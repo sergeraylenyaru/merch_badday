@@ -17,9 +17,20 @@ npm run dev
 
 ## Публикация на GitHub Pages
 
-Репозиторий содержит workflow `.github/workflows/pages.yml`: каждый push в `main` проверяет проект, собирает игру и публикует `dist` через GitHub Pages. Если Pages ещё не включён, в **Settings → Pages → Build and deployment → Source** выберите **GitHub Actions**, затем запустите workflow **Publish game to GitHub Pages** во вкладке **Actions** (Run workflow) или отправьте новый коммит в `main`.
+Адрес игры: `https://sergeraylenyaru.github.io/merch_badday/`.
 
-Адрес игры: `https://sergeraylenyaru.github.io/merch_badday/`. Первая публикация занимает несколько минут. В `vite.config.js` используется относительный `base`, поэтому графика, WASM и шрифты работают внутри пути репозитория. Папку `dist` также можно выложить на любой статический HTTPS-хостинг. Открывать исходный `index.html` прямо через `file://` не нужно: браузеру требуется собранная версия и HTTP(S).
+В `main` уже включена готовая статическая версия: корневой `index.html`, `assets/`, `icon.svg` и `.nojekyll`. Она работает при **Settings → Pages → Deploy from a branch → main → / (root)**. Исходный HTML находится в `src/index.html`; при локальной разработке Vite обслуживает `src/`.
+
+После изменения игры обновите файлы сайта перед коммитом:
+
+```sh
+npm run build:pages
+git add src public index.html assets icon.svg .nojekyll
+git commit -m "Update game"
+git push
+```
+
+Workflow `.github/workflows/pages.yml` также проверяет и собирает игру, затем публикует артефакт через GitHub Actions. Для использования только этого способа в Settings → Pages выберите Source → GitHub Actions. Относительные пути `base: "./"` позволяют размещать сборку внутри пути репозитория или на другом статическом HTTPS-хостинге. Скачанную папку `dist` нужно обслуживать через HTTP(S), а не открывать через `file://`.
 
 ## Как играть
 
@@ -62,6 +73,8 @@ npm run dev
 
 ## Структура
 
+- `src/index.html` — исходная HTML-страница; корневой `index.html` и `assets/` генерируются для публикации.
+- `scripts/export-pages.mjs` — экспорт готовой сборки для Pages из `main`.
 - `src/main.js` — игровой цикл, управление, камера, транспорт, AI, бой, полиция, звук, погода и соединение систем.
 - `src/world.js` — процедурные сущности, город, Rapier и геометрические проверки столкновений.
 - `src/state.js` — данные магазинов, состояние, условия заданий, награды, окончания, сохранение.
