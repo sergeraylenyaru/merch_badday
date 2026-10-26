@@ -1,0 +1,23 @@
+{
+  "name": "merch-badday",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test tests/*.test.js",
+    "test:e2e": "node tests/e2e.mjs"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "0.19.3",
+    "@fontsource/manrope": "5.3.0",
+    "@fontsource/oswald": "5.3.0",
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1",
+    "vite": "7.1.12"
+  }
+}
