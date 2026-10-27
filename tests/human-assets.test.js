@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { Group, Vector3 } from "three";
+import { Box3, Group, Vector3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { AssetLibrary } from "../src/visuals/assets.js";
 import { createCharacterMotion } from "../src/visuals/character-motion.js";
@@ -70,5 +70,28 @@ test("real skinned rig plays recorded walking/running and still reaches both car
   assert.equal(motion.diagnostics.gripErrors.length, 2);
   for (const error of motion.diagnostics.gripErrors) assert.ok(error < 0.01, `real palm contact error ${error}`);
   assert.deepEqual(root.position.toArray(), [0, 0, 0]);
+  library.dispose();
+});
+
+test('actual deformed boots stay above a raised floor through walking, sprinting and crouching', async () => {
+  const source = await load('merch-male');
+  const library = new AssetLibrary({ human: { url: 'fixture:floor' } }, { loader: { loadAsync: async () => source }, logger: { info() {}, warn() {} } });
+  await library.preload();
+  const model = library.instantiate('human', { height: 2.1 }), root = new Group();
+  root.position.y = 0.08;
+  root.add(model);
+  const motion = createCharacterMotion({ mesh: root }, model);
+  for (const [speed, crouch] of [[2.8, false], [6.8, false], [1.7, true], [0, false]]) {
+    for (let frame = 0; frame < 80; frame++) {
+      root.position.z += speed / 60;
+      motion.update(1 / 60, { grounded: true, crouch, velocity: new Vector3(0, 0, speed) });
+      if (frame % 8 !== 0) continue;
+      root.updateMatrixWorld(true);
+      const bounds = new Box3().setFromObject(model, true);
+      assert.ok(bounds.min.y >= root.position.y - 0.001, `boot penetrates floor: ${bounds.min.y}`);
+      assert.ok(bounds.min.y <= root.position.y + 0.015, `supporting shoe floats: ${bounds.min.y}`);
+    }
+  }
+  motion.dispose();
   library.dispose();
 });

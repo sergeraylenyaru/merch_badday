@@ -5,7 +5,7 @@ import { mkdir } from "node:fs/promises";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { freshState } from "../src/state.js";
+import { freshState, SHOPS } from "../src/state.js";
 
 // Separate from the gameplay E2E: validates GLB integration, visual resource
 // lifetime, quality/camera modes and graceful failure of one model download.
@@ -130,18 +130,24 @@ try {
   const { page, events } = normal;
   const visual = await page.evaluate(() => __MERCH__.visuals);
   assert.equal(visual.district, "01 / У дома");
-  assert.equal(visual.assets.loaded, 14);
+  assert.equal(visual.assets.loaded, 17);
   assert.equal(visual.assets.failed, 0);
-  assert.equal(visual.assets.cacheCount, 14);
-  assert.equal(visual.replacements.length, 7);
-  assert.deepEqual(visual.replacements.map((entry) => entry.entity).sort(), ["cart", "cart", "hatchback", "hero", "hero", "staff", "staff"]);
+  assert.equal(visual.assets.cacheCount, 17);
+  assert.equal(visual.districts.length, SHOPS.length);
+  assert.equal(new Set(visual.districts.map((entry) => entry.feature)).size, 8);
+  assert.ok(visual.districts.every((entry) => entry.generatedMeshes > 0 && entry.modelPlacements > 0));
+  assert.equal(visual.replacements.filter((entry) => entry.kind === 'staff').length, 8);
+  assert.equal(visual.replacements.filter((entry) => entry.kind === 'player').length, 1);
+  assert.equal(visual.replacements.filter((entry) => entry.kind === 'cart').length, SHOPS.reduce((n, shop) => n + shop.required, 0));
+  assert.equal(visual.replacements.filter((entry) => entry.kind === 'vehicle').length, 27);
+  assert.deepEqual([...new Set(visual.replacements.filter((entry) => entry.kind === 'vehicle').map((entry) => entry.entity))].sort(), ['hatchback','police','sedan','suv','truck','van']);
   for (const entry of visual.replacements) {
     assert.ok(entry.size.every((n) => Number.isFinite(n) && n > 0), `invalid bounds: ${entry.entity}`);
     assert.ok(Math.abs(entry.minY) < 0.001, `incorrect ground pivot: ${entry.entity}`);
     if (entry.entity === "hero" || entry.entity === "staff") assert.ok(Math.abs(entry.size[1] - 2.1) < 0.05, `adult character scale: ${entry.size}`);
     if (entry.entity === "cart") assert.ok(Math.abs(entry.size[1] - 1.615) < 0.05, `cart scale: ${entry.size}`);
   }
-  assert.equal(events.requests.size, 14);
+  assert.equal(events.requests.size, 17);
   for (const [path, count] of events.requests) assert.equal(count, 1, `model fetched repeatedly: ${path}`);
   const intro = await assertScene(page, "intro");
   await page.screenshot({ path: `${artifacts}visual-district-intro.png` });
@@ -156,7 +162,7 @@ try {
   const moved = await page.evaluate(() => __MERCH__.state.position);
   assert.ok(Math.hypot(moved.x - initial.x, moved.z - initial.z) > 0.3, "player should move with GLB hero");
   const ground = await page.evaluate(() => __MERCH__.view);
-  assert.ok(ground.playerY >= 0 && ground.playerY < 0.01, "hero remains grounded");
+  assert.ok(Math.abs(ground.playerY - ground.groundHeight) < 0.01, "hero stands on the visible surface");
   assert.equal(ground.firstPerson, false);
   assert.equal(ground.playerVisible, true);
   await page.keyboard.press("KeyC");
@@ -197,7 +203,7 @@ try {
   await ready(page);
   const restored = await page.evaluate(() => __MERCH__.state.position);
   assert.ok(Math.hypot(saved.x - restored.x, saved.z - restored.z) < 0.01, "position survives visual-model reload");
-  assert.equal((await page.evaluate(() => __MERCH__.visuals)).assets.loaded, 14);
+  assert.equal((await page.evaluate(() => __MERCH__.visuals)).assets.loaded, 17);
   assertNoErrors(events);
   console.log("VISUAL MODELS / CAMERA / QUALITY / PERSISTENCE PASS", JSON.stringify({ assets: visual.assets, intro: intro.renderer, resourcesBefore, resourcesAfter }));
   await normal.context.close();
@@ -211,7 +217,7 @@ try {
   await wall.page.waitForFunction((time) => __MERCH__.state.time > time + 0.8, wallStart, { timeout: 60000 });
   await wall.page.keyboard.up("KeyW");
   const wallPosition = await wall.page.evaluate(() => __MERCH__.state.position);
-  assert.ok(wallPosition.z >= 13.1 && wallPosition.z < 13.8, `original back-wall collider was bypassed: ${JSON.stringify(wallPosition)}`);
+  assert.ok(wallPosition.z >= 12.79 && wallPosition.z < 13.2, `30cm character must reach, but not cross, the visible back wall: ${JSON.stringify(wallPosition)}`);
   assert.ok((await wall.page.evaluate(() => __MERCH__.view.playerY)) >= 0, "player must not fall through ground");
   assertNoErrors(wall.events);
   console.log("ORIGINAL COLLIDER PASS", wallPosition);
@@ -255,9 +261,10 @@ try {
   missingState.carts = [{ x: -52, z: 28 }, { x: -65, z: 31 }];
   const missing = await createScenario(browser, missingState, { missingCart: true });
   const fallback = await missing.page.evaluate(() => __MERCH__.visuals);
-  assert.equal(fallback.assets.loaded, 13);
+  assert.equal(fallback.assets.loaded, 16);
   assert.equal(fallback.assets.failed, 1);
-  assert.deepEqual(fallback.replacements.map((entry) => entry.entity).sort(), ["hatchback", "hero", "hero", "staff", "staff"]);
+  assert.equal(fallback.replacements.filter((entry) => entry.kind === 'cart').length, 0);
+  assert.equal(fallback.replacements.length, visual.replacements.length - SHOPS.reduce((n, shop) => n + shop.required, 0));
   assert.ok(missing.events.warnings.some((warning) => /\[assets\].*Cannot load cart/.test(warning)), "missing model should have one clear warning");
   await missing.page.click("#begin");
   await missing.page.keyboard.press("KeyR");
@@ -265,8 +272,9 @@ try {
   assert.match(await missing.page.locator("#context").innerText(), /Отпустить/, "fallback cart must remain interactive");
   await missing.page.keyboard.press("KeyR");
   const fallbackBefore = await missing.page.evaluate(() => __MERCH__.state.position);
+  const fallbackStart = await missing.page.evaluate(() => __MERCH__.state.time);
   await missing.page.keyboard.down("KeyA");
-  await missing.page.waitForTimeout(600);
+  await missing.page.waitForFunction((time) => __MERCH__.state.time > time + 0.35, fallbackStart, { timeout: 60000 });
   await missing.page.keyboard.up("KeyA");
   const fallbackAfter = await missing.page.evaluate(() => __MERCH__.state.position);
   assert.ok(Math.hypot(fallbackAfter.x - fallbackBefore.x, fallbackAfter.z - fallbackBefore.z) > 0.2);

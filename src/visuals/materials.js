@@ -230,7 +230,7 @@ export function createDistrictMaterials() {
     return material;
   }
 
-  return {
+  const result = {
     asphalt,
     pavement,
     plaster,
@@ -265,4 +265,22 @@ export function createDistrictMaterials() {
       signs.clear();
     },
   };
+  const tinted = new Map();
+  result.forShop = (style) => {
+    function tint(source, color) {
+      const key = `${source.uuid}:${color}`;
+      if (!tinted.has(key)) {
+        const material = source.clone();
+        material.color.set(color);
+        materials.add(material);
+        tinted.set(key, material);
+      }
+      return tinted.get(key);
+    }
+    return { ...result, style,
+      navy: tint(result.navy, style.primary), mustard: tint(result.mustard, style.accent),
+      colors: { ...COLORS, navy: style.primary, mustard: style.accent },
+    };
+  };
+  return result;
 }

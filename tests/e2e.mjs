@@ -73,7 +73,8 @@ try {
       if (Math.abs(f) > 0.5) list.push(f > 0 ? "KeyW" : "KeyS");
       if (Math.abs(s) > 0.5) list.push(s > 0 ? "KeyD" : "KeyA");
       for (const k of list) await page.keyboard.down(k);
-      await page.waitForTimeout(200);
+      const start = await page.evaluate(() => __MERCH__.state.time);
+      await page.waitForFunction((time) => __MERCH__.state.time > time + 0.12, start, { timeout: 60000 });
       for (const k of list) await page.keyboard.up(k);
     }
     throw Error(
@@ -101,18 +102,20 @@ try {
   );
   assert.equal(await page.evaluate(() => __MERCH__.state.shops[0].done), true);
   console.log("SHOP COMPLETED");
-  await walk(-42, 32);
+  await walk(-42, 32, 0.4);
   await page.keyboard.press("KeyE");
-  await page.waitForTimeout(400);
+  await page.waitForFunction(() => __MERCH__.vehicles.some((vehicle) => vehicle.controlled));
+  await page.waitForFunction(() => document.querySelector('#speed').textContent.includes('км'));
   assert.match(await page.locator("#speed").innerText(), /км/);
   const before = await page.evaluate(() => __MERCH__.state.position);
+  const driveStart = await page.evaluate(() => __MERCH__.state.time);
   await page.keyboard.down("KeyW");
-  await page.waitForTimeout(1700);
+  await page.waitForFunction((time) => __MERCH__.state.time > time + 0.65, driveStart, { timeout: 60000 });
   await page.keyboard.up("KeyW");
   const after = await page.evaluate(() => __MERCH__.state.position);
   assert.ok(Math.hypot(after.x - before.x, after.z - before.z) > 0.5);
   await page.keyboard.press("KeyE");
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => document.querySelector('#speed').textContent === '');
   assert.equal(await page.locator("#speed").innerText(), "");
   console.log("VEHICLE", before, after);
   await page.keyboard.press("KeyM");

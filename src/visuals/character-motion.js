@@ -109,6 +109,20 @@ export function createCharacterMotion(entity, model) {
   const rootScale = root.getWorldScale(new Vector3());
   const motionScale = legs[0] ? legs[0].a.distanceTo(legs[0].b) / (0.49 * Math.max(rootScale.y, 1e-6)) : 1;
   const basePosition = model.position.clone();
+  // Probe actual boot vertices. A wrist/ankle marker is not the bottom of a
+  // deforming shoe: during a stride it previously left toes below the floor.
+  const soleProbes = [];
+  const probePoint = new Vector3();
+  model.updateMatrixWorld(true);
+  model.traverse((mesh) => {
+    if (!mesh.isSkinnedMesh) return;
+    for (let index = 0; index < mesh.geometry.attributes.position.count; index++) {
+      mesh.getVertexPosition(index, probePoint).applyMatrix4(mesh.matrixWorld);
+      root.worldToLocal(probePoint);
+      if (probePoint.y < 0.32 && probePoint.y > -0.1) soleProbes.push({ mesh, index });
+    }
+  });
+  let soleClearance = null;
   const entityQ = new Quaternion(), cartQ = new Quaternion(), rotation = new Quaternion(), tilt = new Quaternion();
   const localVelocity = new Vector3(), pole = new Vector3(), target = new Vector3(), travelDirection = new Vector3();
   const euler = new Euler();
@@ -367,6 +381,21 @@ export function createCharacterMotion(entity, model) {
       }
     }
     model.updateWorldMatrix(true, true);
+    if (grounded && soleProbes.length) {
+      // SkinnedMesh.updateMatrixWorld refreshes bindMatrixInverse; the generic
+      // updateWorldMatrix used by IK does not. Probe the exact rendered skin.
+      model.updateMatrixWorld(true);
+      let bottom = Infinity;
+      for (const { mesh, index } of soleProbes) {
+        mesh.getVertexPosition(index, probePoint).applyMatrix4(mesh.matrixWorld);
+        bottom = Math.min(bottom, probePoint.y);
+      }
+      const floor = root.getWorldPosition(target).y;
+      const correction = floor + 0.004 - bottom;
+      model.position.y += correction / Math.max(rootScale.y, 1e-6);
+      soleClearance = bottom + correction - floor;
+      model.updateMatrixWorld(true);
+    } else soleClearance = null;
 
     for (let i = 0; i < arms.length; i++) {
       const arm = arms[i];
@@ -450,7 +479,7 @@ export function createCharacterMotion(entity, model) {
     get diagnostics() {
       return {
         state, speed, stride: phase / TAU, distance, gripWeight, grounded, crouchWeight: crouching, articulated,
-        gripErrors: [...gripErrors], feetErrors: [...feetErrors],
+        gripErrors: [...gripErrors], feetErrors: [...feetErrors], soleClearance,
         feetPlanted: legs.map((leg) => leg?.wasStance === true),
         animation: mixer ? {
           source: "Quaternius Universal Animation Library (CC0)", clip: activeClip,

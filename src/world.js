@@ -2,6 +2,7 @@ import * as T from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
 import { SHOPS } from "./state.js";
 import { createVisuals } from "./visuals/index.js";
+import { PLAYER_SHAPE, AVENUES, buildingPlot, circleIntersectsBox, boxesIntersect, vehicleBox } from "./spatial.js";
 export async function createWorld(scene, state) {
   await RAPIER.init();
   const physics = new RAPIER.World({ x: 0, y: -20, z: 0 });
@@ -14,7 +15,8 @@ export async function createWorld(scene, state) {
     secrets = [];
   const mat = (color) => new T.MeshStandardMaterial({ color, roughness: 0.85 });
   const materials = new Map();
-  const firstShopDecor = [];
+  const shopDecor = SHOPS.map(() => []);
+  const surfaces = [];
   let visualBucket = null;
   function box(x, y, z, w, h, d, color, solid = false) {
     let m = materials.get(color);
@@ -36,7 +38,7 @@ export async function createWorld(scene, state) {
         RAPIER.ColliderDesc.cuboid(w / 2, h / 2, d / 2),
         b,
       );
-      blockers.push({ x, z, w: w / 2, d: d / 2 });
+      blockers.push({ x, z, y, h, w: w / 2, d: d / 2 });
     }
     return mesh;
   }
@@ -62,12 +64,25 @@ export async function createWorld(scene, state) {
     RAPIER.RigidBodyDesc.fixed().setTranslation(20, -0.5, 20),
   );
   physics.createCollider(RAPIER.ColliderDesc.cuboid(150, 0.5, 150), gb);
-  for (const v of [-17.5, 57.5]) {
+  function surface(x, z, width, depth, height) {
+    surfaces.push({ x, z, w: width / 2, d: depth / 2, height });
+    const body = physics.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x, height / 2, z));
+    physics.createCollider(RAPIER.ColliderDesc.cuboid(width / 2, height / 2, depth / 2), body);
+  }
+  function groundHeight(x, z) {
+    let height = 0;
+    for (const surface of surfaces) if (Math.abs(x - surface.x) <= surface.w && Math.abs(z - surface.z) <= surface.d)
+      height = Math.max(height, surface.height);
+    return height;
+  }
+  for (const v of AVENUES) {
+    surface(v, 20, 15, 270, 0.05);
+    surface(20, v, 270, 15, 0.05);
     box(v, 0.015, 20, 15, 0.06, 270, "#3d484b");
     box(20, 0.02, v, 270, 0.06, 15, "#3d484b");
     for (let j = -105; j < 155; j += 10) {
-      box(v, 0.06, j, 0.22, 0.03, 4, "#e5dbb6");
-      box(j, 0.07, v, 4, 0.03, 0.22, "#e5dbb6");
+      box(v, 0.052, j, 0.22, 0.002, 4, "#e5dbb6");
+      box(j, 0.052, v, 4, 0.002, 0.22, "#e5dbb6");
     }
     for (let j = -100; j < 145; j += 32) {
       box(v + 10, 2.5, j, 0.18, 5, 0.18, "#34433e");
@@ -155,9 +170,12 @@ export async function createWorld(scene, state) {
     }
     g.position.set(x, 0, z);
     scene.add(g);
+    const visualModel = type === 1 ? 'van' : type === 3 ? 'truck' : type === 2 ? 'sedan' : i % 2 ? 'suv' : 'hatchback';
     return {
       mesh: g,
       type,
+      visualModel,
+      displayName: { hatchback: 'Компакт', sedan: 'Седан', suv: 'Кроссовер', van: 'Фургон доставки', truck: 'Грузовик' }[visualModel],
       speed: 0,
       heading: 0,
       w: w / 2,
@@ -165,20 +183,25 @@ export async function createWorld(scene, state) {
       max: [20, 16, 23, 13][type],
       accel: [11, 8, 12, 6][type],
       traffic,
+      claimed: false,
       id: i,
       home: { x, z },
     };
   }
   for (const shop of SHOPS) {
     const { x, z, color, id } = shop;
-    visualBucket = id === 0 ? firstShopDecor : null;
-    box(x, 0.1, z, 39, 0.2, 36, "#a4a797");
+    visualBucket = shopDecor[id];
+    surface(x, z, 39, 36, 0.06);
+    surface(x, z - 3, 28, 11, 0.08);
+    surface(x, z + 3.7, 15.5, 2.5, 0.08);
+    surface(x + (x === -55 ? 1 : -1) * 24.75, z + 13, 10.5, 7, 0.04);
+    box(x, 0.03, z, 39, 0.06, 36, "#a4a797");
     // Open-front stores: back, side walls, canopy and shelves form a walkable interior.
     box(x, 3.2, z - 8, 28, 6.4, 1, color, true);
     box(x - 14, 3.2, z - 3, 1, 6.4, 11, color, true);
     box(x + 14, 3.2, z - 3, 1, 6.4, 11, color, true);
     box(x, 6.5, z - 3, 29, 0.5, 12, "#e6d8ba");
-    box(x, 0.2, z - 3, 28, 0.3, 11, "#d4d0bd");
+    box(x, 0.07, z - 3, 28, 0.02, 11, "#d4d0bd");
     box(x, 5.2, z + 2.6, 28, 1.3, 0.5, color);
     label(shop.name.toUpperCase(), x, 5.25, z + 3, "#fff4da", 3.7);
     label(String(id + 1).padStart(2, "0"), x - 12, 8, z, "#ffe2a0", 2);
@@ -285,16 +308,20 @@ export async function createWorld(scene, state) {
     const x = -105 + (i % 4) * 75,
       z = -105 + Math.floor(i / 4) * 75;
     if (SHOPS.some((s) => Math.hypot(s.x - x, s.z - z) < 30)) continue;
+    const plot = buildingPlot(x, z);
+    if (!plot) continue;
+    const width = plot.w * 2, depth = plot.d * 2;
     const h = 10 + (i % 4) * 4;
-    box(x, h / 2, z, 17, h, 18, ["#a1a79b", "#baa993", "#84968a"][i % 3], true);
+    box(x, h / 2, z, width, h, depth, ["#a1a79b", "#baa993", "#84968a"][i % 3], true);
     for (let y = 3; y < h; y += 3)
-      for (let j = -5; j <= 5; j += 5)
-        box(x + j, y, z + 9.1, 2, 1.5, 0.1, "#d9cf9d");
+      for (const j of [-width / 3, 0, width / 3])
+        box(x + j, y, z + depth / 2 + 0.06, Math.min(2, width / 4), 1.5, 0.1, "#d9cf9d");
   }
   for (let i = 0; i < 34; i++) {
     const x = -116 + (i % 7) * 40,
       z = -113 + Math.floor(i / 7) * 58;
     if (SHOPS.some((s) => Math.hypot(s.x - x, s.z - z) < 25)) continue;
+    if (AVENUES.some((road) => Math.abs(x - road) < 10.5 || Math.abs(z - road) < 10.5)) continue;
     box(x, 1.6, z, 0.5, 3.2, 0.5, "#6d6750", true);
     const tree = new T.Mesh(new T.IcosahedronGeometry(3, 0), mat("#4c7557"));
     tree.position.set(x, 4, z);
@@ -326,6 +353,9 @@ export async function createWorld(scene, state) {
   rival.rival = true;
   vehicles.push(rival);
   label("КОЛЛЕГА ДИМА", 8, 4, 130, "#edda9b", 1);
+  // Keep pre-existing IDs stable for saved games; extra cars replace the
+  // formerly decorative, non-interactive sedans on each shop's left bay.
+  for (const shop of SHOPS) vehicles.push(car(shop.x - 17, shop.z + 12, shop.id % 2 ? 0 : 2, vehicles.length));
   const player = human(state.position.x, state.position.z, "#d8b25e", "player");
   const badge = box(0, 0, 0, 0.2, 0.27, 0.07, "#f6efcd");
   scene.remove(badge);
@@ -333,26 +363,36 @@ export async function createWorld(scene, state) {
   player.mesh.add(badge);
   for (const v of vehicles) {
     const p = state.vehicles[v.id];
-    if (p && !v.traffic) {
-      v.mesh.position.set(p.x, 0, p.z);
+    if (p && (!v.traffic || p.claimed)) {
+      v.claimed = !!p.claimed;
+      v.mesh.position.set(p.x, groundHeight(p.x, p.z), p.z);
       v.heading = p.heading;
       v.mesh.rotation.y = p.heading;
     }
   }
-  function blocked(x, z, r = 0.65, ignoreCar = null) {
+  for (const person of [...people, player]) person.mesh.position.y = groundHeight(person.mesh.position.x, person.mesh.position.z);
+  for (const v of vehicles) v.mesh.position.y = groundHeight(v.mesh.position.x, v.mesh.position.z);
+  function blocked(x, z, r = PLAYER_SHAPE.radius, ignoreCar = null) {
     if (x < -125 || x > 165 || z < -125 || z > 165) return true;
     if (
       blockers.some(
-        (b) => Math.abs(x - b.x) < b.w + r && Math.abs(z - b.z) < b.d + r,
+        (b) => circleIntersectsBox(x, z, r, b),
       )
     )
       return true;
     return vehicles.some(
       (v) =>
-        v !== ignoreCar &&
-        Math.abs(x - v.mesh.position.x) < v.w + r &&
-        Math.abs(z - v.mesh.position.z) < v.l + r,
+        v !== ignoreCar && v.mesh.visible && !(v.police && state.wanted < 3) &&
+        circleIntersectsBox(x, z, r, vehicleBox(v)),
     );
+  }
+  function vehicleBlocked(vehicle, x, z, heading = vehicle.heading) {
+    const shape = vehicleBox(vehicle, x, z, heading);
+    const c = Math.abs(Math.cos(heading)), s = Math.abs(Math.sin(heading));
+    const rx = c * shape.w + s * shape.d, rz = s * shape.w + c * shape.d;
+    if (x - rx < -125 || x + rx > 165 || z - rz < -125 || z + rz > 165) return true;
+    return blockers.some((b) => boxesIntersect(shape, b)) || vehicles.some((v) => v !== vehicle && v.mesh.visible
+      && !(v.police && state.wanted < 3) && boxesIntersect(shape, vehicleBox(v)));
   }
   const world = {
     physics,
@@ -368,9 +408,14 @@ export async function createWorld(scene, state) {
     shelves,
     secrets,
     blocked,
+    vehicleBlocked,
+    groundHeight,
+    blockers,
   };
-  // Rendering is an adapter over the existing entities. It never owns gameplay
-  // identifiers, transforms, triggers, collision extents, or Rapier bodies.
-  world.visuals = await createVisuals(scene, world, firstShopDecor);
+  // Rendering supplies measured vehicle extents. Entity IDs, transforms,
+  // interaction targets and physical bodies remain owned by the world.
+  world.visuals = await createVisuals(scene, world, shopDecor);
+  world.streetObstructions = blockers.filter((blocker) => AVENUES.some((road) =>
+    boxesIntersect(blocker, { x: road, z: 20, w: 7.5, d: 135 }) || boxesIntersect(blocker, { x: 20, z: road, w: 135, d: 7.5 })));
   return world;
 }

@@ -92,7 +92,7 @@ function assertGrip(snapshot, label) {
   assert.ok(cart, `${label}: physical cart diagnostics`);
   assert.ok(angleDifference(motion.player.heading, cart.heading) < 0.12,
     `${label}: avatar and trolley face the same heading`);
-  assert.ok(snapshot.view.playerY >= 0 && snapshot.view.playerY < 0.01,
+  assert.ok(Math.abs(snapshot.view.playerY - snapshot.view.groundHeight) < 0.01,
     `${label}: grounded while holding handle`);
   return cart;
 }
@@ -228,7 +228,7 @@ try {
     !__MERCH__.motion.player.grounded && __MERCH__.view.playerY > 0.03, undefined, { timeout: 60000 });
   await page.waitForFunction(() => __MERCH__.motion.player.state === "fall", undefined, { timeout: 60000 });
   await page.waitForFunction(() => __MERCH__.motion.player.grounded &&
-    __MERCH__.view.playerY < 0.01, undefined, { timeout: 60000 });
+    Math.abs(__MERCH__.view.playerY - __MERCH__.view.groundHeight) < 0.01, undefined, { timeout: 60000 });
   await page.waitForFunction(() => __MERCH__.motion.player.state === "idle", undefined, { timeout: 60000 });
   const guard = await inputFor(page, ["KeyQ"], 0.25);
   assert.equal(guard.motion.player.state, "guard");

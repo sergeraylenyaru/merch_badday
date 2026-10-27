@@ -1,10 +1,10 @@
 import * as T from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
-/** Visuals for shop 01. Existing world colliders and interaction targets win. */
+/** A complete, themed storefront/interior on the shared walkable shop layout. */
 export function createDistrict(scene, { library, materials: m, box: collisionBox, shop }) {
   const root = new T.Group();
-  root.name = "district-01-u-doma";
+  root.name = `district-${shop.id + 1}`;
   root.position.set(shop?.x ?? -55, 0, shop?.z ?? 20);
   scene.add(root);
   const batches = new Map();
@@ -13,7 +13,8 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   const modelBatches = new Map();
   const instanceMeshes = new Set();
   const proxyMeshes = new Set();
-  const metrics = { generatedMeshes: 0, modelMeshes: 0, modelPlacements: 0, collisionProxies: 0, triangles: 0 };
+  const style = m.style;
+  const metrics = { shop: shop.id, name: shop.name, feature: style.feature, generatedMeshes: 0, modelMeshes: 0, modelPlacements: 0, collisionProxies: 0, triangles: 0 };
   let disposed = false;
 
   function queue(geometry, material) {
@@ -44,6 +45,12 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   }
 
   function box(x, y, z, width, height, depth, material, rotationY = 0) {
+    if (y < 0.1 && height <= 0.025 && (material === m.marking || material === m.mustard)) {
+      // Paint lies on its paving/road, instead of forming a floating 3cm slab
+      // that hides the tips of correctly grounded shoes.
+      y = Math.abs(x) > 29 ? 0.052 : 0.062;
+      height = 0.002;
+    }
     const geometry = new T.BoxGeometry(width, height, depth);
     tileUV(geometry, material, [width, height, depth]);
     if (rotationY) geometry.rotateY(rotationY);
@@ -71,7 +78,8 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   }
 
   function sign(text, x, y, z, width, height, options = {}, ground = false) {
-    const material = m.makeSignMaterial(text, options);
+    if (ground) y = 0.063;
+    const material = m.makeSignMaterial(text, { background: m.colors.navy, color: m.colors.cream, accent: m.colors.mustard, ...options });
     const geometry = new T.PlaneGeometry(width, height);
     if (ground) geometry.rotateX(-Math.PI / 2);
     geometry.translate(x, y, z);
@@ -107,14 +115,15 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
 
   // A continuous public apron and a low interior threshold retain the original
   // flat walking plane. Painted details never become obstacles.
-  box(0, 0.025, 0, 39, 0.05, 36, m.pavement);
+  box(0, 0.03, 0, 39, 0.06, 36, m.pavement);
   box(14.4, 0.057, 11.3, 10.2, 0.012, 13.2, m.asphalt);
   box(-17, 0.057, 12, 4.1, 0.012, 9.3, m.asphalt);
   // The apron joins the existing north/south avenue. Only this short section
   // receives the new surface; road positions and traffic routes are unchanged.
-  box(24.75, 0.027, 13, 10.5, 0.025, 7, m.asphalt);
-  box(37.5, 0.045, 14, 15, 0.015, 40, m.asphalt);
-  for (let x = 31; x < 45; x += 2) box(x, 0.067, 18, 1.1, 0.01, 2.5, m.marking);
+  const roadSide = shop.x === -55 ? 1 : -1;
+  box(roadSide * 24.75, 0.027, 13, 10.5, 0.025, 7, m.asphalt);
+  box(roadSide * 37.5, 0.045, 14, 15, 0.015, 40, m.asphalt);
+  for (let x = 31; x < 45; x += 2) box(roadSide * x, 0.067, 18, 1.1, 0.01, 2.5, m.marking);
   box(0, 0.065, -3, 27.9, 0.025, 11, m.floor);
   box(0, 0.065, 3.7, 15.5, 0.025, 2.5, m.floor);
   box(0, 0.081, 5.0, 15.5, 0.015, 0.16, m.metal);
@@ -150,9 +159,9 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   box(0, 6.28, 2.95, 28.5, 0.13, 0.12, m.mustard);
   box(0, 4.34, 2.95, 28.5, 0.09, 0.12, m.mustard);
   box(0, 5.3, 3.02, 11.95, 2.08, 0.26, m.darkMetal);
-  sign("У ДОМА", 0, 5.3, 3.16, 11.65, 1.96, { subtitle: "ПРОДУКТЫ • 08–23" });
-  sign("01", -10.4, 5.3, 2.93, 2.1, 0.95);
-  sign("КАЖДЫЙ ДЕНЬ", 10.4, 5.3, 2.93, 4.8, 1.0);
+  sign(shop.name, 0, 5.3, 3.16, 11.65, 1.96, { subtitle: style.subtitle });
+  sign(String(shop.id + 1).padStart(2, '0'), -10.4, 5.3, 2.93, 2.1, 0.95);
+  sign(style.slogan, 10.4, 5.3, 2.93, 4.8, 1.0);
   box(0, 4.15, 4.3, 28.65, 0.22, 3.25, m.roof);
   box(0, 4.09, 5.96, 28.75, 0.2, 0.12, m.mustard);
   box(0, 4.01, 4.32, 28.25, 0.045, 2.9, m.plaster);
@@ -211,11 +220,11 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
       }
     }
     box(x, 2.25, -4, 2.95, 0.11, 3.95, m.navy);
-    sign(side < 0 ? "БАКАЛЕЯ" : "СВЕЖЕЕ", x, 2.45, -2.015, 2.6, 0.47);
+    sign(style.categories[side < 0 ? 0 : 1], x, 2.45, -2.015, 2.6, 0.47);
   }
-  sign("СВЕЖИЕ ПРОДУКТЫ", 0, 4.65, -7.405, 8.3, 1.55, {
+  sign(style.rear, 0, 4.65, -7.405, 8.3, 1.55, {
     background: m.colors.cream, color: m.colors.navy,
-    subtitle: "РЯДОМ С ВАШИМ ДОМОМ",
+    subtitle: style.subtitle,
   });
 
   // Refrigerated cases occupy rear corners, away from the employee and aisle.
@@ -262,12 +271,112 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   box(17, 0.9, 4.67, 0.68, 0.06, 0.14, m.metal);
   sign("КОФЕ", 17, 2.12, 4.63, 1.05, 0.28);
 
+  // Location-specific architecture and merchandise. These displays sit beside
+  // the central entrance and never consume the staff/shelf quest approaches.
+  function display(x, z, width = 2.7, depth = 1.3) {
+    box(x, 0.55, z, width, 0.95, depth, m.wood);
+    box(x, 1.06, z, width + 0.1, 0.1, depth + 0.1, m.navy);
+    proxy(x, 0.55, z, width + 0.1, 1.1, depth + 0.1);
+  }
+  function price(text, x, y, z, width = 2.2) {
+    sign(text, x, y, z, width, 0.72, { background: m.colors.mustard, color: m.colors.navy });
+  }
+  if (style.feature === 'discount') {
+    // Corrugated discount fascia, hanging price cards and a pallet sale.
+    for (let x = -13.9; x < 14; x += 0.42) box(x, 5.27, 2.97, 0.045, 1.82, 0.06, m.metal);
+    sign(shop.name, 0, 5.3, 3.2, 11.65, 1.96, { subtitle: style.subtitle });
+    for (const [x, value] of [[-10.8, 'ОТ 39 ₽'], [10.8, '−30%']]) {
+      box(x, 3.3, 3.0, 2.65, 0.95, 0.14, m.mustard);
+      price(value, x, 3.3, 3.085);
+    }
+    display(-10.8, 4.45, 3.2, 1.5);
+    for (let row = 0; row < 2; row++) for (let i = 0; i < 4; i++) {
+      box(-11.95 + i * 0.76, 1.32 + row * 0.39, 4.42, 0.65, 0.35, 0.95, row ? m.terracotta : m.mustard);
+    }
+    price('АКЦИЯ НЕДЕЛИ', -10.8, 2.16, 5.23, 3.2);
+  } else if (style.feature === 'family') {
+    for (const side of [-1, 1]) {
+      const geometry = new T.BoxGeometry(14.6, 0.22, 12.5);
+      geometry.rotateZ(-side * 0.12);
+      geometry.translate(side * 7.15, 7.36, -3);
+      queue(geometry, m.terracotta);
+      box(side * 10.9, 2.8, 2.76, 0.14, 2.7, 0.12, m.mustard);
+    }
+    display(-11, -0.3, 3, 1.5);
+    for (let row = 0; row < 2; row++) for (let i = 0; i < 6; i++) {
+      cylinder(-12.12 + i * 0.44, 1.24, -0.64 + row * 0.6, 0.12, 0.4, m.mustard, Math.PI / 2);
+    }
+    sign('СВЕЖАЯ ВЫПЕЧКА', -11, 2.18, 0.49, 3.0, 0.68);
+    for (const x of [-11, 11]) {
+      box(x, 4.32, 4.35, 5.1, 0.13, 3.3, m.terracotta);
+      for (let i = 0; i < 5; i++) box(x - 2.0 + i, 4.4, 4.35, 0.45, 0.05, 3.3, m.plaster);
+    }
+  } else if (style.feature === 'night') {
+    for (const x of [-7.55, 7.55]) box(x, 2.1, 2.85, 0.065, 3.8, 0.07, m.warmLight);
+    for (const y of [4.27, 6.34]) box(0, y, 3.08, 28.3, 0.055, 0.08, m.warmLight);
+    sign('24 / 7', -10.9, 2.9, 2.78, 4.4, 2.0, { color: m.colors.mustard });
+    display(-11, -0.3, 2.9, 1.5);
+    box(-11, 1.42, -0.55, 1.3, 0.65, 0.6, m.metal);
+    box(-11, 1.49, -0.23, 1.1, 0.41, 0.035, m.glass);
+    for (let i = 0; i < 5; i++) cylinder(-12 + i * 0.47, 1.24, 0.1, 0.1, 0.27, m.plaster);
+    sign('КОФЕ И ПЕРЕКУС', -11, 2.4, 0.51, 3.0, 0.7);
+  } else if (style.feature === 'sale') {
+    for (const [x, value] of [[-5, '−25%'], [0, '2 ПО ЦЕНЕ 1'], [5, '−50%']]) {
+      box(x, 3.68, 3.1, 0.025, 0.66, 0.04, m.metal);
+      price(value, x, 3.04, 3.14, 3.1);
+    }
+    display(-11, 4.6, 3.2, 1.5);
+    for (let row = 0; row < 3; row++) for (let i = 0; i < 4 - row; i++) {
+      box(-12.1 + row * 0.32 + i * 0.72, 1.32 + row * 0.39, 4.6, 0.64, 0.34, 0.9, row % 2 ? m.navy : m.mustard);
+    }
+    sign('БЕРИ БОЛЬШЕ', -10.9, 3.05, 2.79, 4.3, 1.6, { background: m.colors.mustard, color: m.colors.navy });
+  } else if (style.feature === 'warehouse') {
+    for (let x = -13.8; x < 14; x += 0.65) box(x, 5.28, 3.0, 0.08, 1.8, 0.14, m.metal);
+    sign(shop.name, 0, 5.3, 3.2, 12.3, 1.96, { subtitle: style.subtitle });
+    box(-10.9, 2.14, 2.77, 4.8, 3.5, 0.13, m.metal);
+    for (let y = 0.5; y < 3.8; y += 0.23) box(-10.9, y, 2.85, 4.6, 0.045, 0.04, m.darkMetal);
+    sign('ЗОНА РАЗГРУЗКИ', -10.9, 3.86, 2.88, 4.5, 0.55);
+    display(-10.9, 4.5, 3.3, 1.5);
+    for (let level = 0; level < 3; level++) for (let i = 0; i < 3; i++)
+      box(-12.0 + i * 1.05, 1.37 + level * 0.53, 4.5, 0.97, 0.48, 1.25, level % 2 ? m.plaster : m.mustard);
+    for (const x of [-13.65, -4.35]) {
+      cylinder(x, 1.28, 14.9, 0.06, 2.5, m.metal);
+      proxy(x, 1.28, 14.9, 0.12, 2.5, 0.12);
+    }
+    box(-9, 2.6, 12, 9.5, 0.16, 6.1, m.roof);
+    sign('ВОЗВРАТ ТЕЛЕЖЕК', -9, 2.35, 15.1, 7.3, 0.5);
+  } else if (style.feature === 'fresh') {
+    for (const center of [-10.9, 10.9]) {
+      for (let x = center - 2.45; x < center + 2.5; x += 0.23) box(x, 1.05, 2.77, 0.14, 1.6, 0.09, m.wood);
+      display(center, 4.5, 3.0, 1.35);
+      for (let row = 0; row < 3; row++) for (let i = 0; i < 9; i++)
+        sphere(center - 1.16 + i * 0.29, 1.22 + (i % 2) * 0.035, 4.08 + row * 0.36, 0.13,
+          [m.terracotta, m.mustard, m.leaf][Math.floor(i / 3)]);
+      sign(center < 0 ? 'ОВОЩИ' : 'ФРУКТЫ', center, 1.0, 5.24, 2.6, 0.44);
+    }
+    for (let x = -13.8; x < 14; x += 0.6) box(x, 4.31, 4.3, 0.58, 0.13, 3.4, Math.round(x / 0.6) % 2 ? m.plaster : m.navy);
+  } else if (style.feature === 'hyper') {
+    for (const x of [-7.75, 7.75]) {
+      box(x, 2.25, 5.08, 0.45, 4.35, 0.5, m.navy);
+      box(x, 2.25, 5.36, 0.09, 4.25, 0.045, m.mustard);
+      proxy(x, 2.25, 5.08, 0.45, 4.35, 0.5);
+    }
+    box(0, 4.5, 5.08, 15.95, 0.4, 0.5, m.navy);
+    sign('ДОБРО ПОЖАЛОВАТЬ', 0, 4.5, 5.35, 8, 0.4);
+    const x = roadSide * 17;
+    box(x, 3.0, 6.5, 0.32, 5.8, 0.35, m.metal);
+    box(x, 4.5, 6.5, 3.4, 3.0, 0.42, m.navy);
+    proxy(x, 3, 6.5, 0.35, 5.8, 0.45);
+    sign('ГИПЕРМАКС', x, 5.1, 6.73, 3.25, 0.85);
+    sign('08–24', x, 4.0, 6.73, 2.8, 0.9);
+  }
+
   // Parking, crossing and the cart-return outline are paint on the apron.
   const zoneFill = new T.MeshBasicMaterial({
     color: m.colors.mustard, transparent: true, opacity: 0.12, depthWrite: false,
   });
   localMaterials.add(zoneFill);
-  box(-9, 0.072, 11, 9, 0.008, 7, zoneFill);
+  box(-9, 0.061, 11, 9, 0.002, 7, zoneFill);
   for (const x of [-13.5, -4.5]) box(x, 0.088, 11, 0.11, 0.01, 7, m.mustard);
   for (const z of [7.5, 14.5]) box(-9, 0.088, z, 9, 0.01, 0.11, m.mustard);
   sign("ТЕЛЕЖКИ", -9, 0.096, 13.95, 4.4, 0.8, {
@@ -275,7 +384,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   }, true);
   for (const x of [12.4, 19]) box(x, 0.079, 13, 0.1, 0.01, 7.0, m.marking);
   for (const z of [9.5, 16.5]) box(15.7, 0.079, z, 6.7, 0.01, 0.1, m.marking);
-  sign("01", 13.5, 0.096, 15.6, 0.9, 0.43, {
+  sign(String(shop.id + 1).padStart(2, '0'), 13.5, 0.096, 15.6, 0.9, 0.43, {
     background: "#505b59", color: m.colors.cream,
   }, true);
   box(16, 0.15, 10.0, 2.1, 0.17, 0.22, m.darkMetal);
@@ -289,13 +398,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   // Static imported street furniture is peripheral, clear of every E2E route.
   for (const x of [-18.6, -15.4]) box(x, 0.079, 12, 0.09, 0.01, 7.8, m.marking);
   for (const z of [8.1, 15.9]) box(-17, 0.079, z, 3.25, 0.01, 0.09, m.marking);
-  if (!model("sedan", -17, 0.055, 12, { size: [2.5, 2.2, 4.6] })) {
-    box(-17, 0.9, 12, 2.35, 0.75, 4.5, m.navy);
-    box(-17, 1.6, 11.8, 2.0, 0.75, 2.25, m.glass);
-    for (const side of [-1, 1]) for (const z of [10.5, 13.5])
-      sphere(-17 + side * 1.02, 0.4, z, 0.4, m.darkMetal);
-  }
-  proxy(-17, 1.1, 12, 2.5, 2.2, 4.6);
+  // Parked cars are real boardable world entities, not decorative obstacles.
   for (const side of [-1, 1]) {
     if (!model("trees", side * 15.1, 0.055, -13.6, { size: [8, 7, 8] })) {
       cylinder(side * 17.5, 2, -13.8, 0.22, 3.7, m.wood);
@@ -344,7 +447,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
     [-95, 75, "buildingA", 28], [-31, -160, "buildingC", 31],
     [7, -162, "buildingA", 25], [48, -163, "buildingC", 34],
   ];
-  for (const [x, z, id, height] of skyline) {
+  for (const [x, z, id, height] of shop.id === 0 ? skyline : []) {
     if (!model(id, x, 0, z, { height, shadow: false }, x < -80 ? Math.PI / 2 : 0)) {
       box(x, height / 2, z, 17, height, 18, m.plaster);
       for (let y = 3; y < height - 1; y += 3) {

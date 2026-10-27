@@ -4,6 +4,8 @@ import { createDistrictMaterials } from "./materials.js";
 import { createDistrict } from "./district.js";
 import { SHOPS } from "../state.js";
 import { createCharacterMotion } from "./character-motion.js";
+import { SHOP_STYLES } from "./shop-styles.js";
+import { PLAYER_SHAPE } from "../spatial.js";
 
 const base = import.meta.env.BASE_URL;
 const vendor = (file) => `${base}models/vendor/kaykit/${file}.glb`;
@@ -11,8 +13,8 @@ const vendor = (file) => `${base}models/vendor/kaykit/${file}.glb`;
 // a Pages update. Keep the version tied to the authored rig contract.
 const original = (file) => `${base}models/original/${file}.glb?rig=2`;
 
-// Sizes are visual envelopes in world metres. Existing collision dimensions,
-// NPC identifiers, saved positions and Rapier bodies remain authoritative.
+// Envelopes fit local models. Cars feed their measured body footprint back to
+// the world; entity identities, saved positions and physical bodies stay intact.
 export const MODEL_MANIFEST = {
   hero: { url: `${base}models/characters/merch-male.glb?rig=3`, size: [1.3, 2.1, 0.9] },
   staff: { url: `${base}models/characters/civilian-female.glb?rig=3`, size: [1.3, 2.1, 0.9] },
@@ -20,6 +22,9 @@ export const MODEL_MANIFEST = {
   hatchback: { url: vendor("car_hatchback"), size: [2.5, 2.2, 4.6] },
   sedan: { url: vendor("car_sedan"), size: [2.5, 2.2, 4.6] },
   police: { url: vendor("car_police"), size: [2.5, 2.3, 4.6] },
+  suv: { url: `${base}models/vehicles/suv.glb`, size: [2.5, 2.4, 4.6] },
+  van: { url: `${base}models/vehicles/van.glb`, size: [2.5, 2.8, 5.8] },
+  truck: { url: `${base}models/vehicles/truck.glb`, size: [3, 3.7, 6.8] },
   bench: { url: vendor("bench"), size: [2.4, 0.8, 1] },
   bush: { url: vendor("bush"), size: [1.7, 1.7, 1.7] },
   streetlight: { url: vendor("streetlight"), size: [2, 7, 0.6] },
@@ -59,15 +64,16 @@ function modelBounds(model) {
   };
 }
 
-export async function createVisuals(scene, world, firstShopDecor) {
+export async function createVisuals(scene, world, shopDecor) {
   const library = new AssetLibrary(MODEL_MANIFEST);
   await library.preload();
   const materials = createDistrictMaterials();
   const replacements = [];
   const actors = [];
+  const actorMaterials = new Set();
 
   function replace(entity, id, animate = false, groundOffset = 0) {
-    const model = library.instantiate(id, animate ? { height: 2.1 } : {});
+    const model = library.instantiate(id, animate ? { height: PLAYER_SHAPE.height } : {});
     if (!model) return; // Original visual and its working animation stay intact.
     const limbs = animate && ["LeftLeg", "RightLeg", "LeftArm", "RightArm"]
       .map((name) => model.getObjectByName(name));
@@ -77,34 +83,56 @@ export async function createVisuals(scene, world, firstShopDecor) {
       return;
     }
     const bounds = modelBounds(model);
+    if (entity.visualModel) {
+      // Collision and door reach follow the normalized visible body, including
+      // each variant's length; a van no longer carries a generic large circle.
+      entity.w = bounds.size[0] / 2;
+      entity.l = bounds.size[2] / 2;
+      model.traverse((node) => {
+        if (node.userData.wheelRadius) entity.wheelRadius = node.userData.wheelRadius * node.getWorldScale(new Vector3()).x;
+      });
+    }
     model.position.y = groundOffset;
+    if (entity.light) entity.light.removeFromParent();
     discardPrimitiveChildren(entity.mesh);
     entity.mesh.add(model);
+    if (entity.light) entity.mesh.add(entity.light);
     if (animate) {
+      if (entity !== world.player) {
+        model.traverse((node) => {
+          if (node.name.startsWith('Backpack')) node.visible = false;
+          if (!node.isMesh) return;
+          const recolor = (source) => {
+            if (!['Merch_BlueTShirt', 'Civilian_TealShirt'].includes(source.name)) return source;
+            const material = source.clone();
+            material.color.set(entity.kind === 'police' ? '#344663' : entity.shop >= 0 ? SHOP_STYLES[entity.shop].primary : ['#577986', '#8d6556', '#73885f'][actors.length % 3]);
+            actorMaterials.add(material);
+            return material;
+          };
+          node.material = Array.isArray(node.material) ? node.material.map(recolor) : recolor(node.material);
+        });
+      }
       entity.legs = limbs.slice(0, 2);
       entity.arms = limbs.slice(2);
       entity.motion = createCharacterMotion(entity, model);
       actors.push({ entity, last: entity.mesh.position.clone(), velocity: new Vector3() });
     }
-    replacements.push({ entity: id, ...bounds });
+    replacements.push({ entity: id, kind: entity.kind ?? (entity.body ? 'cart' : 'vehicle'), shop: entity.shop ?? -1, id: entity.id ?? null, ...bounds });
   }
 
-  // The pilot district is deliberately limited to shop 01. The same adapter
-  // can later be invoked per shop after that location passes its own checks.
   replace(world.player, "hero", true);
-  replace(world.people.find((n) => n.kind === "staff" && n.shop === 0), "staff", true);
-  replace(world.vehicles[0], "hatchback");
-  const neighbours = world.people.filter((person) =>
-    person.kind === "civilian" &&
-    Math.hypot(person.home.x - SHOPS[0].x, person.home.z - SHOPS[0].z) < 32,
-  );
-  neighbours.forEach((person, index) => replace(person, index % 2 ? "hero" : "staff", true));
+  world.people.forEach((person, index) => {
+    const female = person.kind === 'staff' ? [0, 2, 6].includes(person.shop) : person.kind !== 'police' && index % 2 === 0;
+    replace(person, female ? 'staff' : 'hero', true);
+  });
+  for (const vehicle of world.vehicles) replace(vehicle, vehicle.police ? 'police' : vehicle.visualModel);
   // The existing cart collider bottom is local Y=0.05; match that resting
   // plane without changing the rigid body's placement or collision response.
-  for (const cart of world.carts.filter((c) => c.shop === 0)) replace(cart, "cart", false, 0.05);
+  for (const cart of world.carts) replace(cart, "cart", false, 0.05);
   // First person renders the same animated arm meshes at their exact world
   // transforms. The full avatar remains hidden, so its head/chest cannot fill
-  // the camera. Geometry/materials stay owned by the model library.
+  // the camera. Shared source resources belong to the library; masked arm
+  // geometry and material copies are owned and disposed by this adapter.
   const firstPersonArms = new Group();
   firstPersonArms.name = "first-person-arms";
   firstPersonArms.visible = false;
@@ -175,15 +203,39 @@ export async function createVisuals(scene, world, firstShopDecor) {
   }));
   let controls = { active: false, heldCart: null };
 
-  const district = createDistrict(scene, {
-    library, materials, box: world.box, shop: SHOPS[0],
+  const districts = SHOPS.map((shop) => createDistrict(scene, {
+    library, materials: materials.forShop(SHOP_STYLES[shop.id]), box: world.box, shop,
+  }));
+  for (const meshes of shopDecor) for (const mesh of meshes) mesh.visible = false;
+  const rollingVehicles = world.vehicles.map((vehicle) => {
+    const wheels = [], steering = [], doors = [];
+    vehicle.mesh.traverse((node) => {
+      if (/^VehicleWheel(?:Front|Rear|Back)(?:Left|Right)$/.test(node.name)) wheels.push(node);
+      if (/^VehicleSteerFront(?:Left|Right)$/.test(node.name)) steering.push(node);
+      if (node.name === 'DoorLeft' || node.name === 'DoorRight') doors.push(node);
+    });
+    return { vehicle, wheels, steering, doors, last: vehicle.mesh.position.clone() };
   });
-  for (const mesh of firstShopDecor) mesh.visible = false;
   let disposed = false;
   return {
     update(dt, time, input = {}) {
       controls = input;
-      district.update?.(dt, time);
+      for (const district of districts) {
+        district.root.visible = district.root.position.distanceTo(world.player.mesh.position) < 115;
+        district.update?.(dt, time);
+      }
+      for (const { vehicle, wheels, steering, doors, last } of rollingVehicles) {
+        const dx = vehicle.mesh.position.x - last.x, dz = vehicle.mesh.position.z - last.z;
+        const distance = Math.hypot(dx, dz);
+        if (input.active && distance < 2) {
+          const forward = Math.sin(vehicle.heading) * dx + Math.cos(vehicle.heading) * dz;
+          for (const wheel of wheels) wheel.rotation.x += Math.sign(forward || 1) * distance / (vehicle.wheelRadius || 0.43);
+          for (const pivot of steering) pivot.rotation.y = Math.atan2(Math.cos(vehicle.heading) * dx - Math.sin(vehicle.heading) * dz, Math.abs(forward) + 0.001) * 0.4;
+          vehicle.doorAnimation = Math.max(0, (vehicle.doorAnimation || 0) - dt * 1.8);
+          for (const door of doors) door.rotation.y = (door.name === 'DoorLeft' ? -1 : 1) * Math.sin((vehicle.doorAnimation || 0) * Math.PI) * 0.8;
+        }
+        last.copy(vehicle.mesh.position);
+      }
       for (const { cart, wheels } of rollingCarts) {
         cart.mesh.updateMatrixWorld(true);
         for (const item of wheels) {
@@ -213,6 +265,7 @@ export async function createVisuals(scene, world, firstShopDecor) {
         if (teleported || (entity === world.player && input.inVehicle)) velocity.set(0, 0, 0);
         else velocity.multiplyScalar(1 / Math.max(dt, 0.001));
         const isPlayer = entity === world.player;
+        if (!isPlayer && entity.mesh.position.distanceToSquared(world.player.mesh.position) > 75 * 75) continue;
         entity.motion.update(dt, {
           ...(isPlayer ? input : { active: entity.stun <= 0, grounded: true, crouch: false, attack: 0, guard: false }),
           active: isPlayer ? !input.inVehicle : entity.stun <= 0,
@@ -230,22 +283,27 @@ export async function createVisuals(scene, world, firstShopDecor) {
     },
     setFirstPerson(enabled) { firstPersonArms.visible = enabled; },
     get firstPersonHandsVisible() { return firstPersonArms.visible && armCopies.length > 0; },
-    setQuality(quality) { district.setQuality?.(quality); },
+    setQuality(quality) { for (const district of districts) district.setQuality?.(quality); },
     get diagnostics() {
       return {
         district: "01 / У дома",
         assets: { ...library.metrics },
         replacements: replacements.map((entry) => ({ ...entry, size: [...entry.size] })),
-        districtMetrics: { ...district.metrics },
+        districtMetrics: { ...districts[0].metrics },
+        districts: districts.map((district) => ({ ...district.metrics, visible: district.root.visible })),
       };
     },
     get motionDiagnostics() {
       return {
         player: world.player.motion ? { ...world.player.motion.diagnostics, heading: world.player.mesh.rotation.y } : null,
         heldCartId: world.carts.find((cart) => cart.mesh === controls.heldCart)?.id ?? null,
-        carts: rollingCarts.filter(({ cart, wheels }) => cart.shop === 0 || (wheels.length && cart.mesh === controls.heldCart)).map(({ cart, wheels }) => ({
+        carts: rollingCarts.map(({ cart, wheels }) => ({
           id: cart.id, position: cart.mesh.position.toArray(), heading: cart.mesh.rotation.y,
           wheelAngles: wheels.map(({ wheel }) => wheel.rotation.x),
+        })),
+        vehicles: rollingVehicles.map(({ vehicle, wheels, doors }) => ({
+          id: vehicle.id, wheelAngles: wheels.map((wheel) => wheel.rotation.x),
+          doorAngles: doors.map((door) => door.rotation.y),
         })),
       };
     },
@@ -256,7 +314,8 @@ export async function createVisuals(scene, world, firstShopDecor) {
       firstPersonArms.removeFromParent();
       for (const geometry of armGeometries) geometry.dispose();
       for (const material of armMaterials.values()) material.dispose();
-      district.dispose();
+      for (const district of districts) district.dispose();
+      for (const material of actorMaterials) material.dispose();
       library.dispose();
       materials.dispose();
     },

@@ -298,6 +298,7 @@ def cart():
     root['rigVersion']=2
     export('shopping-cart.glb')
 
-character()
-character(staff=True)
-cart()
+if __name__ == '__main__':
+    character()
+    character(staff=True)
+    cart()

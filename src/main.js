@@ -19,6 +19,7 @@ import { createWorld } from "./world.js";
 import { createUI } from "./ui.js";
 import { createAtmosphere } from "./visuals/atmosphere.js";
 import { createPointerCapture } from "./input/pointer-capture.js";
+import { PLAYER_SHAPE, nearestBoardableVehicle, vehicleDoor, circleIntersectsBox, boxesIntersect, vehicleBox } from "./spatial.js";
 const state = load();
 let settings = { sensitivity: 1, volume: 0.25, quality: "high" };
 try {
@@ -61,6 +62,7 @@ let visualTime = 0,
   slowFrames = 0;
 const v3 = new T.Vector3();
 const walkingVelocity = new T.Vector3();
+const cameraRay = new T.Ray(), cameraBounds = new T.Box3(), cameraHit = new T.Vector3(), cameraDelta = new T.Vector3();
 function notify(t) {
   ui.toast(t);
 }
@@ -68,6 +70,27 @@ function message(t) {
   state.messages.push(t);
   state.messages = state.messages.slice(-40);
   notify(t);
+}
+function findVehicleExit(v) {
+  const candidates = [vehicleDoor(v, -1), vehicleDoor(v, 1)];
+  for (const sign of [-1, 1]) candidates.push({
+    x: v.mesh.position.x + Math.sin(v.heading) * sign * (v.l + 0.65),
+    z: v.mesh.position.z + Math.cos(v.heading) * sign * (v.l + 0.65),
+  });
+  return candidates.find((p) => !world.blocked(p.x, p.z));
+}
+function avoidCameraCollision(origin, desired) {
+  cameraDelta.copy(desired).sub(origin);
+  let distance = cameraDelta.length();
+  if (distance < 0.001) return;
+  cameraDelta.multiplyScalar(1 / distance);
+  cameraRay.set(origin, cameraDelta);
+  for (const box of world.blockers) {
+    cameraBounds.min.set(box.x - box.w, box.y - box.h / 2, box.z - box.d);
+    cameraBounds.max.set(box.x + box.w, box.y + box.h / 2, box.z + box.d);
+    if (cameraRay.intersectBox(cameraBounds, cameraHit)) distance = Math.min(distance, Math.max(0.1, origin.distanceTo(cameraHit) - 0.14));
+  }
+  desired.copy(origin).addScaledVector(cameraDelta, distance);
 }
 function snapshot() {
   if (!world || resetting) return;
@@ -86,18 +109,12 @@ function snapshot() {
     x: v.mesh.position.x,
     z: v.mesh.position.z,
     heading: v.heading,
+    claimed: !!v.claimed,
   }));
   let savedPosition = state.position;
   if (vehicle) {
-    const p = vehicle.mesh.position;
-    const options = [
-      [4, 0],
-      [-4, 0],
-      [0, 6],
-      [0, -6],
-    ];
-    const offset = options.find(([x, z]) => !world.blocked(p.x + x, p.z + z));
-    if (offset) savedPosition = { x: p.x + offset[0], z: p.z + offset[1] };
+    const exit = findVehicleExit(vehicle);
+    if (exit) savedPosition = exit;
   }
   try {
     save({ ...state, position: savedPosition });
@@ -347,12 +364,12 @@ try {
   const playerBody = world.physics.createRigidBody(
     world.RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(
       state.position.x,
-      0.9,
+      world.groundHeight(state.position.x, state.position.z) + PLAYER_SHAPE.height / 2,
       state.position.z,
     ),
   );
   world.physics.createCollider(
-    world.RAPIER.ColliderDesc.capsule(0.45, 0.38),
+    world.RAPIER.ColliderDesc.capsule(PLAYER_SHAPE.height / 2 - PLAYER_SHAPE.radius, PLAYER_SHAPE.radius),
     playerBody,
   );
   const rainPoints = new Float32Array(750 * 3);
@@ -383,7 +400,10 @@ try {
   );
   scene.add(marker);
   function dist(obj) {
-    return obj.mesh.position.distanceTo(world.player.mesh.position);
+    const player = world.player.mesh.position;
+    // Shelves expose an approach point in the aisle. Their raised marker is
+    // decoration, not a 3D distance penalty on top of the interaction range.
+    return Math.hypot((obj.x ?? obj.mesh.position.x) - player.x, (obj.z ?? obj.mesh.position.z) - player.z);
   }
   function nearest(list, max) {
     let best = null,
@@ -425,13 +445,9 @@ try {
       3,
     );
     if (cart) return "R · Взяться за ручку тележки";
-    if (
-      nearest(
-        world.vehicles.filter((v) => !v.traffic && !v.police),
-        5,
-      )
-    )
-      return "E · Сесть в автомобиль";
+    const car = nearestBoardableVehicle(world.vehicles, pos);
+    if (car) return car.traffic && !car.claimed
+      ? `E · Остановить и сесть · ${car.displayName}` : `E · Сесть · ${car.displayName}`;
     return "";
   }
   function interact() {
@@ -442,27 +458,16 @@ try {
         if (cargo) return;
       }
       const v = vehicle;
-      let exit = null;
-      for (const offset of [
-        [4, 0],
-        [-4, 0],
-        [0, -6],
-        [0, 6],
-      ]) {
-        const x = v.mesh.position.x + offset[0],
-          z = v.mesh.position.z + offset[1];
-        if (!world.blocked(x, z)) {
-          exit = { x, z };
-          break;
-        }
-      }
+      const exit = findVehicleExit(v);
       if (!exit) {
         notify("Выход заблокирован. Переставьте машину.");
         return;
       }
       vehicle = null;
       world.player.mesh.visible = true;
-      world.player.mesh.position.set(exit.x, 0, exit.z);
+      world.player.mesh.position.set(exit.x, world.groundHeight(exit.x, exit.z), exit.z);
+      jump = vertical = 0;
+      v.doorAnimation = 1;
       v.speed = 0;
       notify("Пешком тоже неплохо.");
       return;
@@ -506,25 +511,32 @@ try {
       beep(500);
       return;
     }
-    const car = nearest(
-      world.vehicles.filter((v) => !v.traffic && !v.police),
-      5,
-    );
+    const car = nearestBoardableVehicle(world.vehicles, pos);
     if (car) {
       if (held) {
         notify("Сначала отпустите тележку.");
         return;
       }
       vehicle = car;
+      if (car.traffic && !car.claimed) {
+        car.claimed = true;
+        crime(1);
+        message(`Вы забрали ${car.displayName}. Водитель сообщил об угоне.`);
+      }
+      walkingVelocity.set(0, 0, 0);
+      held = null;
+      jump = vertical = 0;
+      world.player.mesh.position.copy(car.mesh.position);
       world.player.mesh.visible = false;
       car.speed = 0;
+      car.doorAnimation = 1;
       yaw = car.heading + Math.PI;
       notify(
         [
-          "Компакт · манёвренный",
-          "Фургон · можно перевозить тележку",
-          "Служебная · быстрый разгон",
-          "Грузовик · тяжёлый, перевозит тележку",
+          `${car.displayName} · манёвренный`,
+          `${car.displayName} · можно перевозить тележку`,
+          `${car.displayName} · быстрый разгон`,
+          `${car.displayName} · тяжёлый, перевозит тележку`,
         ][car.type],
       );
     }
@@ -682,6 +694,7 @@ try {
     if (vehicle) {
       walkingVelocity.set(0, 0, 0);
       const old = vehicle.mesh.position.clone(),
+        oldHeading = vehicle.heading,
         sign = Math.sign(vehicle.speed);
       vehicle.speed += forward * vehicle.accel * dt;
       vehicle.speed *= Math.pow(
@@ -704,15 +717,15 @@ try {
       const p = vehicle.mesh.position;
       const nx = p.x + dx,
         nz = p.z + dz;
-      const radius = Math.max(vehicle.w, vehicle.l * 0.75);
-      if (world.blocked(nx, nz, radius, vehicle)) {
+      if (world.vehicleBlocked(vehicle, nx, nz)) {
         if (Math.abs(vehicle.speed) > 7) {
           state.health -= Math.abs(vehicle.speed) * 0.5;
           state.stress += 4;
           beep(80, 0.2);
         }
         vehicle.speed *= -0.25;
-      } else p.set(nx, 0, nz);
+        vehicle.heading = oldHeading;
+      } else p.set(nx, world.groundHeight(nx, nz), nz);
       vehicle.mesh.rotation.y = vehicle.heading;
       pos.copy(p);
       for (const n of world.people) {
@@ -795,7 +808,7 @@ try {
       vertical -= 20 * dt;
       jump = Math.max(0, jump + vertical * dt);
       if (jump === 0) vertical = 0;
-      pos.y = jump;
+      pos.y = world.groundHeight(pos.x, pos.z) + jump;
       // Articulated characters crouch at the hips/knees, preserving limb size.
       world.player.mesh.scale.y = world.player.motion ? 1 : crouch ? 0.7 : 1;
       if (held) {
@@ -829,7 +842,7 @@ try {
     }
     playerBody.setNextKinematicTranslation({
       x: pos.x,
-      y: vehicle ? -10 : pos.y + 0.9,
+      y: vehicle ? -10 : pos.y + PLAYER_SHAPE.height / 2,
       z: pos.z,
     });
     state.position = { x: pos.x, z: pos.z };
@@ -881,11 +894,11 @@ try {
       if (n.stun > 0) {
         n.stun -= dt;
         n.mesh.rotation.z = 1.25;
-        n.mesh.position.y = 0.2;
+        n.mesh.position.y = world.groundHeight(n.mesh.position.x, n.mesh.position.z) + 0.2;
         continue;
       }
       n.mesh.rotation.z = 0;
-      n.mesh.position.y = 0;
+      n.mesh.position.y = world.groundHeight(n.mesh.position.x, n.mesh.position.z);
       const d = n.mesh.position.distanceTo(player);
       let target = null,
         speed = 1.1;
@@ -952,6 +965,7 @@ try {
           if (!world.blocked(nx, nz, 0.4)) {
             n.mesh.position.x = nx;
             n.mesh.position.z = nz;
+            n.mesh.position.y = world.groundHeight(nx, nz);
           }
           n.mesh.rotation.y = Math.atan2(delta.x, delta.z);
           n.legs.forEach(
@@ -986,6 +1000,7 @@ try {
         officer.mesh.position.set(p.x + 3, 0, p.z);
     }
     for (const v of world.vehicles.filter((v) => v.traffic)) {
+      if (v === vehicle || v.claimed) continue;
       if (v.rival) {
         const stop = SHOPS[Math.floor(state.time / 80) % 8],
           d = stop.x - v.mesh.position.x,
@@ -1002,7 +1017,8 @@ try {
             )
           )
             v.mesh.position.add(step);
-          v.mesh.rotation.y = Math.atan2(step.x, step.z);
+          v.heading = Math.atan2(step.x, step.z);
+          v.mesh.rotation.y = v.heading;
         } else if (Math.floor(state.time / 80) !== v.lastVisit) {
           v.lastVisit = Math.floor(state.time / 80);
           if (!state.shops[stop.id].done) {
@@ -1017,18 +1033,21 @@ try {
         }
         continue;
       }
-      v.mesh.position.z += dt * 6;
+      v.speed = 6;
+      v.mesh.position.z += dt * v.speed;
       v.heading = 0;
       v.mesh.rotation.y = 0;
       if (v.mesh.position.z > 150) v.mesh.position.z = -115;
-      const d = v.mesh.position.distanceTo(player);
-      if (!vehicle && d < 2.8) {
+      v.mesh.position.y = world.groundHeight(v.mesh.position.x, v.mesh.position.z);
+      v.impactCooldown = Math.max(0, (v.impactCooldown || 0) - dt);
+      if (!vehicle && v.impactCooldown === 0 && circleIntersectsBox(player.x, player.z, PLAYER_SHAPE.radius, vehicleBox(v))) {
+        v.impactCooldown = 1.5;
         state.health -= 15;
         state.stress += 8;
         player.x -= 4;
         notify("Смотрите по сторонам!");
       }
-      if (vehicle && d < 5) {
+      if (vehicle && boxesIntersect(vehicleBox(vehicle), vehicleBox(v))) {
         vehicle.speed *= -0.3;
         v.mesh.position.z += 8;
         state.health -= 4;
@@ -1141,7 +1160,7 @@ try {
       camera.lookAt(-64, 2, 18);
       return;
     }
-    const target = pos.clone().add(new T.Vector3(0, vehicle ? 2 : firstPerson ? 1.8 : 1.45, 0));
+    const target = pos.clone().add(new T.Vector3(0, vehicle ? 2 : firstPerson ? PLAYER_SHAPE.eyeHeight : 1.3, 0));
     let desired;
     if (firstPerson && !vehicle) {
       desired = target;
@@ -1160,17 +1179,20 @@ try {
       );
     } else {
       world.player.mesh.visible = !vehicle;
-      const r = vehicle ? 12 : 6;
+      const r = vehicle ? 10 : 4.25;
       desired = target
         .clone()
         .add(
           new T.Vector3(
             Math.sin(yaw) * r * Math.cos(pitch),
-            (vehicle ? 2 : 1) + Math.sin(pitch) * r,
+            (vehicle ? 2 : 0.6) + Math.sin(pitch) * r,
             Math.cos(yaw) * r * Math.cos(pitch),
           ),
         );
+      avoidCameraCollision(target, desired);
       camera.position.lerp(desired, 1 - Math.exp(-dt * 10));
+      avoidCameraCollision(target, camera.position);
+      if (!vehicle) world.player.mesh.visible = camera.position.distanceTo(target) > 0.65;
       camera.lookAt(target);
     }
   }
@@ -1270,6 +1292,8 @@ try {
         firstPerson,
         playerVisible: world.player.mesh.visible,
         playerY: world.player.mesh.position.y,
+        groundHeight: world.groundHeight(world.player.mesh.position.x, world.player.mesh.position.z),
+        collisionRadius: PLAYER_SHAPE.radius,
         firstPersonHandsVisible: world.visuals?.firstPersonHandsVisible ?? false,
         fov: camera.fov,
         pointerLocked: mouseCapture.captured,
@@ -1278,6 +1302,14 @@ try {
     },
     get motion() {
       return world.visuals?.motionDiagnostics ?? null;
+    },
+    get vehicles() {
+      return world.vehicles.map((v) => ({ id: v.id, type: v.type, model: v.visualModel, name: v.displayName,
+        traffic: v.traffic, claimed: v.claimed, controlled: v === vehicle,
+        position: v.mesh.position.toArray(), heading: v.heading, speed: v.speed, halfWidth: v.w, halfLength: v.l }));
+    },
+    get navigation() {
+      return { streetObstructions: world.streetObstructions.map(({ x, z, w, d }) => ({ x, z, w, d })) };
     },
   };
   // BFCache preserves the page and its GPU resources. Dispose only on a real exit.
