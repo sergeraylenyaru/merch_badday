@@ -108,16 +108,24 @@ export function createUI(state, actions) {
     $("context").classList.add("hidden");
     $("crosshair").classList.add("hidden");
   }
+  function confirmNewShift() {
+    if (confirm("Начать новую смену? Маршрут, деньги и задания текущей смены будут сброшены. Настройки останутся."))
+      actions.restart();
+  }
   function intro() {
+    const hasProgress = state.time > 0 || state.shops.some((shop) =>
+      shop.done || shop.carts > 0 || shop.badge || shop.shelf || shop.photo,
+    );
     show(
-      `<div class="veil"><div class="intro"><div class="tag">ГОРОДСКАЯ ПЕСОЧНИЦА · ПЕРВАЯ СМЕНА</div><h1>ПЛОХОЙ ДЕНЬ<br><em>МЕРЧА.</em></h1><p class="subtitle">Восемь магазинов. Один мерчендайзер.<br>Ноль причин задерживаться на работе.</p><p>Собирай тележки, договаривайся с директорами и закрой маршрут до конца смены. Или посмотри, насколько плохим может стать этот день.</p><div class="actions"><button class="primary" id="begin">${state.time > 0 ? "ПРОДОЛЖИТЬ СМЕНУ" : "ВЫЙТИ НА МАРШРУТ"} ↗</button><button class="secondary" id="how">КАК ВЫЖИТЬ?</button></div><div class="introfooter"><div><b>08</b>ТОРГОВЫХ ТОЧЕК</div><div><b>25</b>МИНУТ ДО КОНЦА ДНЯ</div><div><b>∞</b>НЕУДАЧНЫХ РЕШЕНИЙ</div></div></div><div class="buildtag">СЕВЕРНЫЙ РАЙОН / У ДОМА</div></div>`,
+      `<div class="veil"><div class="intro"><div class="tag">ГОРОДСКАЯ ПЕСОЧНИЦА · ПЕРВАЯ СМЕНА</div><h1>ПЛОХОЙ ДЕНЬ<br><em>МЕРЧА.</em></h1><p class="subtitle">Восемь магазинов. Один мерчендайзер.<br>Ноль причин задерживаться на работе.</p><p>Собирай тележки, договаривайся с директорами и закрой маршрут до конца смены. Или посмотри, насколько плохим может стать этот день.</p><div class="actions"><button class="primary" id="begin">${hasProgress ? "ПРОДОЛЖИТЬ СМЕНУ" : "ВЫЙТИ НА МАРШРУТ"} ↗</button>${hasProgress ? '<button class="secondary" id="newShift" title="Сбросить текущий маршрут и начать с 08:00">НОВАЯ СМЕНА</button>' : ""}<button class="secondary" id="how">КАК ВЫЖИТЬ?</button></div><div class="introfooter"><div><b>08</b>ТОРГОВЫХ ТОЧЕК</div><div><b>25</b>МИНУТ ДО КОНЦА ДНЯ</div><div><b>∞</b>НЕУДАЧНЫХ РЕШЕНИЙ</div></div></div><div class="buildtag">СЕВЕРНЫЙ РАЙОН / У ДОМА</div></div>`,
     );
     $("begin").onclick = actions.resume;
     $("how").onclick = () => pause(true);
+    if ($("newShift")) $("newShift").onclick = confirmNewShift;
   }
   function pause(help = false) {
     show(
-      `<div class="modal"><div class="window settings"><div class="eyebrow">${help ? "ПАМЯТКА МЕРЧЕНДАЙЗЕРА" : "КОФЕ-БРЕЙК"}</div><h2>${help ? "Как пережить эту смену" : "Смена на паузе"}</h2><p>WASD — ходить или вести машину; Shift — бег / ручной тормоз; Space — прыжок / тормоз; Ctrl — присесть; C — камера. Мышь — обзор (щелчок по городу захватывает курсор).</p><p>E — разговор, полка, кофе, сесть / выйти из машины. R — тянуть или отпустить ближайшую тележку; в фургоне — загрузить / выгрузить. F / ЛКМ — удар, G — сильный удар, Q — блок. M — телефон; Tab — карта.</p><p>Отнесите тележки в жёлтый прямоугольник, выполните просьбу сотрудника и получите подпись. Фото — во вкладке телефона у зоны тележек. Прогресс сохраняется автоматически; телефон и диалоги ставят игру на паузу.</p><label>Чувствительность мыши<input id="sensitivity" type="range" min="0.2" max="2" step="0.1" value="${actions.settings.sensitivity}"></label><label>Громкость<input id="volume" type="range" min="0" max="1" step="0.05" value="${actions.settings.volume}"></label><label>Качество<select id="quality"><option value="low">Экономное</option><option value="high">Высокое</option></select></label><div class="actions"><button class="primary" id="resume">${help ? "ПОНЯТНО, НА МАРШРУТ" : "ПРОДОЛЖИТЬ"}</button><button class="secondary" id="finish">Завершить день</button><button class="secondary" id="quit">Бросить маршрут</button><button class="secondary" id="new">Новая смена</button></div></div></div>`,
+      `<div class="modal"><div class="window settings"><div class="eyebrow">${help ? "ПАМЯТКА МЕРЧЕНДАЙЗЕРА" : "КОФЕ-БРЕЙК"}</div><h2>${help ? "Как пережить эту смену" : "Смена на паузе"}</h2><p>WASD — ходить или вести машину; Shift — бег / ручной тормоз; Space — прыжок / тормоз; Ctrl — присесть; C — камера. Мышь — обзор (щелчок по городу захватывает курсор).</p><p>E — разговор, полка, кофе, сесть / выйти из машины. R — взяться за ручку / отпустить тележку; в фургоне — загрузить / выгрузить. С тележкой WASD — движение, мышь или стрелки ← → — поворот. F / ЛКМ — удар, G — сильный удар, Q — блок. M — телефон; Tab — карта.</p><p>Отнесите тележки в жёлтый прямоугольник, выполните просьбу сотрудника и получите подпись. Фото — во вкладке телефона у зоны тележек. Прогресс сохраняется автоматически; телефон и диалоги ставят игру на паузу.</p><label>Чувствительность мыши<input id="sensitivity" type="range" min="0.2" max="2" step="0.1" value="${actions.settings.sensitivity}"></label><label>Громкость<input id="volume" type="range" min="0" max="1" step="0.05" value="${actions.settings.volume}"></label><label>Качество<select id="quality"><option value="low">Экономное</option><option value="high">Высокое</option></select></label><div class="actions"><button class="primary" id="resume">${help ? "ПОНЯТНО, НА МАРШРУТ" : "ПРОДОЛЖИТЬ"}</button><button class="secondary" id="finish">Завершить день</button><button class="secondary" id="quit">Бросить маршрут</button><button class="secondary" id="new">Новая смена</button></div></div></div>`,
     );
     $("quality").value = actions.settings.quality;
     $("quality").onchange = (e) => actions.configure("quality", e.target.value);
@@ -127,10 +135,7 @@ export function createUI(state, actions) {
     $("resume").onclick = actions.resume;
     $("finish").onclick = actions.finish;
     $("quit").onclick = actions.quit;
-    $("new").onclick = () => {
-      if (confirm("Начать новую смену? Текущее сохранение будет заменено."))
-        actions.restart();
-    };
+    $("new").onclick = confirmNewShift;
   }
   function phone(which = tab) {
     tab = which;

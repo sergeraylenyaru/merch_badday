@@ -51,6 +51,7 @@ let world,
   lastEvent = 0,
   stressEvent = false,
   hasStarted = false,
+  resetting = false,
   audio = null;
 const keys = new Set(),
   clock = new T.Clock();
@@ -66,7 +67,7 @@ function message(t) {
   notify(t);
 }
 function snapshot() {
-  if (!world) return;
+  if (!world || resetting) return;
   state.position = {
     x: world.player.mesh.position.x,
     z: world.player.mesh.position.z,
@@ -76,7 +77,7 @@ function snapshot() {
       c === cargo && vehicle
         ? { x: vehicle.mesh.position.x - 5, z: vehicle.mesh.position.z + 5 }
         : c.body.translation();
-    return { x: p.x, z: p.z };
+    return { x: p.x, z: p.z, heading: c.mesh.rotation.y };
   });
   state.vehicles = world.vehicles.map((v) => ({
     x: v.mesh.position.x,
@@ -172,6 +173,8 @@ function end(quit = false) {
   ui.ending();
 }
 function restart() {
+  // pagehide also saves. Do not let that handler restore the shift being reset.
+  resetting = true;
   localStorage.removeItem("merch-badday-v1");
   location.reload();
 }
@@ -404,7 +407,7 @@ try {
       world.carts.filter((c) => !c.delivered),
       3,
     );
-    if (cart) return "R · Взять тележку";
+    if (cart) return "R · Взяться за ручку тележки";
     if (
       nearest(
         world.vehicles.filter((v) => !v.traffic && !v.police),
@@ -546,16 +549,27 @@ try {
       beep(250);
       return;
     }
+    if (jump > 0.02) {
+      notify("Чтобы взяться за ручку, сначала встаньте на землю.");
+      return;
+    }
     const cart = nearest(
       world.carts.filter((c) => !c.delivered),
       3,
     );
     if (cart) {
       held = cart;
-      notify("Тележка взята. Подведите её к жёлтой зоне, затем отпустите.");
+      held.pushHeading = yaw + Math.PI;
+      held.gripTime = 0;
+      attack = 0;
+      notify("Держим ручку двумя руками. WASD — везти, R — отпустить в жёлтой зоне.");
     }
   }
   function hit(strong = false) {
+    if (held) {
+      notify("Сначала отпустите ручку тележки: R.");
+      return;
+    }
     if (vehicle || attack > 0) return;
     attackKind = strong ? "strong" : "quick";
     attack = strong ? 0.85 : 0.35;
@@ -611,7 +625,7 @@ try {
     if (e.code === "KeyF") hit();
     if (e.code === "KeyG") hit(true);
     if (e.code === "KeyC") firstPerson = !firstPerson;
-    if (e.code === "Space" && !vehicle && jump === 0) vertical = 8;
+    if (e.code === "Space" && !vehicle && !held && jump === 0) vertical = 8;
   });
   document.addEventListener("keyup", (e) => keys.delete(e.code));
   window.addEventListener("blur", () => {
@@ -722,7 +736,7 @@ try {
           );
       }
     } else {
-      const crouch = keys.has("ControlLeft"),
+      const crouch = !held && keys.has("ControlLeft"),
         speed =
           (crouch
             ? 2
@@ -736,12 +750,30 @@ try {
       let dx = -Math.sin(yaw) * forward + Math.cos(yaw) * side,
         dz = -Math.cos(yaw) * forward - Math.sin(yaw) * side;
       const len = Math.hypot(dx, dz);
+      if (held) {
+        const turn = Math.atan2(Math.sin(yaw + Math.PI - held.pushHeading), Math.cos(yaw + Math.PI - held.pushHeading));
+        const proposed = held.pushHeading + turn * (1 - Math.exp(-dt * 9));
+        const frontX = pos.x + Math.sin(proposed) * 1.32;
+        const frontZ = pos.z + Math.cos(proposed) * 1.32;
+        if (!world.blocked(frontX, frontZ, 0.88)) held.pushHeading = proposed;
+        world.player.mesh.rotation.y = held.pushHeading;
+      }
       if (len) {
         dx = (dx / len) * speed * dt;
         dz = (dz / len) * speed * dt;
-        if (!world.blocked(pos.x + dx, pos.z)) pos.x += dx;
-        if (!world.blocked(pos.x, pos.z + dz)) pos.z += dz;
-        world.player.mesh.rotation.y = Math.atan2(dx, dz);
+        const aheadX = held ? Math.sin(held.pushHeading) * 1.32 : 0;
+        const aheadZ = held ? Math.cos(held.pushHeading) * 1.32 : 0;
+        const cp = held?.body.translation();
+        const attached = !held || held.gripTime < 0.35 || Math.hypot(cp.x - pos.x - aheadX, cp.z - pos.z - aheadZ) < 0.65;
+        if (attached && !world.blocked(pos.x + dx, pos.z) &&
+            (!held || !world.blocked(pos.x + dx + aheadX, pos.z + aheadZ, 0.88))) pos.x += dx;
+        if (attached && !world.blocked(pos.x, pos.z + dz) &&
+            (!held || !world.blocked(pos.x + aheadX, pos.z + dz + aheadZ, 0.88))) pos.z += dz;
+        if (!held) {
+          const target = Math.atan2(dx, dz);
+          const turn = Math.atan2(Math.sin(target - world.player.mesh.rotation.y), Math.cos(target - world.player.mesh.rotation.y));
+          world.player.mesh.rotation.y += turn * (1 - Math.exp(-dt * 14));
+        }
         for (const [i, leg] of world.player.legs.entries())
           leg.rotation.x = Math.sin(visualTime * speed * 2 + i * Math.PI) * 0.5;
       } else world.player.legs.forEach((l) => (l.rotation.x = 0));
@@ -749,18 +781,24 @@ try {
       jump = Math.max(0, jump + vertical * dt);
       if (jump === 0) vertical = 0;
       pos.y = jump;
-      world.player.mesh.scale.y = crouch ? 0.7 : 1;
+      // Articulated characters crouch at the hips/knees, preserving limb size.
+      world.player.mesh.scale.y = world.player.motion ? 1 : crouch ? 0.7 : 1;
       if (held) {
         const p = held.body.translation();
-        const tx = pos.x - Math.sin(yaw) * 1.9,
-          tz = pos.z - Math.cos(yaw) * 1.9;
+        const tx = pos.x + Math.sin(held.pushHeading) * 1.32,
+          tz = pos.z + Math.cos(held.pushHeading) * 1.32;
+        held.gripTime += dt;
+        const ex = tx - p.x, ez = tz - p.z;
+        const gain = Math.min(1 / Math.max(dt, 0.001), 6 / Math.max(Math.hypot(ex, ez), 0.001));
         held.body.setLinvel(
-          { x: (tx - p.x) * 8, y: 0, z: (tz - p.z) * 8 },
+          { x: ex * gain, y: held.body.linvel().y, z: ez * gain },
           true,
         );
-        if (Math.hypot(p.x - pos.x, p.z - pos.z) > 6) {
+        held.body.setRotation({ x: 0, y: Math.sin(held.pushHeading / 2), z: 0, w: Math.cos(held.pushHeading / 2) }, true);
+        if (Math.hypot(p.x - pos.x, p.z - pos.z) > 6 ||
+            (held.gripTime > 0.8 && Math.hypot(ex, ez) > 0.65)) {
           held = null;
-          notify("Тележка застряла. Подойдите с другой стороны.");
+          notify("Ручка недоступна: тележка упёрлась в препятствие. Подойдите с другой стороны.");
         }
       }
       for (const c of world.carts) {
@@ -805,6 +843,9 @@ try {
       if (c === cargo) continue;
       const p = c.body.translation();
       c.mesh.position.set(p.x, p.y, p.z);
+      const q = c.body.rotation();
+      c.heading = Math.atan2(2 * (q.w * q.y + q.x * q.z), 1 - 2 * (q.y * q.y + q.x * q.x));
+      c.mesh.rotation.set(0, c.heading, 0);
       const zone = world.zones[c.shop];
       const good =
         c !== held &&
@@ -1074,6 +1115,12 @@ try {
   }
   function updateCamera(dt) {
     const pos = world.player.mesh.position;
+    world.visuals?.setFirstPerson(firstPerson && !vehicle && hasStarted);
+    const fov = firstPerson && !vehicle && hasStarted ? 78 : 58;
+    if (camera.fov !== fov) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
     if (!hasStarted) {
       camera.position.set(-45, 12, 49);
       camera.lookAt(-64, 2, 18);
@@ -1172,7 +1219,12 @@ try {
       player: world.player.mesh.position,
       dt,
     });
-    world.visuals?.update?.(dt, visualTime);
+    world.visuals?.update?.(dt, visualTime, {
+      active: mode === "play", heldCart: held?.mesh ?? null,
+      grounded: jump <= 0, verticalVelocity: vertical,
+      crouch: !held && keys.has("ControlLeft"), guard: !held && keys.has("KeyQ"),
+      attack, attackKind, inVehicle: !!vehicle,
+    });
     ui.update(world, vehicle);
     renderer.render(scene, camera);
   }
@@ -1202,7 +1254,12 @@ try {
         firstPerson,
         playerVisible: world.player.mesh.visible,
         playerY: world.player.mesh.position.y,
+        firstPersonHandsVisible: world.visuals?.firstPersonHandsVisible ?? false,
+        fov: camera.fov,
       };
+    },
+    get motion() {
+      return world.visuals?.motionDiagnostics ?? null;
     },
   };
   // BFCache preserves the page and its GPU resources. Dispose only on a real exit.

@@ -228,12 +228,19 @@ export async function createWorld(scene, state) {
             new T.SphereGeometry(0.15, 6, 6),
             mat("#2d3c35"),
           );
+          wheel.name = `Wheel${dz < 0 ? "Rear" : "Front"}${dx < 0 ? "Left" : "Right"}`;
           wheel.position.set(dx, 0.2, dz);
           g.add(wheel);
         }
       const handle = new T.Mesh(new T.BoxGeometry(1.2, 0.13, 0.15), mat(color));
       handle.position.set(0, 1.5, -0.85);
       g.add(handle);
+      for (const [side, name] of [[-1, "CartHandleLeft"], [1, "CartHandleRight"]]) {
+        const anchor = new T.Object3D();
+        anchor.name = name;
+        anchor.position.set(side * 0.42, 1.5, -0.85);
+        g.add(anchor);
+      }
       scene.add(g);
       const body = physics.createRigidBody(
         RAPIER.RigidBodyDesc.dynamic()
@@ -242,6 +249,8 @@ export async function createWorld(scene, state) {
           .setAngularDamping(5)
           .lockRotations(),
       );
+      const heading = Number.isFinite(saved?.heading) ? saved.heading : 0;
+      body.setRotation({ x: 0, y: Math.sin(heading / 2), z: 0, w: Math.cos(heading / 2) }, true);
       physics.createCollider(
         RAPIER.ColliderDesc.cuboid(0.6, 0.6, 0.85)
           .setTranslation(0, 0.65, 0)

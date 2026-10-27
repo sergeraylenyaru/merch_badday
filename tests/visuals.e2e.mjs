@@ -50,7 +50,7 @@ async function createScenario(browser, state = freshState(), { missingCart = fal
     localStorage.setItem("merch-settings", JSON.stringify({ quality: "low", volume: 0, sensitivity: 1 }));
     sessionStorage.setItem("visual-fixture", "1");
   }, state);
-  if (missingCart) await context.route("**/models/original/shopping-cart.glb", (route) => route.abort());
+  if (missingCart) await context.route("**/models/original/shopping-cart.glb*", (route) => route.abort());
   const page = await context.newPage();
   page.setDefaultTimeout(20000);
   const events = { errors: [], consoleErrors: [], warnings: [], requests: new Map(), failedRequests: [] };

@@ -5,7 +5,7 @@ Game-space coordinates: +Y up, +Z forward; export is floor centered.
 """
 from pathlib import Path
 import bpy
-from math import pi
+from math import pi, sin, cos
 from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -142,73 +142,90 @@ def character(staff=False):
     black=material('rubber and eyes','20262b')
     metal=material('brushed hardware','b5bac0',.65,.4)
     root=empty('StoreStaff' if staff else 'MerchHero')
+    spine=empty('Spine',(0,1.20,0),root)
     # Torso is a shaped rounded jacket, separate shoulder and hip volumes.
-    sphere('tailored jacket', (0,1.54,0),(.385,.435,.225),blue,root)
-    box('jacket hem',(0,1.19,0),(.61,.14,.36),navy,root,.05)
-    sphere('shoulders',(0,1.78,0),(.43,.18,.23),blue,root)
-    rod('neck',(0,1.88,0),(0,2.01,0),.12,skin,root)
-    sphere('face',(0,2.13,.018),(.238,.285,.215),skin,root)
-    sphere('hair back',(0,2.23,-.065),(.247,.21,.18),hair,root)
+    sphere('tailored jacket', (0,1.54,0),(.385,.435,.225),blue,spine)
+    box('jacket hem',(0,1.19,0),(.61,.14,.36),navy,spine,.05)
+    sphere('shoulders',(0,1.78,0),(.43,.18,.23),blue,spine)
+    rod('neck',(0,1.88,0),(0,2.01,0),.12,skin,spine)
+    head=empty('Head',(0,1.94,0),spine)
+    sphere('face',(0,2.13,.018),(.238,.285,.215),skin,head)
+    sphere('hair back',(0,2.23,-.065),(.247,.21,.18),hair,head)
     for side in (-1,1):
-        sphere('ear',(side*.236,2.13,0),(.047,.078,.05),skin,root)
-        sphere('eye white',(side*.081,2.18,.212),(.047,.028,.012),white,root)
-        sphere('pupil',(side*.081,2.18,.223),(.019,.021,.007),black,root)
-        rod('eyebrow',(side*.045,2.237,.207),(side*.115,2.231,.198),.009,hair,root)
-    sphere('nose',(0,2.11,.238),(.037,.055,.052),skin,root)
-    rod('mouth',(-.047,2.023,.191),(.047,2.023,.191),.008,hair,root)
+        sphere('ear',(side*.236,2.13,0),(.047,.078,.05),skin,head)
+        sphere('eye white',(side*.081,2.18,.212),(.047,.028,.012),white,head)
+        sphere('pupil',(side*.081,2.18,.223),(.019,.021,.007),black,head)
+        rod('eyebrow',(side*.045,2.237,.207),(side*.115,2.231,.198),.009,hair,head)
+    sphere('nose',(0,2.11,.238),(.037,.055,.052),skin,head)
+    rod('mouth',(-.047,2.023,.191),(.047,2.023,.191),.008,hair,head)
     # Cap crown and brim. Brim is rounded and reads well in third person.
-    sphere('uniform cap',(0,2.34,-.015),(.26,.10,.235),navy,root)
-    sphere('cap brim',(0,2.305,.215),(.25,.025,.18),navy,root)
-    box('cap crest',(0,2.352,.201),(.095,.045,.012),yellow,root,.005)
+    sphere('uniform cap',(0,2.34,-.015),(.26,.10,.235),navy,head)
+    sphere('cap brim',(0,2.305,.215),(.25,.025,.18),navy,head)
+    box('cap crest',(0,2.352,.201),(.095,.045,.012),yellow,head,.005)
     if staff:
-        sphere('tied hair',(0,2.17,-.25),(.13,.17,.13),hair,root)
+        sphere('tied hair',(0,2.17,-.25),(.13,.17,.13),hair,head)
     # Collar, zip, pockets, identity patch and a usable looking ID lanyard.
     for side in (-1,1):
-        rod('collar',(side*.15,1.94,.11),(side*.075,1.82,.217),.04,navy,root)
-    rod('jacket zip',(0,1.21,.199),(0,1.83,.23),.008,metal,root)
-    box('pocket',( .205,1.59,.207),(.16,.15,.028),navy,root,.014)
-    box('chest patch',(-.205,1.72,.214),(.19,.07,.022),yellow,root,.007)
-    text('chest embroidery','MERCH',(-.205,1.707,.229),.042,navy,root)
-    box('back work patch',(0,1.69,-.225),(.47,.17,.022),yellow,root,.008)
-    text('back embroidery','MERCH',(0,1.65,-.242),.105,navy,root,True)
+        rod('collar',(side*.15,1.94,.11),(side*.075,1.82,.217),.04,navy,spine)
+    rod('jacket zip',(0,1.21,.199),(0,1.83,.23),.008,metal,spine)
+    box('pocket',( .205,1.59,.207),(.16,.15,.028),navy,spine,.014)
+    box('chest patch',(-.205,1.72,.214),(.19,.07,.022),yellow,spine,.007)
+    text('chest embroidery','MERCH',(-.205,1.707,.229),.042,navy,spine)
+    box('back work patch',(0,1.69,-.225),(.47,.17,.022),yellow,spine,.008)
+    text('back embroidery','MERCH',(0,1.65,-.242),.105,navy,spine,True)
     for side in (-1,1):
-        rod('lanyard',(side*.10,1.91,.213),(side*.028,1.52,.25),.009,yellow,root)
-    box('ID badge',(.017,1.43,.25),(.16,.21,.022),white,root,.008)
-    box('ID photo',(-.021,1.455,.264),(.052,.068,.004),blue,root,.002)
+        rod('lanyard',(side*.10,1.91,.213),(side*.028,1.52,.25),.009,yellow,spine)
+    box('ID badge',(.017,1.43,.25),(.16,.21,.022),white,spine,.008)
+    box('ID photo',(-.021,1.455,.264),(.052,.068,.004),blue,spine,.002)
     for yy in (1.44,1.41,1.38):
-        box('ID printed line',(.044,yy,.265),(.06,.006,.003),navy,root,0)
-    # Hip-hinged legs preserve the game's procedural walk animation.
-    for side,name in ((-1,'LeftLeg'),(1,'RightLeg')):
-        pivot=empty(name,(side*.174,1.1,0),root)
-        rod('trouser upper',(side*.174,.59,0),(side*.174,1.13,0),.122,navy,pivot,.165)
-        rod('trouser lower',(side*.174,.19,.015),(side*.174,.66,0),.105,navy,pivot,.126)
-        box('cargo pocket',(side*.298,.71,.01),(.06,.23,.18),blue,pivot,.02)
-        rod('leg seam',(side*.274,.22,-.022),(side*.30,.84,-.022),.006,dark,pivot)
-        sphere('shoe',(side*.174,.115,.09),(.137,.115,.245),black,pivot)
-        box('shoe sole',(side*.174,.05,.10),(.26,.06,.43),white,pivot,.028)
+        box('ID printed line',(.044,yy,.265),(.06,.006,.003),navy,spine,0)
+    # Independent hip, knee and ankle pivots keep the silhouette connected
+    # while allowing a real planted-foot gait rather than swinging rigid poles.
+    for side,name in ((-1,'Left'),(1,'Right')):
+        hip=empty(name+'Leg',(side*.174,1.1,0),root)
+        knee=empty(name+'Knee',(side*.174,.61,0),hip)
+        foot=empty(name+'Foot',(side*.174,.19,.015),knee)
+        rod('trouser upper',(side*.174,.59,0),(side*.174,1.13,0),.122,navy,hip,.165)
+        rod('trouser lower',(side*.174,.19,.015),(side*.174,.66,0),.105,navy,knee,.126)
+        sphere('rounded knee',(side*.174,.61,0),(.122,.125,.12),navy,knee)
+        box('cargo pocket',(side*.298,.71,.01),(.06,.23,.18),blue,hip,.02)
+        rod('upper leg seam',(side*.284,.66,-.022),(side*.30,.84,-.022),.006,dark,hip)
+        rod('lower leg seam',(side*.274,.22,-.022),(side*.284,.63,-.022),.006,dark,knee)
+        sphere('shoe',(side*.174,.115,.09),(.137,.115,.245),black,foot)
+        box('shoe sole',(side*.174,.05,.10),(.26,.06,.43),white,foot,.028)
         for zz in (.08,.13,.18):
-            rod('shoelace',(side*.174-.065,.207,zz),(side*.174+.065,.207,zz),.008,white,pivot)
-    # Shoulder pivots keep punching / guarding / trolley gestures compatible.
-    for side,name in ((-1,'LeftArm'),(1,'RightArm')):
-        pivot=empty(name,(side*.415,1.80,0),root)
-        rod('shirt sleeve',(side*.47,1.54,0),(side*.405,1.81,0),.123,blue,pivot,.155)
-        rod('sleeve cuff',(side*.474,1.525,0),(side*.47,1.56,0),.13,navy,pivot)
-        rod('forearm',(side*.49,1.22,.035),(side*.474,1.535,0),.082,skin,pivot,.106)
-        sphere('hand',(side*.49,1.15,.05),(.089,.12,.078),skin,pivot)
-        sphere('thumb',(side*.434,1.175,.10),(.04,.065,.045),skin,pivot)
+            rod('shoelace',(side*.174-.065,.207,zz),(side*.174+.065,.207,zz),.008,white,foot)
+        empty('FootContact'+name,(side*.174,.02,.10),foot)
+    # Shoulder -> elbow -> wrist -> palm anchors. The grip is the centre of
+    # the hand geometry, not the wrist, so runtime IK can touch the actual bar.
+    for side,name in ((-1,'Left'),(1,'Right')):
+        shoulder=empty(name+'Arm',(side*.415,1.80,0),spine)
+        elbow=empty(name+'Elbow',(side*.474,1.505,.015),shoulder)
+        hand=empty(name+'Hand',(side*.49,1.235,.045),elbow)
+        rod('shirt sleeve',(side*.47,1.54,0),(side*.405,1.81,0),.123,blue,shoulder,.155)
+        rod('sleeve cuff',(side*.474,1.525,0),(side*.47,1.56,0),.13,navy,shoulder)
+        sphere('rounded elbow',(side*.474,1.505,.015),(.09,.09,.085),skin,elbow)
+        rod('forearm',(side*.49,1.22,.035),(side*.474,1.535,0),.082,skin,elbow,.106)
+        sphere('hand',(side*.49,1.15,.05),(.089,.12,.078),skin,hand)
+        sphere('thumb',(side*.434,1.175,.10),(.04,.065,.045),skin,hand)
+        for offset in (-.049,-.016,.016,.049):
+            sphere('rounded finger',(side*.49+offset,1.073,.072),(.019,.041,.04),skin,hand)
+        empty('PalmGrip'+name,(side*.49,1.15,.05),hand)
         if side==-1:
-            rod('watch strap',(side*.49,1.26,.034),(side*.49,1.305,.03),.09,black,pivot)
-            box('watch face',(side*.49,1.28,.117),(.075,.067,.018),metal,pivot,.009)
+            rod('watch strap',(side*.49,1.26,.034),(side*.49,1.305,.03),.103,black,elbow)
+            box('watch face',(side*.49,1.28,.117),(.075,.067,.018),metal,elbow,.009)
     # Work satchel is an actual soft rounded silhouette, with a shoulder strap.
     if not staff:
-        box('satchel',(.445,1.03,-.08),(.25,.43,.39),navy,root,.065)
-        box('satchel flap',(.455,1.13,-.08),(.27,.20,.405),dark,root,.035)
-        rod('bag shoulder strap',(-.30,1.88,.19),(.49,1.20,.22),.028,dark,root)
-        rod('bag back strap',(-.30,1.88,-.18),(.49,1.20,-.25),.028,dark,root)
-        box('bag clasp',(.59,1.06,-.08),(.012,.07,.08),metal,root,.005)
+        box('satchel',(.445,1.03,-.08),(.25,.43,.39),navy,spine,.065)
+        box('satchel flap',(.455,1.13,-.08),(.27,.20,.405),dark,spine,.035)
+        rod('bag shoulder strap',(-.30,1.88,.19),(.49,1.20,.22),.028,dark,spine)
+        rod('bag back strap',(-.30,1.88,-.18),(.49,1.20,-.25),.028,dark,spine)
+        box('bag clasp',(.59,1.06,-.08),(.012,.07,.08),metal,spine,.005)
     root['provenance']='Original mesh authored for this project; CC0-1.0'
     root['forward']='+Z'
-    root['animationPivots']='LeftLeg,RightLeg,LeftArm,RightArm'
+    root['animationPivots']='Spine,Head,LeftLeg,RightLeg,LeftKnee,RightKnee,LeftFoot,RightFoot,LeftArm,RightArm,LeftElbow,RightElbow,LeftHand,RightHand'
+    root['gripAnchors']='PalmGripLeft,PalmGripRight'
+    root['rigVersion']=2
     export('store-staff.glb' if staff else 'merch-hero.glb')
 
 def cart():
@@ -249,20 +266,36 @@ def cart():
         rod('handle bend',(side*.57,1.54,-.83),(side*.54,1.58,-.94),.027,steel,root)
     rod('handle',(-.54,1.58,-.94),(.54,1.58,-.94),.045,navy,root,sides=12)
     box('handle work mark',(0,1.583,-.895),(.23,.045,.006),yellow,root,.006)
+    empty('CartHandleLeft',(-.42,1.58,-.94),root)
+    empty('CartHandleRight',(.42,1.58,-.94),root)
     for zz in (-.61,.65): rod('lower crossbar',(-.46,.36,zz),(.46,.36,zz),.027,steel,root)
     for i in range(7):
         rod('lower rack',(-.38+i*.126,.36,-.57),(-.38+i*.126,.36,.61),.013,steel,root)
-    # Four actual casters, each fork, rubber wheel and silver axle face.
+    # Swivels steer around Y; tyre pivots roll around game-space X.
+    # Forks/axle remain attached to their swivel instead of spinning with tyres.
     for xx in (-.45,.45):
         for zz in (-.59,.59):
+            name=('Front' if zz>0 else 'Rear')+('Left' if xx<0 else 'Right')
+            caster=empty('Caster'+name,(xx,.31,zz),root)
+            wheel=empty('Wheel'+name,(xx,.155,zz+.025),caster)
             rod('caster swivel',(xx,.27,zz),(xx,.38,zz),.046,steel,root,sides=10)
             for sx in (-1,1):
-                rod('caster fork',(xx+sx*.065,.15,zz+.025),(xx+sx*.065,.31,zz),.018,steel,root)
-            rod('rubber caster',(xx-.06,.155,zz+.025),(xx+.06,.155,zz+.025),.15,dark,root,sides=12)
-            rod('axle cap',(xx-.065,.155,zz+.025),(xx+.065,.155,zz+.025),.063,steel,root,sides=10)
+                rod('caster fork',(xx+sx*.065,.15,zz+.025),(xx+sx*.065,.31,zz),.018,steel,caster)
+            rod('rubber caster',(xx-.06,.155,zz+.025),(xx+.06,.155,zz+.025),.15,dark,wheel,sides=12)
+            rod('axle cap',(xx-.065,.155,zz+.025),(xx+.065,.155,zz+.025),.063,steel,caster,sides=10)
+            # Visible hub spokes make rolling readable even with flat rubber.
+            for face in (-1,1):
+                for angle in (0,pi/2,pi,pi*1.5):
+                    rod('wheel spoke',
+                        (xx+face*.067,.155+.035*cos(angle),zz+.025+.035*sin(angle)),
+                        (xx+face*.067,.155+.115*cos(angle),zz+.025+.115*sin(angle)),
+                        .008,steel,wheel,sides=6)
     root['provenance']='Original mesh authored for this project; CC0-1.0'
     root['forward']='+Z'
     root['collider']='Existing gameplay collider: half extents (0.6,0.6,0.85), centre Y=0.65'
+    root['gripAnchors']='CartHandleLeft,CartHandleRight'
+    root['wheelRadius']=.15
+    root['rigVersion']=2
     export('shopping-cart.glb')
 
 character()
