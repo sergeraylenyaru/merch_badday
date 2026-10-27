@@ -110,7 +110,7 @@ export function createUI(state, actions) {
   }
   function intro() {
     show(
-      `<div class="veil"><div class="intro"><div class="tag">ГОРОДСКАЯ ПЕСОЧНИЦА · ПЕРВАЯ СМЕНА</div><h1>ПЛОХОЙ ДЕНЬ<br><em>МЕРЧА.</em></h1><p class="subtitle">Восемь магазинов. Один мерчендайзер.<br>Ноль причин задерживаться на работе.</p><p>Собирай тележки, договаривайся с директорами и закрой маршрут до конца смены. Или посмотри, насколько плохим может стать этот день.</p><div class="actions"><button class="primary" id="begin">${state.time > 0 ? "ПРОДОЛЖИТЬ СМЕНУ" : "ВЫЙТИ НА МАРШРУТ"} ↗</button><button class="secondary" id="how">КАК ВЫЖИТЬ?</button></div><div class="introfooter"><div><b>08</b>ТОРГОВЫХ ТОЧЕК</div><div><b>25</b>МИНУТ ДО КОНЦА ДНЯ</div><div><b>∞</b>НЕУДАЧНЫХ РЕШЕНИЙ</div></div></div><div class="buildtag">ПРОЦЕДУРНЫЙ ГОРОД / DEMO 0.1</div></div>`,
+      `<div class="veil"><div class="intro"><div class="tag">ГОРОДСКАЯ ПЕСОЧНИЦА · ПЕРВАЯ СМЕНА</div><h1>ПЛОХОЙ ДЕНЬ<br><em>МЕРЧА.</em></h1><p class="subtitle">Восемь магазинов. Один мерчендайзер.<br>Ноль причин задерживаться на работе.</p><p>Собирай тележки, договаривайся с директорами и закрой маршрут до конца смены. Или посмотри, насколько плохим может стать этот день.</p><div class="actions"><button class="primary" id="begin">${state.time > 0 ? "ПРОДОЛЖИТЬ СМЕНУ" : "ВЫЙТИ НА МАРШРУТ"} ↗</button><button class="secondary" id="how">КАК ВЫЖИТЬ?</button></div><div class="introfooter"><div><b>08</b>ТОРГОВЫХ ТОЧЕК</div><div><b>25</b>МИНУТ ДО КОНЦА ДНЯ</div><div><b>∞</b>НЕУДАЧНЫХ РЕШЕНИЙ</div></div></div><div class="buildtag">СЕВЕРНЫЙ РАЙОН / У ДОМА</div></div>`,
     );
     $("begin").onclick = actions.resume;
     $("how").onclick = () => pause(true);

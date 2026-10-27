@@ -8,6 +8,11 @@ await mkdir(new URL("assets/", root), { recursive: true });
 await cp(new URL("dist/assets/", root), new URL("assets/", root), {
   recursive: true,
 });
+// Public models are emitted beside index.html by Vite. Branch-based Pages
+// serves the repository root, so it needs the same URLs as the dist artifact.
+await cp(new URL("dist/models/", root), new URL("models/", root), {
+  recursive: true,
+});
 await cp(new URL("dist/index.html", root), new URL("index.html", root));
 await cp(new URL("dist/icon.svg", root), new URL("icon.svg", root));
 await writeFile(new URL(".nojekyll", root), "");

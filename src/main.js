@@ -17,6 +17,7 @@ import {
 } from "./state.js";
 import { createWorld } from "./world.js";
 import { createUI } from "./ui.js";
+import { createAtmosphere } from "./visuals/atmosphere.js";
 const state = load();
 let settings = { sensitivity: 1, volume: 0.25, quality: "high" };
 try {
@@ -29,6 +30,7 @@ let world,
   renderer,
   scene,
   camera,
+  atmosphere,
   ui,
   mode = "intro",
   vehicle = null,
@@ -156,9 +158,11 @@ function configure(name, value) {
 function applyQuality() {
   if (!renderer) return;
   renderer.setPixelRatio(
-    settings.quality === "high" ? Math.min(devicePixelRatio, 1.6) : 1,
+    settings.quality === "high" ? Math.min(devicePixelRatio, 1.6) : 0.85,
   );
   renderer.shadowMap.enabled = settings.quality === "high";
+  atmosphere?.setQuality(settings.quality);
+  world?.visuals?.setQuality?.(settings.quality);
 }
 function end(quit = false) {
   finish(state, quit);
@@ -289,8 +293,6 @@ function energy() {
 }
 try {
   scene = new T.Scene();
-  scene.background = new T.Color("#b9c7b6");
-  scene.fog = new T.Fog("#b9c7b6", 85, 230);
   camera = new T.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 350);
   renderer = new T.WebGLRenderer({
     antialias: true,
@@ -301,25 +303,10 @@ try {
   renderer.shadowMap.type = T.PCFSoftShadowMap;
   renderer.outputColorSpace = T.SRGBColorSpace;
   renderer.toneMapping = T.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.18;
+  renderer.toneMappingExposure = 1.05;
   document.getElementById("game").append(renderer.domElement);
+  atmosphere = createAtmosphere(scene, renderer);
   applyQuality();
-  scene.add(new T.HemisphereLight("#e3ebd6", "#61705e", 2.3));
-  const sun = new T.DirectionalLight("#fff0c8", 3.2);
-  sun.position.set(-40, 70, 30);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, {
-    left: -90,
-    right: 90,
-    top: 90,
-    bottom: -90,
-    near: 1,
-    far: 200,
-  });
-  sun.shadow.normalBias = 0.08;
-  scene.add(sun);
-  scene.add(sun.target);
   ui = createUI(state, {
     settings,
     resume,
@@ -333,6 +320,8 @@ try {
     energy,
   });
   world = await createWorld(scene, state);
+  world.visuals?.setQuality?.(settings.quality);
+  world.player.mesh.rotation.y = yaw + Math.PI;
   ui.$("loading").remove();
   // Gameplay uses fixed-step Rapier for movable carts and collision queries for characters.
   const playerBody = world.physics.createRigidBody(
@@ -1086,8 +1075,8 @@ try {
   function updateCamera(dt) {
     const pos = world.player.mesh.position;
     if (!hasStarted) {
-      camera.position.set(-18, 39, 64);
-      camera.lookAt(-45, 0, 15);
+      camera.position.set(-45, 12, 49);
+      camera.lookAt(-64, 2, 18);
       return;
     }
     const target = pos.clone().add(new T.Vector3(0, vehicle ? 2 : 1.8, 0));
@@ -1177,18 +1166,13 @@ try {
     marker.rotation.z = Math.PI;
     marker.visible = !state.shops[state.selected].done;
     updateCamera(dt);
-    const day = state.time / 1500;
-    sun.intensity = 3.2 - day * 1.8;
-    sun.position.set(
-      world.player.mesh.position.x - 40,
-      70 - day * 35,
-      world.player.mesh.position.z + 30,
-    );
-    sun.target.position.copy(world.player.mesh.position);
-    scene.background.set(
-      state.weather ? "#8daba7" : day > 0.7 ? "#c5a584" : "#b9c7b6",
-    );
-    scene.fog.color.copy(scene.background);
+    atmosphere.update({
+      day: state.time / 1500,
+      weather: state.weather,
+      player: world.player.mesh.position,
+      dt,
+    });
+    world.visuals?.update?.(dt, visualTime);
     ui.update(world, vehicle);
     renderer.render(scene, camera);
   }
@@ -1205,9 +1189,29 @@ try {
       return {
         calls: renderer.info.render.calls,
         triangles: renderer.info.render.triangles,
+        geometries: renderer.info.memory.geometries,
+        textures: renderer.info.memory.textures,
+        quality: settings.quality,
+      };
+    },
+    get visuals() {
+      return world.visuals?.diagnostics ?? null;
+    },
+    get view() {
+      return {
+        firstPerson,
+        playerVisible: world.player.mesh.visible,
+        playerY: world.player.mesh.position.y,
       };
     },
   };
+  // BFCache preserves the page and its GPU resources. Dispose only on a real exit.
+  addEventListener("pagehide", (event) => {
+    if (!event.persisted) {
+      world.visuals?.dispose();
+      atmosphere.dispose();
+    }
+  });
 } catch (err) {
   console.error(err);
   document.body.innerHTML = "";

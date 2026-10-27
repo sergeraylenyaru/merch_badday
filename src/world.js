@@ -1,6 +1,7 @@
 import * as T from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
 import { SHOPS } from "./state.js";
+import { createVisuals } from "./visuals/index.js";
 export async function createWorld(scene, state) {
   await RAPIER.init();
   const physics = new RAPIER.World({ x: 0, y: -20, z: 0 });
@@ -13,6 +14,8 @@ export async function createWorld(scene, state) {
     secrets = [];
   const mat = (color) => new T.MeshStandardMaterial({ color, roughness: 0.85 });
   const materials = new Map();
+  const firstShopDecor = [];
+  let visualBucket = null;
   function box(x, y, z, w, h, d, color, solid = false) {
     let m = materials.get(color);
     if (!m) {
@@ -24,6 +27,7 @@ export async function createWorld(scene, state) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
+    visualBucket?.push(mesh);
     if (solid) {
       const b = physics.createRigidBody(
         RAPIER.RigidBodyDesc.fixed().setTranslation(x, y, z),
@@ -50,6 +54,7 @@ export async function createWorld(scene, state) {
     p.position.set(x, y, z);
     p.scale.set(size * 4, size * 0.75, 1);
     scene.add(p);
+    visualBucket?.push(p);
     return p;
   }
   const ground = box(20, -0.5, 20, 300, 1, 300, "#708666");
@@ -166,6 +171,7 @@ export async function createWorld(scene, state) {
   }
   for (const shop of SHOPS) {
     const { x, z, color, id } = shop;
+    visualBucket = id === 0 ? firstShopDecor : null;
     box(x, 0.1, z, 39, 0.2, 36, "#a4a797");
     // Open-front stores: back, side walls, canopy and shelves form a walkable interior.
     box(x, 3.2, z - 8, 28, 6.4, 1, color, true);
@@ -249,6 +255,7 @@ export async function createWorld(scene, state) {
     box(x + 17, 1.2, z + 4, 1.2, 2.4, 1.2, "#314d3e", true);
     label("КОФЕ", x + 17, 3, z + 4, "#ffe5a1", 0.9);
   }
+  visualBucket = null;
   vehicles.push(car(-21, 35, 2, vehicles.length));
   for (let i = 0; i < 6; i++) {
     const v = car(-21, -90 + i * 36, i % 4, vehicles.length, true);
@@ -338,7 +345,7 @@ export async function createWorld(scene, state) {
         Math.abs(z - v.mesh.position.z) < v.l + r,
     );
   }
-  return {
+  const world = {
     physics,
     RAPIER,
     box,
@@ -353,4 +360,8 @@ export async function createWorld(scene, state) {
     secrets,
     blocked,
   };
+  // Rendering is an adapter over the existing entities. It never owns gameplay
+  // identifiers, transforms, triggers, collision extents, or Rapier bodies.
+  world.visuals = await createVisuals(scene, world, firstShopDecor);
+  return world;
 }
