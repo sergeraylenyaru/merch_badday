@@ -17,6 +17,9 @@ canvas.scene {
   width: 100%;
   height: 100%;
 }
+body.mouse-captured canvas.scene {
+  cursor: none;
+}
 button,
 input {
   font: inherit;

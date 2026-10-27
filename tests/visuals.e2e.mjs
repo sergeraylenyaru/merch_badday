@@ -138,7 +138,7 @@ try {
   for (const entry of visual.replacements) {
     assert.ok(entry.size.every((n) => Number.isFinite(n) && n > 0), `invalid bounds: ${entry.entity}`);
     assert.ok(Math.abs(entry.minY) < 0.001, `incorrect ground pivot: ${entry.entity}`);
-    if (entry.entity === "hero" || entry.entity === "staff") assert.ok(Math.abs(entry.size[1] - 2.44) < 0.05, `person scale: ${entry.size}`);
+    if (entry.entity === "hero" || entry.entity === "staff") assert.ok(Math.abs(entry.size[1] - 2.1) < 0.05, `adult character scale: ${entry.size}`);
     if (entry.entity === "cart") assert.ok(Math.abs(entry.size[1] - 1.615) < 0.05, `cart scale: ${entry.size}`);
   }
   assert.equal(events.requests.size, 14);
@@ -149,8 +149,9 @@ try {
   await page.waitForFunction(() => __MERCH__.mode === "play");
   await page.waitForTimeout(600);
   const initial = await page.evaluate(() => __MERCH__.state.position);
+  const movementStart = await page.evaluate(() => __MERCH__.state.time);
   await page.keyboard.down("KeyW");
-  await page.waitForTimeout(700);
+  await page.waitForFunction((time) => __MERCH__.state.time > time + 0.4, movementStart, { timeout: 60000 });
   await page.keyboard.up("KeyW");
   const moved = await page.evaluate(() => __MERCH__.state.position);
   assert.ok(Math.hypot(moved.x - initial.x, moved.z - initial.z) > 0.3, "player should move with GLB hero");
@@ -205,8 +206,9 @@ try {
   wallState.position = { x: -55, z: 14 };
   const wall = await createScenario(browser, wallState);
   await wall.page.click("#begin");
+  const wallStart = await wall.page.evaluate(() => __MERCH__.state.time);
   await wall.page.keyboard.down("KeyW");
-  await wall.page.waitForTimeout(1700);
+  await wall.page.waitForFunction((time) => __MERCH__.state.time > time + 0.8, wallStart, { timeout: 60000 });
   await wall.page.keyboard.up("KeyW");
   const wallPosition = await wall.page.evaluate(() => __MERCH__.state.position);
   assert.ok(wallPosition.z >= 13.1 && wallPosition.z < 13.8, `original back-wall collider was bypassed: ${JSON.stringify(wallPosition)}`);
@@ -225,8 +227,9 @@ try {
   await drive.page.click("#begin");
   await drive.page.keyboard.press("KeyE");
   await drive.page.waitForFunction(() => !__MERCH__.view.playerVisible);
+  const driveStart = await drive.page.evaluate(() => __MERCH__.state.time);
   await drive.page.keyboard.down("KeyW");
-  await drive.page.waitForTimeout(10000);
+  await drive.page.waitForFunction((time) => __MERCH__.state.time > time + 3, driveStart, { timeout: 60000 });
   await drive.page.keyboard.up("KeyW");
   const carPosition = await drive.page.evaluate(() => __MERCH__.state.position);
   assert.ok(carPosition.z >= 14.2 && carPosition.z < 16, `vehicle must reach and stop at back wall: ${JSON.stringify(carPosition)}`);

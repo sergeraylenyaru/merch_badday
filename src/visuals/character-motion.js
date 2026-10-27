@@ -1,4 +1,4 @@
-import { Euler, MathUtils, Quaternion, Vector3 } from "three";
+import { AnimationMixer, Euler, LoopOnce, MathUtils, Quaternion, Vector3 } from "three";
 
 const TAU = Math.PI * 2;
 const X = new Vector3(1, 0, 0);
@@ -18,9 +18,11 @@ function chain(upper, lower, end, contact, entity) {
   const entityRotation = entity.getWorldQuaternion(new Quaternion());
   return {
     upper, lower, end, contact,
+    side: Math.sign(entity.worldToLocal(upper.getWorldPosition(new Vector3())).x) || 1,
     contactOffset: end.worldToLocal(contactWorld.clone()),
     neutralContact: entity.worldToLocal(contactWorld.clone()),
     neutralEndRotation: entityRotation.invert().multiply(end.getWorldQuaternion(new Quaternion())),
+    gripOrientation: end.userData.gripOrientation ? new Quaternion().fromArray(end.userData.gripOrientation).normalize() : null,
     endScale: end.getWorldScale(new Vector3()),
     a: upper.getWorldPosition(new Vector3()),
     b: lower.getWorldPosition(new Vector3()),
@@ -98,6 +100,9 @@ export function createCharacterMotion(entity, model) {
   const names = ["Spine", "Head", "LeftLeg", "RightLeg", "LeftKnee", "RightKnee", "LeftFoot", "RightFoot", "LeftArm", "RightArm", "LeftElbow", "RightElbow", "LeftHand", "RightHand"];
   const joints = Object.fromEntries(names.map((name) => [name, joint(find(name))]));
   const records = Object.values(joints).filter(Boolean);
+  model.traverse((node) => {
+    if (node.isBone && !records.some((record) => record.node === node)) records.push(joint(node));
+  });
   const arms = ["Left", "Right"].map((side) => chain(find(`${side}Arm`), find(`${side}Elbow`), find(`${side}Hand`), find(`PalmGrip${side}`), root));
   const legs = ["Left", "Right"].map((side) => chain(find(`${side}Leg`), find(`${side}Knee`), find(`${side}Foot`), find(`FootContact${side}`), root));
   const articulated = arms.every(Boolean) && legs.every(Boolean);
@@ -113,6 +118,60 @@ export function createCharacterMotion(entity, model) {
   let state = "idle", grounded = true, lastCart = null;
   let wasMoving = false;
   const gripErrors = [], feetErrors = [];
+  const mixer = model.animations?.some((clip) => clip.name === "Walk") ? new AnimationMixer(model) : null;
+  const actions = new Map();
+  const closedFingers = new Map();
+  let activeClip = "Idle";
+  if (mixer) {
+    for (const clip of model.animations) {
+      const action = mixer.clipAction(clip).setEffectiveWeight(0).play();
+      if (["Jump", "Land", "Punch", "StrongPunch"].includes(clip.name)) {
+        action.setLoop(LoopOnce, 1);
+        action.clampWhenFinished = true;
+      }
+      actions.set(clip.name, action);
+    }
+    actions.get("Idle")?.setEffectiveWeight(1);
+    const punch = actions.get("Punch");
+    if (punch) {
+      actions.get("Idle")?.setEffectiveWeight(0);
+      punch.setEffectiveWeight(1);
+      punch.time = punch.getClip().duration * 0.3;
+      mixer.update(0);
+      for (const record of records) if (/Index|Middle|Ring|Pinky|Thumb/.test(record.node.name)) closedFingers.set(record.node, record.node.quaternion.clone());
+      for (const action of actions.values()) action.reset().setEffectiveWeight(0).play();
+      actions.get("Idle")?.setEffectiveWeight(1);
+    }
+  }
+
+  function recordedPose(dt, input, held, rawSpeed) {
+    let next = held ? "Push" : input.inVehicle ? "Drive" : !grounded ? lastVertical > 0 ? "Jump" : "Fall"
+      : input.attack > 0 ? input.attackKind === "strong" ? "StrongPunch" : "Punch"
+        : landing > 0.2 ? "Land" : input.crouch ? rawSpeed > 0.08 ? "CrouchWalk" : "Crouch"
+          : rawSpeed > 6 ? "Sprint" : rawSpeed > 0.08 ? "Walk" : "Idle";
+    if (!actions.has(next)) next = "Idle";
+    if (next !== activeClip) {
+      const previous = actions.get(activeClip);
+      const action = actions.get(next);
+      action.reset().play();
+      if (["Walk", "Run", "Sprint"].includes(next) && ["Walk", "Run", "Sprint"].includes(activeClip))
+        action.time = (previous.time / previous.getClip().duration % 1) * action.getClip().duration;
+      activeClip = next;
+    }
+    for (const [name, action] of actions) {
+      const weight = damp(action.getEffectiveWeight(), name === next ? 1 : 0, 14, dt);
+      action.setEffectiveWeight(weight);
+      let rate = 1;
+      if (name === "Walk") rate = MathUtils.clamp(rawSpeed / 1.6, 0.45, 1.9);
+      if (name === "Run" || name === "Sprint") rate = MathUtils.clamp(rawSpeed / 4.8, 0.7, 1.7);
+      if (name === "CrouchWalk") rate = MathUtils.clamp(rawSpeed / 1.3, 0.5, 1.6);
+      if (input.firstPerson && (name === "Walk" || name === "CrouchWalk") && localVelocity.z < -Math.abs(localVelocity.x) * 0.5) rate *= -1;
+      if (name === "Punch" || name === "StrongPunch") rate = action.getClip().duration / (name === "Punch" ? 0.35 : 0.85);
+      if (name === "Land") rate = action.getClip().duration / 0.25;
+      action.setEffectiveTimeScale(rate);
+    }
+    mixer.update(dt);
+  }
 
   function pose(name, x = 0, y = 0, z = 0) {
     const record = joints[name];
@@ -180,6 +239,20 @@ export function createCharacterMotion(entity, model) {
     restore();
     gripErrors.length = 0;
     feetErrors.length = 0;
+    const recorded = !!mixer && !held;
+    if (mixer) {
+      recordedPose(step, input, held, rawSpeed);
+      if (!recorded) for (const record of records) {
+        if (/Index|Middle|Ring|Pinky|Thumb/.test(record.node.name)) {
+          const closed = closedFingers.get(record.node);
+          if (closed) record.node.quaternion.slerp(closed, gripWeight);
+          continue;
+        }
+        record.node.position.copy(record.position);
+        record.node.quaternion.copy(record.rotation);
+      }
+    }
+    if (!recorded) {
     const bob = moving * (0.013 + running * 0.014) * (1 - Math.cos(phase * 2));
     model.position.y += grounded ? (-(0.16 + running * 0.12) * moving * (1 - crouching * 0.5) - 0.51 * crouching - 0.11 * landing + bob) * motionScale : 0;
     pose("Spine", 0.075 * moving + 0.13 * running + 0.3 * crouching + 0.12 * gripWeight + 0.08 * landing,
@@ -265,24 +338,54 @@ export function createCharacterMotion(entity, model) {
         if (joints.Spine) pose("Spine", 0.1 + strike * 0.1, -strike * 0.18, -turn);
       }
     }
+    } else if (grounded) {
+      // Keep the captured performance, with a small ground-contact correction.
+      // Feet close to the floor are pinned in world space during support.
+      model.updateWorldMatrix(true, true);
+      let lowest = Infinity;
+      for (const leg of legs) if (leg) {
+        leg.contact.getWorldPosition(leg.actual);
+        lowest = Math.min(lowest, leg.actual.y);
+      }
+      const floor = root.getWorldPosition(target).y + (legs[0]?.neutralContact.y || 0);
+      if (Number.isFinite(lowest)) model.position.y += floor - lowest;
+      model.updateWorldMatrix(true, true);
+      for (const leg of legs) if (leg) {
+        leg.contact.getWorldPosition(leg.actual);
+        const supporting = leg.actual.y < floor + 0.055 && rawSpeed > 0.08;
+        if (supporting && !leg.wasStance) leg.plant.copy(leg.actual).setY(floor);
+        leg.wasStance = supporting;
+        if (supporting) {
+          leg.end.getWorldQuaternion(leg.endQ);
+          pole.set(0, -0.06, 1).applyQuaternion(entityQ);
+          solve(leg, leg.plant, leg.endQ, pole);
+          leg.contact.getWorldPosition(leg.actual);
+          const error = leg.actual.distanceTo(leg.plant);
+          if (error > 0.04) leg.wasStance = false;
+          feetErrors.push(error);
+        }
+      }
+    }
     model.updateWorldMatrix(true, true);
 
     for (let i = 0; i < arms.length; i++) {
       const arm = arms[i];
       if (!arm) continue;
       if (held) {
-        if (lastCart !== held) arm.targetObject = held.getObjectByName(i === 0 ? "CartHandleLeft" : "CartHandleRight");
+        if (lastCart !== held) arm.targetObject = held.getObjectByName(arm.side < 0 ? "CartHandleLeft" : "CartHandleRight");
         held.updateWorldMatrix(true, true);
         if (arm.targetObject) arm.targetObject.getWorldPosition(arm.contactGoal);
-        else arm.contactGoal.copy(fallbackTargets[i]), held.localToWorld(arm.contactGoal);
+        else arm.contactGoal.copy(fallbackTargets[arm.side < 0 ? 0 : 1]), held.localToWorld(arm.contactGoal);
         held.getWorldQuaternion(cartQ);
-        arm.endQ.copy(cartQ).multiply(arm.neutralEndRotation);
-        tilt.setFromAxisAngle(X, -1.05);
-        arm.endQ.multiply(tilt);
+        arm.endQ.copy(cartQ).multiply(arm.gripOrientation || arm.neutralEndRotation);
+        if (!arm.gripOrientation) {
+          tilt.setFromAxisAngle(X, -1.05);
+          arm.endQ.multiply(tilt);
+        }
         arm.freeUpper.copy(arm.upper.quaternion);
         arm.freeLower.copy(arm.lower.quaternion);
         arm.freeEnd.copy(arm.end.quaternion);
-        pole.set(i === 0 ? -0.45 : 0.45, -0.8, -0.15).applyQuaternion(entityQ);
+        pole.set(arm.side * 0.45, -0.8, -0.15).applyQuaternion(entityQ);
         solve(arm, arm.contactGoal, arm.endQ, pole);
         arm.gripUpper.copy(arm.upper.quaternion);
         arm.gripLower.copy(arm.lower.quaternion);
@@ -296,6 +399,12 @@ export function createCharacterMotion(entity, model) {
         arm.contact.getWorldPosition(arm.actual);
         arm.error = arm.actual.distanceTo(arm.contactGoal);
         gripErrors.push(arm.error);
+      } else if (input.guard && recorded) {
+        target.set(arm.side * 0.19, 1.73, 0.25);
+        root.localToWorld(target);
+        arm.endQ.copy(entityQ).multiply(arm.gripOrientation || arm.neutralEndRotation);
+        pole.set(arm.side * 0.6, -1, -0.1).applyQuaternion(entityQ);
+        solve(arm, target, arm.endQ, pole);
       } else if (gripWeight > 0 && lastCart) {
         arm.upper.quaternion.slerp(arm.gripUpper, gripWeight);
         arm.lower.quaternion.slerp(arm.gripLower, gripWeight);
@@ -323,22 +432,36 @@ export function createCharacterMotion(entity, model) {
       leg.wasStance = null;
       leg.settleProgress = 1;
     }
+    if (mixer) {
+      for (const action of actions.values()) action.reset().setEffectiveWeight(0).play();
+      actions.get("Idle")?.setEffectiveWeight(1);
+      activeClip = "Idle";
+      update(0, { active: false, grounded: true, velocity: new Vector3() });
+    }
   }
+
+  if (mixer) update(0, { active: false, grounded: true, velocity: new Vector3() });
 
   return {
     articulated,
     update,
     reset,
+    dispose() { mixer?.stopAllAction(); mixer?.uncacheRoot(model); lastCart = null; },
     get diagnostics() {
       return {
         state, speed, stride: phase / TAU, distance, gripWeight, grounded, crouchWeight: crouching, articulated,
         gripErrors: [...gripErrors], feetErrors: [...feetErrors],
         feetPlanted: legs.map((leg) => leg?.wasStance === true),
+        animation: mixer ? {
+          source: "Quaternius Universal Animation Library (CC0)", clip: activeClip,
+          time: actions.get(activeClip)?.time || 0,
+          weights: Object.fromEntries([...actions].filter(([, a]) => a.getEffectiveWeight() > 0.01).map(([name, a]) => [name, a.getEffectiveWeight()])),
+        } : null,
         jointAngles: {
-          leftKnee: joints.LeftKnee?.node.rotation.x ?? 0,
-          rightKnee: joints.RightKnee?.node.rotation.x ?? 0,
-          leftElbow: joints.LeftElbow?.node.rotation.x ?? 0,
-          rightElbow: joints.RightElbow?.node.rotation.x ?? 0,
+          leftKnee: joints.LeftKnee?.node.quaternion.angleTo(joints.LeftKnee.rotation) ?? 0,
+          rightKnee: joints.RightKnee?.node.quaternion.angleTo(joints.RightKnee.rotation) ?? 0,
+          leftElbow: joints.LeftElbow?.node.quaternion.angleTo(joints.LeftElbow.rotation) ?? 0,
+          rightElbow: joints.RightElbow?.node.quaternion.angleTo(joints.RightElbow.rotation) ?? 0,
         },
       };
     },

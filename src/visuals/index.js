@@ -1,4 +1,4 @@
-import { Box3, Vector3, Group, Mesh } from "three";
+import { Box3, Vector3, Group, Mesh, SkinnedMesh, Float32BufferAttribute } from "three";
 import { AssetLibrary } from "./assets.js";
 import { createDistrictMaterials } from "./materials.js";
 import { createDistrict } from "./district.js";
@@ -14,8 +14,8 @@ const original = (file) => `${base}models/original/${file}.glb?rig=2`;
 // Sizes are visual envelopes in world metres. Existing collision dimensions,
 // NPC identifiers, saved positions and Rapier bodies remain authoritative.
 export const MODEL_MANIFEST = {
-  hero: { url: original("merch-hero"), size: [1.3, 2.44, 0.9] },
-  staff: { url: original("store-staff"), size: [1.3, 2.44, 0.9] },
+  hero: { url: `${base}models/characters/merch-male.glb?rig=3`, size: [1.3, 2.1, 0.9] },
+  staff: { url: `${base}models/characters/civilian-female.glb?rig=3`, size: [1.3, 2.1, 0.9] },
   cart: { url: original("shopping-cart"), size: [1.2, 1.62, 1.75] },
   hatchback: { url: vendor("car_hatchback"), size: [2.5, 2.2, 4.6] },
   sedan: { url: vendor("car_sedan"), size: [2.5, 2.2, 4.6] },
@@ -67,7 +67,7 @@ export async function createVisuals(scene, world, firstShopDecor) {
   const actors = [];
 
   function replace(entity, id, animate = false, groundOffset = 0) {
-    const model = library.instantiate(id);
+    const model = library.instantiate(id, animate ? { height: 2.1 } : {});
     if (!model) return; // Original visual and its working animation stay intact.
     const limbs = animate && ["LeftLeg", "RightLeg", "LeftArm", "RightArm"]
       .map((name) => model.getObjectByName(name));
@@ -110,7 +110,50 @@ export async function createVisuals(scene, world, firstShopDecor) {
   firstPersonArms.visible = false;
   scene.add(firstPersonArms);
   const armCopies = [];
-  for (const arm of world.player.arms) arm.traverse((source) => {
+  const armGeometries = new Set(), armMaterials = new Map();
+  function armMaterial(source) {
+    if (armMaterials.has(source)) return armMaterials.get(source);
+    const material = source.clone();
+    material.onBeforeCompile = (shader) => {
+      shader.vertexShader = 'attribute float armMask; varying float vArmMask;\n' + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvArmMask = armMask;');
+      shader.fragmentShader = 'varying float vArmMask;\n' + shader.fragmentShader;
+      shader.fragmentShader = shader.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (vArmMask < 0.5) discard;');
+    };
+    material.customProgramCacheKey = () => 'first-person-skinned-arms-v1';
+    armMaterials.set(source, material);
+    return material;
+  }
+  const skinnedSources = [];
+  world.player.mesh.traverse((source) => { if (source.isSkinnedMesh) skinnedSources.push(source); });
+  for (const source of skinnedSources) {
+    const armBones = new Set();
+    source.skeleton.bones.forEach((bone, index) => {
+      for (let node = bone; node; node = node.parent) if (node.name === 'LeftArm' || node.name === 'RightArm') {
+        armBones.add(index); break;
+      }
+    });
+    const indices = source.geometry.getAttribute('skinIndex'), weights = source.geometry.getAttribute('skinWeight');
+    const mask = new Float32Array(indices.count), access = ['getX', 'getY', 'getZ', 'getW'];
+    let hasArms = false;
+    for (let vertex = 0; vertex < indices.count; vertex++) {
+      for (let component = 0; component < 4; component++) if (armBones.has(indices[access[component]](vertex))) mask[vertex] += weights[access[component]](vertex);
+      if (mask[vertex] > 0.5) hasArms = true;
+    }
+    if (!hasArms) continue;
+    const geometry = source.geometry.clone();
+    geometry.setAttribute('armMask', new Float32BufferAttribute(mask, 1));
+    armGeometries.add(geometry);
+    const materials = Array.isArray(source.material) ? source.material.map(armMaterial) : armMaterial(source.material);
+    const mesh = new SkinnedMesh(geometry, materials);
+    mesh.bindMode = source.bindMode;
+    mesh.bind(source.skeleton, source.bindMatrix);
+    mesh.matrixAutoUpdate = false;
+    mesh.receiveShadow = true;
+    firstPersonArms.add(mesh);
+    armCopies.push({ source, mesh });
+  }
+  if (!skinnedSources.length) for (const arm of world.player.arms) arm.traverse((source) => {
     if (!source.isMesh) return;
     const mesh = new Mesh(source.geometry, source.material);
     mesh.matrixAutoUpdate = false;
@@ -209,7 +252,10 @@ export async function createVisuals(scene, world, firstShopDecor) {
     dispose() {
       if (disposed) return;
       disposed = true;
+      for (const { entity } of actors) entity.motion.dispose?.();
       firstPersonArms.removeFromParent();
+      for (const geometry of armGeometries) geometry.dispose();
+      for (const material of armMaterials.values()) material.dispose();
       district.dispose();
       library.dispose();
       materials.dispose();

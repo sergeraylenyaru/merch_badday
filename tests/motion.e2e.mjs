@@ -203,9 +203,11 @@ try {
 
   const walk = await inputFor(page, ["KeyS"], 0.45);
   assert.equal(walk.motion.player.state, "walk");
+  assert.equal(walk.motion.player.animation?.clip, "Walk", "walking plays the recorded skeleton clip");
   assert.ok(walk.motion.player.speed > 1, "walk has measured travel speed");
   const run = await inputFor(page, ["KeyS", "Shift"], 0.45);
   assert.equal(run.motion.player.state, "run");
+  assert.ok(["Run", "Sprint"].includes(run.motion.player.animation?.clip), "running plays a recorded run/sprint clip");
   assert.ok(run.motion.player.speed > walk.motion.player.speed + 1, "running is faster than walking");
   assert.ok(run.motion.player.distance > walk.motion.player.distance, "stride advances with actual distance");
   const crouch = await inputFor(page, ["Control", "KeyS"], 0.35);

@@ -18,6 +18,7 @@ import {
 import { createWorld } from "./world.js";
 import { createUI } from "./ui.js";
 import { createAtmosphere } from "./visuals/atmosphere.js";
+import { createPointerCapture } from "./input/pointer-capture.js";
 const state = load();
 let settings = { sensitivity: 1, volume: 0.25, quality: "high" };
 try {
@@ -31,6 +32,7 @@ let world,
   scene,
   camera,
   atmosphere,
+  mouseCapture,
   ui,
   mode = "intro",
   vehicle = null,
@@ -58,6 +60,7 @@ const keys = new Set(),
 let visualTime = 0,
   slowFrames = 0;
 const v3 = new T.Vector3();
+const walkingVelocity = new T.Vector3();
 function notify(t) {
   ui.toast(t);
 }
@@ -103,8 +106,9 @@ function snapshot() {
   }
 }
 function unlock() {
-  if (document.pointerLockElement) document.exitPointerLock();
+  mouseCapture?.release();
   keys.clear();
+  walkingVelocity.set(0, 0, 0);
 }
 function open(next) {
   if (mode === "end") return;
@@ -122,6 +126,7 @@ function resume() {
   mode = "play";
   ui.clear();
   initAudio();
+  mouseCapture?.capture();
 }
 function crime(amount = 1) {
   state.wanted = Math.min(5, Math.max(state.wanted, amount) + 0.35);
@@ -308,6 +313,18 @@ try {
   renderer.toneMapping = T.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   document.getElementById("game").append(renderer.domElement);
+  mouseCapture = createPointerCapture(renderer.domElement, {
+    onChange: (captured) => document.body.classList.toggle("mouse-captured", captured && mode === "play"),
+    onLost: () => {
+      if (mode === "play") { open("pause"); ui.pause(); }
+    },
+    onDenied: () => {
+      if (mode === "play") {
+        open("pause"); ui.pause();
+        notify("Нажмите «Продолжить», чтобы включить управление мышью.");
+      }
+    },
+  });
   atmosphere = createAtmosphere(scene, renderer);
   applyQuality();
   ui = createUI(state, {
@@ -419,6 +436,7 @@ try {
   }
   function interact() {
     if (vehicle) {
+      walkingVelocity.set(0, 0, 0);
       if (cargo) {
         grab();
         if (cargo) return;
@@ -636,13 +654,8 @@ try {
   });
   renderer.domElement.addEventListener("click", () => {
     if (mode !== "play") return;
-    if (document.pointerLockElement) hit();
-    else
-      renderer.domElement
-        .requestPointerLock()
-        ?.catch(() =>
-          notify("Захват мыши недоступен. Обзор: стрелки влево / вправо."),
-        );
+    if (mouseCapture.captured) hit();
+    else mouseCapture.capture();
   });
   document.addEventListener("mousemove", (e) => {
     if (document.pointerLockElement && mode === "play") {
@@ -652,12 +665,6 @@ try {
         -0.2,
         1.1,
       );
-    }
-  });
-  document.addEventListener("pointerlockchange", () => {
-    if (!document.pointerLockElement && mode === "play") {
-      open("pause");
-      ui.pause();
     }
   });
   window.addEventListener("resize", () => {
@@ -673,6 +680,7 @@ try {
     if (keys.has("ArrowLeft")) yaw += dt * 1.7;
     if (keys.has("ArrowRight")) yaw -= dt * 1.7;
     if (vehicle) {
+      walkingVelocity.set(0, 0, 0);
       const old = vehicle.mesh.position.clone(),
         sign = Math.sign(vehicle.speed);
       vehicle.speed += forward * vehicle.accel * dt;
@@ -739,17 +747,23 @@ try {
       const crouch = !held && keys.has("ControlLeft"),
         speed =
           (crouch
-            ? 2
+            ? 1.7
             : held
-              ? 3.8
+              ? 3.2
               : keys.has("ShiftLeft")
                 ? state.energy > 0
                   ? 10
-                  : 8
-                : 4.6) * (state.health < 25 ? 0.65 : 1);
+                  : 6.8
+                : 2.8) * (state.health < 25 ? 0.65 : 1);
       let dx = -Math.sin(yaw) * forward + Math.cos(yaw) * side,
         dz = -Math.cos(yaw) * forward - Math.sin(yaw) * side;
       const len = Math.hypot(dx, dz);
+      const acceleration = len ? 11 : 18;
+      walkingVelocity.x = T.MathUtils.damp(walkingVelocity.x, len ? dx / len * speed : 0, acceleration, dt);
+      walkingVelocity.z = T.MathUtils.damp(walkingVelocity.z, len ? dz / len * speed : 0, acceleration, dt);
+      if (walkingVelocity.lengthSq() < 0.0001) walkingVelocity.set(0, 0, 0);
+      dx = walkingVelocity.x * dt;
+      dz = walkingVelocity.z * dt;
       if (held) {
         const turn = Math.atan2(Math.sin(yaw + Math.PI - held.pushHeading), Math.cos(yaw + Math.PI - held.pushHeading));
         const proposed = held.pushHeading + turn * (1 - Math.exp(-dt * 9));
@@ -758,18 +772,19 @@ try {
         if (!world.blocked(frontX, frontZ, 0.88)) held.pushHeading = proposed;
         world.player.mesh.rotation.y = held.pushHeading;
       }
-      if (len) {
-        dx = (dx / len) * speed * dt;
-        dz = (dz / len) * speed * dt;
+      else if (firstPerson) world.player.mesh.rotation.y = yaw + Math.PI;
+      if (walkingVelocity.lengthSq() > 0) {
         const aheadX = held ? Math.sin(held.pushHeading) * 1.32 : 0;
         const aheadZ = held ? Math.cos(held.pushHeading) * 1.32 : 0;
         const cp = held?.body.translation();
         const attached = !held || held.gripTime < 0.35 || Math.hypot(cp.x - pos.x - aheadX, cp.z - pos.z - aheadZ) < 0.65;
         if (attached && !world.blocked(pos.x + dx, pos.z) &&
             (!held || !world.blocked(pos.x + dx + aheadX, pos.z + aheadZ, 0.88))) pos.x += dx;
+        else walkingVelocity.x = 0;
         if (attached && !world.blocked(pos.x, pos.z + dz) &&
             (!held || !world.blocked(pos.x + aheadX, pos.z + dz + aheadZ, 0.88))) pos.z += dz;
-        if (!held) {
+        else walkingVelocity.z = 0;
+        if (!held && !firstPerson) {
           const target = Math.atan2(dx, dz);
           const turn = Math.atan2(Math.sin(target - world.player.mesh.rotation.y), Math.cos(target - world.player.mesh.rotation.y));
           world.player.mesh.rotation.y += turn * (1 - Math.exp(-dt * 14));
@@ -1126,7 +1141,7 @@ try {
       camera.lookAt(-64, 2, 18);
       return;
     }
-    const target = pos.clone().add(new T.Vector3(0, vehicle ? 2 : 1.8, 0));
+    const target = pos.clone().add(new T.Vector3(0, vehicle ? 2 : firstPerson ? 1.8 : 1.45, 0));
     let desired;
     if (firstPerson && !vehicle) {
       desired = target;
@@ -1145,13 +1160,13 @@ try {
       );
     } else {
       world.player.mesh.visible = !vehicle;
-      const r = vehicle ? 12 : 8;
+      const r = vehicle ? 12 : 6;
       desired = target
         .clone()
         .add(
           new T.Vector3(
             Math.sin(yaw) * r * Math.cos(pitch),
-            2 + Math.sin(pitch) * r,
+            (vehicle ? 2 : 1) + Math.sin(pitch) * r,
             Math.cos(yaw) * r * Math.cos(pitch),
           ),
         );
@@ -1224,6 +1239,7 @@ try {
       grounded: jump <= 0, verticalVelocity: vertical,
       crouch: !held && keys.has("ControlLeft"), guard: !held && keys.has("KeyQ"),
       attack, attackKind, inVehicle: !!vehicle,
+      firstPerson,
     });
     ui.update(world, vehicle);
     renderer.render(scene, camera);
@@ -1256,6 +1272,8 @@ try {
         playerY: world.player.mesh.position.y,
         firstPersonHandsVisible: world.visuals?.firstPersonHandsVisible ?? false,
         fov: camera.fov,
+        pointerLocked: mouseCapture.captured,
+        cameraYaw: yaw,
       };
     },
     get motion() {
@@ -1266,6 +1284,7 @@ try {
   addEventListener("pagehide", (event) => {
     if (!event.persisted) {
       world.visuals?.dispose();
+      mouseCapture.dispose();
       atmosphere.dispose();
     }
   });
