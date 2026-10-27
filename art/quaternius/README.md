@@ -21,3 +21,5 @@ blender --background --threads 2 --python-exit-code 1 --python scripts/import-hu
 ```
 
 The script recolors real mesh materials, adds a structured backpack, maps the skeleton to the game's visual joint names, retargets selected recorded UAL animation tracks, removes horizontal root motion, and exports self-contained GLBs into `public/models/characters/`. It does not execute code from the model files. No textures or external URLs are requested during gameplay.
+
+Runtime rig version 4 embeds 18 selected clips. New work clips use `Idle_Talking_Loop`, `Interact`, `PickUp_Table`, `Fixing_Kneeling`, and `Walk_Formal_Loop`. The existing source and license are unchanged. Directional walking and hand contacts are adjusted at runtime; separate GTA or other proprietary animation data is not used.

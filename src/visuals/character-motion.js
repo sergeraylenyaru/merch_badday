@@ -3,6 +3,7 @@ import { AnimationMixer, Euler, LoopOnce, MathUtils, Quaternion, Vector3 } from 
 const TAU = Math.PI * 2;
 const X = new Vector3(1, 0, 0);
 const UP = new Vector3(0, 1, 0);
+const Z = new Vector3(0, 0, 1);
 const damp = (from, to, rate, dt) => MathUtils.lerp(from, to, 1 - Math.exp(-rate * dt));
 const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
@@ -125,6 +126,8 @@ export function createCharacterMotion(entity, model) {
   let soleClearance = null;
   const entityQ = new Quaternion(), cartQ = new Quaternion(), rotation = new Quaternion(), tilt = new Quaternion();
   const localVelocity = new Vector3(), pole = new Vector3(), target = new Vector3(), travelDirection = new Vector3();
+  const lastVelocity = new Vector3(), acceleration = new Vector3(), balanceAxis = new Vector3();
+  let bodyLean = 0, headTurn = 0, lastActivityId = null;
   const euler = new Euler();
   const fallbackTargets = [new Vector3(-0.45, 1.5, -0.85), new Vector3(0.45, 1.5, -0.85)];
   let speed = 0, distance = 0, phase = 0, moving = 0, running = 0, crouching = 0, gripWeight = 0;
@@ -139,7 +142,7 @@ export function createCharacterMotion(entity, model) {
   if (mixer) {
     for (const clip of model.animations) {
       const action = mixer.clipAction(clip).setEffectiveWeight(0).play();
-      if (["Jump", "Land", "Punch", "StrongPunch"].includes(clip.name)) {
+      if (["Jump", "Land", "Punch", "StrongPunch", 'PickUp', 'Interact', 'Fixing'].includes(clip.name)) {
         action.setLoop(LoopOnce, 1);
         action.clampWhenFinished = true;
       }
@@ -159,29 +162,33 @@ export function createCharacterMotion(entity, model) {
   }
 
   function recordedPose(dt, input, held, rawSpeed) {
-    let next = held ? "Push" : input.inVehicle ? "Drive" : !grounded ? lastVertical > 0 ? "Jump" : "Fall"
+    let next = input.activity?.clip ?? (input.inVehicle ? "Drive" : !grounded ? lastVertical > 0 ? "Jump" : "Fall"
       : input.attack > 0 ? input.attackKind === "strong" ? "StrongPunch" : "Punch"
         : landing > 0.2 ? "Land" : input.crouch ? rawSpeed > 0.08 ? "CrouchWalk" : "Crouch"
-          : rawSpeed > 6 ? "Sprint" : rawSpeed > 0.08 ? "Walk" : "Idle";
+          : rawSpeed > 6 && !held ? "Sprint" : rawSpeed > 0.08 ? input.staff ? 'WalkFormal' : "Walk" : input.social ? 'Talk' : "Idle");
     if (!actions.has(next)) next = "Idle";
-    if (next !== activeClip) {
+    if (next !== activeClip || (input.activity && input.activity.id !== lastActivityId)) {
       const previous = actions.get(activeClip);
       const action = actions.get(next);
       action.reset().play();
-      if (["Walk", "Run", "Sprint"].includes(next) && ["Walk", "Run", "Sprint"].includes(activeClip))
+      if (["Walk", "WalkFormal", "Run", "Sprint"].includes(next) && ["Walk", 'WalkFormal', "Run", "Sprint"].includes(activeClip))
         action.time = (previous.time / previous.getClip().duration % 1) * action.getClip().duration;
+      if (input.activity && ['PickUp', 'Interact', 'Fixing'].includes(next)) action.time = Math.max(0, 1 - input.activity.remaining / input.activity.duration) * action.getClip().duration;
       activeClip = next;
     }
+    lastActivityId = input.activity?.id ?? null;
     for (const [name, action] of actions) {
       const weight = damp(action.getEffectiveWeight(), name === next ? 1 : 0, 14, dt);
       action.setEffectiveWeight(weight);
       let rate = 1;
       if (name === "Walk") rate = MathUtils.clamp(rawSpeed / 1.6, 0.45, 1.9);
+      if (name === 'WalkFormal') rate = MathUtils.clamp(rawSpeed / 1.15, 0.5, 1.6);
       if (name === "Run" || name === "Sprint") rate = MathUtils.clamp(rawSpeed / 4.8, 0.7, 1.7);
       if (name === "CrouchWalk") rate = MathUtils.clamp(rawSpeed / 1.3, 0.5, 1.6);
-      if (input.firstPerson && (name === "Walk" || name === "CrouchWalk") && localVelocity.z < -Math.abs(localVelocity.x) * 0.5) rate *= -1;
+      if ((input.firstPerson || held || input.activity?.approach) && (name === "Walk" || name === "CrouchWalk") && localVelocity.z < -Math.abs(localVelocity.x) * 0.5) rate *= -1;
       if (name === "Punch" || name === "StrongPunch") rate = action.getClip().duration / (name === "Punch" ? 0.35 : 0.85);
       if (name === "Land") rate = action.getClip().duration / 0.25;
+      if (name === next && input.activity && ['PickUp', 'Interact', 'Fixing'].includes(name)) rate = action.getClip().duration / input.activity.duration;
       action.setEffectiveTimeScale(rate);
     }
     mixer.update(dt);
@@ -208,7 +215,7 @@ export function createCharacterMotion(entity, model) {
     const step = active ? dt : 0;
     const velocity = input.velocity;
     const rawSpeed = active && !input.inVehicle && velocity ? Math.hypot(velocity.x, velocity.z) : 0;
-    const held = input.heldCart ?? null;
+    const held = input.heldCart ?? input.carriedBox ?? null;
     grounded = input.grounded !== false;
     const facing = input.facing ?? root.rotation.y;
     const turning = step > 0 ? wrapAngle(facing - lastFacing) / step : 0;
@@ -246,24 +253,18 @@ export function createCharacterMotion(entity, model) {
     if (rawSpeed > 0.05) travelDirection.copy(velocity).setY(0).normalize();
     else travelDirection.set(0, 0, 1).applyQuaternion(entityQ);
 
-    state = input.inVehicle ? "drive" : !grounded ? lastVertical > 0 ? "jump" : "fall"
-      : held ? rawSpeed < 0.08 ? "hold" : Math.abs(localVelocity.x) > Math.abs(localVelocity.z) * 0.8 ? "strafe" : localVelocity.z < 0 ? "pull" : "push"
+    state = input.inVehicle ? "drive" : input.activity ? 'work' : !grounded ? lastVertical > 0 ? "jump" : "fall"
+      : input.carriedBox ? rawSpeed > 0.08 ? 'carry-walk' : 'carry' : held ? rawSpeed < 0.08 ? "hold" : Math.abs(localVelocity.x) > Math.abs(localVelocity.z) * 0.8 ? "strafe" : localVelocity.z < 0 ? "pull" : "push"
         : input.attack > 0 ? "attack" : input.guard ? "guard" : landing > 0.2 ? "land"
           : input.crouch ? rawSpeed > 0.08 ? "crouch-walk" : "crouch" : rawSpeed > 6 ? "run" : rawSpeed > 0.08 ? "walk" : "idle";
     restore();
     gripErrors.length = 0;
     feetErrors.length = 0;
-    const recorded = !!mixer && !held;
+    const recorded = !!mixer;
     if (mixer) {
       recordedPose(step, input, held, rawSpeed);
-      if (!recorded) for (const record of records) {
-        if (/Index|Middle|Ring|Pinky|Thumb/.test(record.node.name)) {
-          const closed = closedFingers.get(record.node);
-          if (closed) record.node.quaternion.slerp(closed, gripWeight);
-          continue;
-        }
-        record.node.position.copy(record.position);
-        record.node.quaternion.copy(record.rotation);
+      if (held) for (const record of records) if (/Index|Middle|Ring|Pinky|Thumb/.test(record.node.name)) {
+        const closed = closedFingers.get(record.node); if (closed) record.node.quaternion.slerp(closed, gripWeight);
       }
     }
     if (!recorded) {
@@ -352,10 +353,47 @@ export function createCharacterMotion(entity, model) {
         if (joints.Spine) pose("Spine", 0.1 + strike * 0.1, -strike * 0.18, -turn);
       }
     }
-    } else if (grounded) {
+    } else {
+      if (step > 0 && velocity) acceleration.copy(velocity).sub(lastVelocity).multiplyScalar(1 / step).applyQuaternion(rotation.copy(entityQ).invert());
+      else acceleration.set(0, 0, 0);
+      if (velocity) lastVelocity.copy(velocity);
+      const leanTarget = input.activity ? 0 : (held ? 0.08 : running * 0.1) + MathUtils.clamp(acceleration.z * 0.006, -0.09, 0.12);
+      bodyLean = damp(bodyLean, leanTarget, 8, dt);
+      if (joints.Spine) {
+        balanceAxis.set(1, 0, 0).applyQuaternion(entityQ);
+        tilt.setFromAxisAngle(balanceAxis, bodyLean);
+        joints.Spine.node.getWorldQuaternion(rotation).premultiply(tilt);
+        worldRotation(joints.Spine.node, rotation, cartQ);
+      }
+      let look = 0;
+      if (input.lookAt) {
+        const position = root.getWorldPosition(target);
+        look = MathUtils.clamp(wrapAngle(Math.atan2(input.lookAt.x - position.x, input.lookAt.z - position.z) - facing), -0.55, 0.55);
+      }
+      headTurn = damp(headTurn, look, 7, dt);
+      if (joints.Head) {
+        tilt.setFromAxisAngle(UP, headTurn);
+        joints.Head.node.getWorldQuaternion(rotation).premultiply(tilt);
+        worldRotation(joints.Head.node, rotation, cartQ);
+      }
+    }
+    if (recorded && grounded) {
       // Keep the captured performance, with a small ground-contact correction.
       // Feet close to the floor are pinned in world space during support.
       model.updateWorldMatrix(true, true);
+      // Redirect the captured leg swing for lateral movement while keeping
+      // shoulders facing the trolley/first-person camera and hands on the grip.
+      const angle = input.firstPerson || held ? Math.atan2(localVelocity.x, Math.abs(localVelocity.z) + 0.001) : 0;
+      if (rawSpeed > 0.08 && Math.abs(angle) > 0.05) for (const leg of legs) if (leg) {
+        leg.contact.getWorldPosition(target); root.worldToLocal(target);
+        const dx = target.x - leg.neutralContact.x, dz = target.z - leg.neutralContact.z;
+        target.x = leg.neutralContact.x + Math.cos(angle) * dx + Math.sin(angle) * dz;
+        target.z = leg.neutralContact.z - Math.sin(angle) * dx + Math.cos(angle) * dz;
+        root.localToWorld(target);
+        leg.end.getWorldQuaternion(leg.endQ);
+        pole.set(Math.sin(angle) * 0.6, -0.06, Math.cos(angle)).applyQuaternion(entityQ);
+        solve(leg, target, leg.endQ, pole);
+      }
       let lowest = Infinity;
       for (const leg of legs) if (leg) {
         leg.contact.getWorldPosition(leg.actual);
@@ -367,10 +405,10 @@ export function createCharacterMotion(entity, model) {
       for (const leg of legs) if (leg) {
         leg.contact.getWorldPosition(leg.actual);
         const supporting = leg.actual.y < floor + 0.055 && rawSpeed > 0.08;
-        if (supporting && !leg.wasStance) leg.plant.copy(leg.actual).setY(floor);
+        if (supporting && !leg.wasStance) { leg.plant.copy(leg.actual).setY(floor); leg.end.getWorldQuaternion(leg.plantRotation); }
         leg.wasStance = supporting;
         if (supporting) {
-          leg.end.getWorldQuaternion(leg.endQ);
+          leg.endQ.copy(leg.plantRotation);
           pole.set(0, -0.06, 1).applyQuaternion(entityQ);
           solve(leg, leg.plant, leg.endQ, pole);
           leg.contact.getWorldPosition(leg.actual);
@@ -406,7 +444,9 @@ export function createCharacterMotion(entity, model) {
         if (arm.targetObject) arm.targetObject.getWorldPosition(arm.contactGoal);
         else arm.contactGoal.copy(fallbackTargets[arm.side < 0 ? 0 : 1]), held.localToWorld(arm.contactGoal);
         held.getWorldQuaternion(cartQ);
-        arm.endQ.copy(cartQ).multiply(arm.gripOrientation || arm.neutralEndRotation);
+        arm.endQ.copy(cartQ);
+        if (held.userData.carry) arm.endQ.multiply(tilt.setFromAxisAngle(Z, -arm.side * Math.PI / 2));
+        arm.endQ.multiply(arm.gripOrientation || arm.neutralEndRotation);
         if (!arm.gripOrientation) {
           tilt.setFromAxisAngle(X, -1.05);
           arm.endQ.multiply(tilt);
@@ -454,6 +494,7 @@ export function createCharacterMotion(entity, model) {
     lastFacing = root.rotation.y;
     lastGrounded = true;
     lastVertical = 0;
+    lastVelocity.set(0, 0, 0); bodyLean = headTurn = 0; lastActivityId = null;
     wasMoving = false;
     model.updateWorldMatrix(true, true);
     for (const leg of legs) if (leg) {
@@ -479,7 +520,7 @@ export function createCharacterMotion(entity, model) {
     get diagnostics() {
       return {
         state, speed, stride: phase / TAU, distance, gripWeight, grounded, crouchWeight: crouching, articulated,
-        gripErrors: [...gripErrors], feetErrors: [...feetErrors], soleClearance,
+        gripErrors: [...gripErrors], feetErrors: [...feetErrors], soleClearance, bodyLean, headTurn,
         feetPlanted: legs.map((leg) => leg?.wasStance === true),
         animation: mixer ? {
           source: "Quaternius Universal Animation Library (CC0)", clip: activeClip,

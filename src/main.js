@@ -18,8 +18,13 @@ import {
 import { createWorld } from "./world.js";
 import { createUI } from "./ui.js";
 import { createAtmosphere } from "./visuals/atmosphere.js";
+import { constrainCamera } from './visuals/camera-collision.js';
 import { createPointerCapture } from "./input/pointer-capture.js";
 import { PLAYER_SHAPE, nearestBoardableVehicle, vehicleDoor, circleIntersectsBox, boxesIntersect, vehicleBox } from "./spatial.js";
+import { JOBS, PRICE_ITEMS, EXPIRY_BATCHES, jobDone, jobProgress, isShopUnlocked, payParking as chargeParking } from './jobs/catalog.js';
+import { newPlanogram, swapProducts, planogramWon } from './jobs/match3.js';
+import { rotatePort, circuitConnected } from './jobs/circuit.js';
+import { staffPatrol } from './npc/patrol.js';
 const state = load();
 let settings = { sensitivity: 1, volume: 0.25, quality: "high" };
 try {
@@ -56,13 +61,14 @@ let world,
   hasStarted = false,
   resetting = false,
   audio = null;
+let eyeHeight = PLAYER_SHAPE.eyeHeight;
+let cameraNeedsSnap = true;
 const keys = new Set(),
   clock = new T.Clock();
 let visualTime = 0,
   slowFrames = 0;
 const v3 = new T.Vector3();
 const walkingVelocity = new T.Vector3();
-const cameraRay = new T.Ray(), cameraBounds = new T.Box3(), cameraHit = new T.Vector3(), cameraDelta = new T.Vector3();
 function notify(t) {
   ui.toast(t);
 }
@@ -80,17 +86,7 @@ function findVehicleExit(v) {
   return candidates.find((p) => !world.blocked(p.x, p.z));
 }
 function avoidCameraCollision(origin, desired) {
-  cameraDelta.copy(desired).sub(origin);
-  let distance = cameraDelta.length();
-  if (distance < 0.001) return;
-  cameraDelta.multiplyScalar(1 / distance);
-  cameraRay.set(origin, cameraDelta);
-  for (const box of world.blockers) {
-    cameraBounds.min.set(box.x - box.w, box.y - box.h / 2, box.z - box.d);
-    cameraBounds.max.set(box.x + box.w, box.y + box.h / 2, box.z + box.d);
-    if (cameraRay.intersectBox(cameraBounds, cameraHit)) distance = Math.min(distance, Math.max(0.1, origin.distanceTo(cameraHit) - 0.14));
-  }
-  desired.copy(origin).addScaledVector(cameraDelta, distance);
+  constrainCamera(origin, desired, world.blockers, world.vehicles, vehicle);
 }
 function snapshot() {
   if (!world || resetting) return;
@@ -103,7 +99,7 @@ function snapshot() {
       c === cargo && vehicle
         ? { x: vehicle.mesh.position.x - 5, z: vehicle.mesh.position.z + 5 }
         : c.body.translation();
-    return { x: p.x, z: p.z, heading: c.mesh.rotation.y };
+    return { x: p.x, z: p.z, heading: c.mesh.rotation.y, rewarded: c.rewarded };
   });
   state.vehicles = world.vehicles.map((v) => ({
     x: v.mesh.position.x,
@@ -210,29 +206,19 @@ function nearestShop() {
 }
 function talk(shop, choice) {
   const p = state.shops[shop.id];
+  if (!isShopUnlocked(state, shop.id)) { notify('ГиперМакс откроется после пяти подтверждённых визитов.'); resume(); return; }
   if (p.done) {
     notify("Визит уже подтверждён.");
     resume();
     return;
   }
-  if (choice === "badge") {
+  if (choice === "badge" && !p.badge) {
     p.badge = true;
     p.rep += 2;
     state.reputation += 1;
     notify("Бейдж принят. «Ладно, работайте. Я здесь».");
   }
-  if (choice === "bargain") {
-    if (state.money < 100) {
-      notify("Для переговоров нужно 100 ₽.");
-      return;
-    }
-    state.money -= 100;
-    p[shop.task] = true;
-    p.rep -= 2;
-    notify(
-      "Сотрудник помог с дополнительной задачей. Тележки всё равно нужно собрать.",
-    );
-  }
+  if (choice === 'job') notify(`${JOBS[shop.id].title}: ${JOBS[shop.id].description}`);
   if (choice === "rude") {
     p.rep -= 10;
     state.reputation -= 5;
@@ -241,6 +227,7 @@ function talk(shop, choice) {
     message(`${shop.name}: жалоба на грубость. Охрана предупреждена.`);
   }
   if (choice === "polite") {
+    if (shop.id === 7 && p.job.scannerFound) p.job.scannerReturned = true;
     if (canComplete(state, shop.id)) {
       complete(state, shop.id);
       message(`${shop.name}: визит подтверждён. +200 ₽, +100 ₽ к премии.`);
@@ -249,21 +236,13 @@ function talk(shop, choice) {
         end();
         return;
       }
-      const next = state.shops.findIndex((x) => !x.done);
+      if (state.shops.filter((s) => s.done).length >= 5 && !state.gateNotified) {
+        state.gateNotified = true; message('ГиперМакс открылся! Управляющий ждёт помощи с потерянным ТСД.');
+      }
+      const next = state.shops.findIndex((x, id) => !x.done && isShopUnlocked(state, id));
       if (next >= 0) state.selected = next;
     } else {
-      const missing = [];
-      if (p.carts < shop.required)
-        missing.push(`тележки ${p.carts}/${shop.required}`);
-      if (!p[shop.task])
-        missing.push(
-          {
-            badge: "покажите бейдж",
-            shelf: "исправьте выкладку справа",
-            photo: "нужен фотоотчёт из телефона",
-          }[shop.task],
-        );
-      notify(`Сначала: ${missing.join("; ")}.`);
+      notify(`${jobProgress(state, shop.id)}. ${JOBS[shop.id].description}`);
       state.stress += 2;
     }
   }
@@ -271,26 +250,63 @@ function talk(shop, choice) {
   snapshot();
   resume();
 }
-function arrange(shop, order) {
-  if (order.every((v, i) => v === i)) {
-    state.shops[shop.id].shelf = true;
-    state.bonus += 30;
-    state.stress -= 4;
-    normalize(state);
-    notify("Планограмма соблюдена! +30 ₽ к премии.");
+function planogramSwap(shop, a, b) {
+  if (shop.id !== 1 || state.shops[1].done) return { valid: false, reason: 'Работа уже закрыта.' };
+  const job = state.shops[1].job;
+  const result = swapProducts(job.match, a, b);
+  if (result.valid) {
+    if (planogramWon(job.match) && !job.rewarded) {
+      job.rewarded = true; state.shops[1].shelf = true; state.bonus += 30; state.stress -= 4;
+      normalize(state); beep(720); notify('Планограмма выполнена! +30 ₽ к премии. Найдите директора.');
+    }
     snapshot();
-    resume();
-  } else ui.shelf(shop, order);
+  }
+  return result;
+}
+function resetPlanogram(shop) {
+  if (shop.id !== 1 || jobDone(state, 1) || state.shops[1].done) return;
+  state.shops[1].job.match = newPlanogram(state.shops[1].job.match.seed);
+  snapshot();
+}
+function payParking(shop) {
+  const car = world.jobs.parkingCar;
+  if (shop.id !== 0 || !car || !chargeParking(state, car.id)) { notify('Нужна неподвижная машина в голубой разметке и 40 ₽.'); return; }
+  notify('Парковка оплачена. Чек сохранён. Найдите Нину в торговом зале.');
+  beep(650); snapshot(); resume();
+}
+function rotateCircuit(shop, index) {
+  if (shop.id !== 3 || !Number.isInteger(index) || index < 0 || index > 8 || jobDone(state, 3)) return;
+  const job = state.shops[3].job;
+  job.circuit[index] = rotatePort(job.circuit[index]); job.rotations++; snapshot();
+}
+function applyRepair(shop) {
+  if (shop.id !== 3 || !circuitConnected(state.shops[3].job.circuit) || jobDone(state, 3)) return;
+  if (world.jobs.startRepair()) {
+    walkingVelocity.set(0, 0, 0);
+    world.player.actionFacing = Math.atan2(shop.x + 11.25 - world.player.mesh.position.x, shop.z - 5.78 - world.player.mesh.position.z);
+    notify('Устанавливаем секцию подсветки…'); resume();
+  }
+}
+function removeExpired(shop, index) {
+  if (shop.id !== 5 || !EXPIRY_BATCHES[index] || state.shops[5].job.removed.includes(index)) return;
+  if (EXPIRY_BATCHES[index].expired) { state.shops[5].job.removed.push(index); beep(490); }
+  else { state.stress += 2; notify('Срок ещё не истёк. Эта партия должна остаться на полке.'); }
+  normalize(state); snapshot();
+}
+function replacePrice(shop, index, value) {
+  if (shop.id !== 6 || !PRICE_ITEMS[index] || state.shops[6].job.labels[index] === PRICE_ITEMS[index].price) return;
+  if (value === PRICE_ITEMS[index].price) { state.shops[6].job.labels[index] = value; beep(550); }
+  else { state.stress += 2; notify('Проверьте цену в накладной — она указана слева от вариантов.'); }
+  normalize(state); snapshot();
 }
 function photo() {
   const shop = nearestShop(),
     zone = world.zones[shop.id],
     pos = world.player.mesh.position;
   if (
-    Math.hypot(pos.x - zone.x, pos.z - zone.z) > 13 ||
-    state.shops[shop.id].carts < shop.required
+    Math.hypot(pos.x - shop.x, pos.z - shop.z) > 26 || !isShopUnlocked(state, shop.id)
   ) {
-    notify("Фото не принято: встаньте у зоны и соберите все тележки.");
+    notify("Подойдите к открытому магазину, чтобы сделать фотоотчёт.");
     return;
   }
   state.shops[shop.id].photo = true;
@@ -352,7 +368,13 @@ try {
     quit: () => end(true),
     restart,
     talk,
-    arrange,
+    planogramSwap,
+    resetPlanogram,
+    payParking,
+    rotateCircuit,
+    applyRepair,
+    removeExpired,
+    replacePrice,
     photo,
     energy,
   });
@@ -421,27 +443,24 @@ try {
     if (vehicle)
       return cargo
         ? "R · Выгрузить тележку   E · Выйти"
-        : "E · Выйти   R · Загрузить тележку (фургон / грузовик)";
-    if (held) return "R · Отпустить тележку в жёлтой зоне";
-    const s = nearest(
-      world.shelves.filter(
-        (s) => !state.shops[s.shop].shelf && SHOPS[s.shop].task === "shelf",
-      ),
-      4,
-    );
-    if (s) return "E · Исправить выкладку";
+        : [1, 3].includes(vehicle.type) ? 'E · Выйти   R · Загрузить тележку' : 'E · Выйти из машины';
+    if (world.jobs.activity) return 'Выполняем работу…';
+    const pos = world.player.mesh.position;
+    const task = world.jobs.nearest(pos);
+    if (state.carrying) return task?.type === 'drop' ? 'E · Поставить коробку в приёмку' : 'Коробка в руках · отнесите в голубую приёмку магазина «СуперЦена»';
+    if (held) return held.missionCargo ? 'R · Оставить грузовую тележку в голубой приёмке' : 'R · Вернуть в жёлтую зону за бонус';
+    if (task) return `E · ${task.label}`;
     const npc = nearest(
-      world.people.filter((n) => n.kind === "staff"),
+      world.people.filter((n) => n.kind === "staff" && isShopUnlocked(state, n.shop)),
       3.5,
     );
     if (npc) return `E · ${SHOPS[npc.shop].npc}`;
-    const pos = world.player.mesh.position;
     const coffee = SHOPS.find(
       (s) => Math.hypot(pos.x - s.x - 17, pos.z - s.z - 4) < 3,
     );
     if (coffee) return "E · Кофе и аптечка · 40 ₽";
     const cart = nearest(
-      world.carts.filter((c) => !c.delivered),
+      world.carts.filter((c) => !c.delivered || (c.missionCargo && !state.shops[2].job.delivered.includes(c.id))),
       3,
     );
     if (cart) return "R · Взяться за ручку тележки";
@@ -473,23 +492,37 @@ try {
       return;
     }
     const pos = world.player.mesh.position;
-    const shelf = nearest(
-      world.shelves.filter(
-        (s) => !state.shops[s.shop].shelf && SHOPS[s.shop].task === "shelf",
-      ),
-      4,
-    );
-    if (shelf) {
-      open("shelf");
-      ui.shelf(SHOPS[shelf.shop], [2, 0, 1]);
+    if (world.jobs.activity) return;
+    const task = world.jobs.nearest(pos);
+    if (state.carrying && task?.type !== 'drop') { notify('Сначала отнесите коробку в голубую приёмку «СуперЦены».'); return; }
+    if (task) {
+      state.selected = task.shop;
+      const shop = SHOPS[task.shop];
+      if (task.type === 'locked') { notify(`Магазин откроется после пяти визитов. Сейчас ${state.shops.filter((s) => s.done).length}/5.`); return; }
+      if (held) { notify('Сначала отпустите ручку тележки: R.'); return; }
+      if (['pickup', 'drop', 'search'].includes(task.type)) {
+        walkingVelocity.set(0, 0, 0);
+        world.player.actionFacing = Math.atan2(task.x - pos.x, task.z - pos.z);
+        if (task.type === 'pickup' && !world.jobs.startPickup()) notify('Подойдите к коробкам сзади грузовика. Нужно свободное место для рук.');
+        if (task.type === 'drop') world.jobs.startDrop();
+        if (task.type === 'search') world.jobs.startSearch(task.spot);
+      } else {
+        open('job');
+        if (task.type === 'parking') ui.parking(shop, world.jobs.parkingCar);
+        if (task.type === 'planogram') ui.planogram(shop);
+        if (task.type === 'repair') ui.repair(shop);
+        if (task.type === 'expiry') ui.expiry(shop);
+        if (task.type === 'prices') ui.prices(shop);
+      }
       return;
     }
     const npc = nearest(
-      world.people.filter((n) => n.kind === "staff"),
+      world.people.filter((n) => n.kind === "staff" && isShopUnlocked(state, n.shop)),
       3.5,
     );
     if (npc) {
       state.selected = npc.shop;
+      npc.lookAt = pos;
       open("dialogue");
       ui.dialogue(SHOPS[npc.shop]);
       return;
@@ -542,6 +575,7 @@ try {
     }
   }
   function grab() {
+    if (state.carrying || world.jobs.activity) { notify('Сейчас руки заняты работой.'); return; }
     if (vehicle) {
       if (![1, 3].includes(vehicle.type)) {
         notify("Для перевозки нужен фургон или грузовик.");
@@ -561,7 +595,7 @@ try {
         notify("Тележка выгружена.");
       } else {
         const cart = nearest(
-          world.carts.filter((c) => !c.delivered),
+          world.carts.filter((c) => !c.delivered || (c.missionCargo && !state.shops[2].job.delivered.includes(c.id))),
           7,
         );
         if (cart) {
@@ -584,18 +618,20 @@ try {
       return;
     }
     const cart = nearest(
-      world.carts.filter((c) => !c.delivered),
+      world.carts.filter((c) => !c.delivered || (c.missionCargo && !state.shops[2].job.delivered.includes(c.id))),
       3,
     );
     if (cart) {
       held = cart;
+      if (cart.missionCargo) state.selected = 2;
       held.pushHeading = yaw + Math.PI;
       held.gripTime = 0;
       attack = 0;
-      notify("Держим ручку двумя руками. WASD — везти, R — отпустить в жёлтой зоне.");
+      notify(cart.missionCargo ? 'Вывозим товар со склада. Отпустите R в голубой приёмке.' : 'Возврат обычных тележек — необязательный бонус. R — отпустить.');
     }
   }
   function hit(strong = false) {
+    if (state.carrying || world.jobs.activity) { notify('Руки заняты работой.'); return; }
     if (held) {
       notify("Сначала отпустите ручку тележки: R.");
       return;
@@ -628,7 +664,7 @@ try {
     }
   }
   document.addEventListener("keydown", (e) => {
-    if (["Tab", "Space", "ArrowUp", "ArrowDown"].includes(e.code))
+    if (mode === 'play' && ["Tab", "Space", "ArrowUp", "ArrowDown"].includes(e.code))
       e.preventDefault();
     if (e.code === "Escape") {
       if (mode === "play") {
@@ -638,7 +674,7 @@ try {
       return;
     }
     if (e.repeat) {
-      keys.add(e.code);
+      if (mode === 'play') keys.add(e.code);
       return;
     }
     if (e.code === "KeyM" || e.code === "Tab") {
@@ -655,7 +691,7 @@ try {
     if (e.code === "KeyF") hit();
     if (e.code === "KeyG") hit(true);
     if (e.code === "KeyC") firstPerson = !firstPerson;
-    if (e.code === "Space" && !vehicle && !held && jump === 0) vertical = 8;
+    if (e.code === "Space" && !vehicle && !held && !state.carrying && !world.jobs.activity && jump === 0) vertical = 8;
   });
   document.addEventListener("keyup", (e) => keys.delete(e.code));
   window.addEventListener("blur", () => {
@@ -757,12 +793,13 @@ try {
           );
       }
     } else {
-      const crouch = !held && keys.has("ControlLeft"),
+      const activity = world.jobs.activity, busy = !!activity, carrying = !!state.carrying;
+      const crouch = !held && !carrying && !busy && keys.has("ControlLeft"),
         speed =
-          (crouch
+          (activity?.approach ? 1.5 : busy ? 0 : carrying ? 2.25 : crouch
             ? 1.7
             : held
-              ? 3.2
+              ? held.missionCargo ? 2.7 : 3.2
               : keys.has("ShiftLeft")
                 ? state.energy > 0
                   ? 10
@@ -770,6 +807,7 @@ try {
                 : 2.8) * (state.health < 25 ? 0.65 : 1);
       let dx = -Math.sin(yaw) * forward + Math.cos(yaw) * side,
         dz = -Math.cos(yaw) * forward - Math.sin(yaw) * side;
+      if (activity?.approach) { dx = activity.approach.x - pos.x; dz = activity.approach.z - pos.z; }
       const len = Math.hypot(dx, dz);
       const acceleration = len ? 11 : 18;
       walkingVelocity.x = T.MathUtils.damp(walkingVelocity.x, len ? dx / len * speed : 0, acceleration, dt);
@@ -785,7 +823,7 @@ try {
         if (!world.blocked(frontX, frontZ, 0.88)) held.pushHeading = proposed;
         world.player.mesh.rotation.y = held.pushHeading;
       }
-      else if (firstPerson) world.player.mesh.rotation.y = yaw + Math.PI;
+      else if (firstPerson && !busy) world.player.mesh.rotation.y = yaw + Math.PI;
       if (walkingVelocity.lengthSq() > 0) {
         const aheadX = held ? Math.sin(held.pushHeading) * 1.32 : 0;
         const aheadZ = held ? Math.cos(held.pushHeading) * 1.32 : 0;
@@ -797,7 +835,7 @@ try {
         if (attached && !world.blocked(pos.x, pos.z + dz) &&
             (!held || !world.blocked(pos.x + aheadX, pos.z + dz + aheadZ, 0.88))) pos.z += dz;
         else walkingVelocity.z = 0;
-        if (!held && !firstPerson) {
+        if (!held && !firstPerson && !busy) {
           const target = Math.atan2(dx, dz);
           const turn = Math.atan2(Math.sin(target - world.player.mesh.rotation.y), Math.cos(target - world.player.mesh.rotation.y));
           world.player.mesh.rotation.y += turn * (1 - Math.exp(-dt * 14));
@@ -805,6 +843,11 @@ try {
         for (const [i, leg] of world.player.legs.entries())
           leg.rotation.x = Math.sin(visualTime * speed * 2 + i * Math.PI) * 0.5;
       } else world.player.legs.forEach((l) => (l.rotation.x = 0));
+      if (busy && Number.isFinite(world.player.actionFacing)) {
+        const rotation = world.player.mesh.rotation.y;
+        const turn = Math.atan2(Math.sin(world.player.actionFacing - rotation), Math.cos(world.player.actionFacing - rotation));
+        world.player.mesh.rotation.y += turn * (1 - Math.exp(-dt * 10));
+      }
       vertical -= 20 * dt;
       jump = Math.max(0, jump + vertical * dt);
       if (jump === 0) vertical = 0;
@@ -882,7 +925,10 @@ try {
         p.y < 2;
       if (good && !c.delivered) {
         beep(660);
-        notify(`Тележка возвращена · ${SHOPS[c.shop].name}`);
+        if (!c.rewarded) {
+          c.rewarded = true; state.money += 10; state.bonus += 5;
+          notify(`Тележка возвращена · ${SHOPS[c.shop].name} · бонус 10 ₽`);
+        }
       }
       c.delivered = good;
       if (good) state.shops[c.shop].carts++;
@@ -954,20 +1000,35 @@ try {
             .add(n.home.clone().sub(player).normalize().multiplyScalar(8));
           speed = 5;
         }
+      } else if (n.kind === 'staff') {
+        const intent = staffPatrol(n, SHOPS[n.shop], player, dt);
+        target = intent.target ? new T.Vector3(intent.target.x, n.mesh.position.y, intent.target.z) : null;
+        speed = intent.speed; n.lookAt = intent.lookAt; n.social = intent.social; n.activity = intent.activity;
+        if (!target && n.lookAt) {
+          const angle = Math.atan2(n.lookAt.x - n.mesh.position.x, n.lookAt.z - n.mesh.position.z);
+          const turn = Math.atan2(Math.sin(angle - n.mesh.rotation.y), Math.cos(angle - n.mesh.rotation.y));
+          n.mesh.rotation.y += turn * (1 - Math.exp(-dt * 5));
+        }
       } else if (n.mesh.position.distanceTo(n.home) > 1) target = n.home;
       if (target) {
         const delta = target.clone().sub(n.mesh.position);
         delta.y = 0;
-        if (delta.length() > 0.5) {
-          delta.normalize().multiplyScalar(speed * dt);
+        if (delta.length() > (n.kind === 'staff' ? 0.12 : 0.5)) {
+          const step = Math.min(delta.length(), speed * dt);
+          delta.normalize().multiplyScalar(step);
           const nx = n.mesh.position.x + delta.x,
             nz = n.mesh.position.z + delta.z;
-          if (!world.blocked(nx, nz, 0.4)) {
+          if (!world.blocked(nx, nz, PLAYER_SHAPE.radius)) {
             n.mesh.position.x = nx;
             n.mesh.position.z = nz;
             n.mesh.position.y = world.groundHeight(nx, nz);
+          } else {
+            if (!world.blocked(nx, n.mesh.position.z, PLAYER_SHAPE.radius)) n.mesh.position.x = nx;
+            if (!world.blocked(n.mesh.position.x, nz, PLAYER_SHAPE.radius)) n.mesh.position.z = nz;
           }
-          n.mesh.rotation.y = Math.atan2(delta.x, delta.z);
+          const desired = Math.atan2(delta.x, delta.z);
+          const turn = Math.atan2(Math.sin(desired - n.mesh.rotation.y), Math.cos(desired - n.mesh.rotation.y));
+          n.mesh.rotation.y += turn * (1 - Math.exp(-dt * 7));
           n.legs.forEach(
             (l, i) =>
               (l.rotation.x = Math.sin(visualTime * 8 + i * Math.PI) * 0.5),
@@ -1023,7 +1084,7 @@ try {
           v.lastVisit = Math.floor(state.time / 80);
           if (!state.shops[stop.id].done) {
             const cart = world.carts.find(
-              (c) => c.shop === stop.id && !c.delivered,
+              (c) => c.shop === stop.id && !c.delivered && !c.missionCargo,
             );
             if (cart) cart.body.applyImpulse({ x: 30, y: 0, z: 20 }, true);
             message(
@@ -1080,7 +1141,7 @@ try {
       lastMessage = state.time;
       message(
         [
-          "Региональный: Где фото? Фото без тележек не считается.",
+          "Региональный: В каждой точке своя задача. Проверьте маршрут в телефоне.",
           "Региональный: Ваш маршрут сам себя не закроет.",
           "Региональный: Вы сегодня работаете или катаетесь?",
         ][Math.floor(state.time / 120) % 3],
@@ -1095,10 +1156,6 @@ try {
           ? "Начался дождь. Тележки стали скользкими."
           : "Дождь закончился. Коллега снова перепутал выкладку.",
       );
-      const unfinished = world.shelves.find(
-        (s) => !state.shops[s.shop].done && SHOPS[s.shop].task === "shelf",
-      );
-      if (unfinished) state.shops[unfinished.shop].shelf = false;
       for (const c of world.carts)
         c.body.setLinearDamping(state.weather ? 1.5 : 4);
     }
@@ -1160,7 +1217,10 @@ try {
       camera.lookAt(-64, 2, 18);
       return;
     }
-    const target = pos.clone().add(new T.Vector3(0, vehicle ? 2 : firstPerson ? PLAYER_SHAPE.eyeHeight : 1.3, 0));
+    const head = world.player.mesh.getObjectByName('Head');
+    const headY = head ? head.getWorldPosition(v3).y - pos.y + 0.05 : PLAYER_SHAPE.eyeHeight;
+    eyeHeight = T.MathUtils.damp(eyeHeight, T.MathUtils.clamp(headY, 0.8, 1.9), 10, dt);
+    const target = pos.clone().add(new T.Vector3(0, vehicle ? 2 : firstPerson ? eyeHeight : Math.min(1.3, Math.max(0.8, eyeHeight * 0.75)), 0));
     let desired;
     if (firstPerson && !vehicle) {
       desired = target;
@@ -1190,7 +1250,8 @@ try {
           ),
         );
       avoidCameraCollision(target, desired);
-      camera.position.lerp(desired, 1 - Math.exp(-dt * 10));
+      if (cameraNeedsSnap) { camera.position.copy(desired); cameraNeedsSnap = false; }
+      else camera.position.lerp(desired, 1 - Math.exp(-dt * 10));
       avoidCameraCollision(target, camera.position);
       if (!vehicle) world.player.mesh.visible = camera.position.distanceTo(target) > 0.65;
       camera.lookAt(target);
@@ -1237,32 +1298,50 @@ try {
         accumulator -= 1 / 60;
       }
       updateCarts();
+      for (const cart of world.carts) cart.gripped = cart === held;
+      world.jobs.update(dt, visualTime, true);
+      const jobEvents = world.jobs.takeEvents();
+      for (const event of jobEvents) {
+        if (event.kind === 'pickup') notify('Коробка в руках. Отнесите её в голубую приёмку и нажмите E.');
+        if (event.kind === 'drop') notify(`Товар принят · ${state.shops[4].job.delivered.length}/3 коробки`);
+        if (event.kind === 'repair') notify('Подсветка работает! Найдите сотрудника и подтвердите визит.');
+        if (event.kind === 'warehouse') notify(`Акцизный товар принят · ${event.count}/2 тележки`);
+        if (event.kind === 'search') notify(event.found ? 'ТСД найден! Верните терминал управляющему.' : 'Здесь только упаковка. Проверьте остальные места.');
+        if (event.kind === 'blocked') notify('К коробке не подойти. Обойдите грузовик и попробуйте ближе к его заднему борту.');
+        beep(620);
+      }
+      if (jobEvents.length) snapshot();
       ai(dt);
       systems(dt);
       ui.context(context());
-    } else ui.context("");
+    } else { world.jobs.update(0, visualTime, false); ui.context(""); }
     const selected = SHOPS[state.selected];
+    const goal = world.jobs.targetFor(selected.id) ?? selected;
+    const nearby = Math.hypot(goal.x - world.player.mesh.position.x, goal.z - world.player.mesh.position.z) < 25;
+    marker.scale.setScalar(nearby ? 0.32 : 1);
     marker.position.set(
-      selected.x,
-      9 + Math.sin(visualTime * 2) * 0.4,
-      selected.z + 4,
+      goal.x,
+      world.groundHeight(goal.x, goal.z) + (nearby ? 3.0 : 9) + Math.sin(visualTime * 2) * 0.12,
+      goal.z,
     );
     marker.rotation.z = Math.PI;
     marker.visible = !state.shops[state.selected].done;
-    updateCamera(dt);
     atmosphere.update({
       day: state.time / 1500,
       weather: state.weather,
       player: world.player.mesh.position,
       dt,
     });
+    world.visuals?.setFirstPerson(firstPerson && !vehicle && hasStarted);
     world.visuals?.update?.(dt, visualTime, {
       active: mode === "play", heldCart: held?.mesh ?? null,
+      carriedBox: world.jobs.handObject, activity: world.jobs.activity,
       grounded: jump <= 0, verticalVelocity: vertical,
       crouch: !held && keys.has("ControlLeft"), guard: !held && keys.has("KeyQ"),
       attack, attackKind, inVehicle: !!vehicle,
       firstPerson,
     });
+    updateCamera(dt);
     ui.update(world, vehicle);
     renderer.render(scene, camera);
   }
@@ -1298,6 +1377,7 @@ try {
         fov: camera.fov,
         pointerLocked: mouseCapture.captured,
         cameraYaw: yaw,
+        cameraPosition: camera.position.toArray(),
       };
     },
     get motion() {
@@ -1306,15 +1386,20 @@ try {
     get vehicles() {
       return world.vehicles.map((v) => ({ id: v.id, type: v.type, model: v.visualModel, name: v.displayName,
         traffic: v.traffic, claimed: v.claimed, controlled: v === vehicle,
-        position: v.mesh.position.toArray(), heading: v.heading, speed: v.speed, halfWidth: v.w, halfLength: v.l }));
+        position: v.mesh.position.toArray(), heading: v.heading, speed: v.speed, halfWidth: v.w, halfLength: v.l, height: v.h }));
     },
     get navigation() {
-      return { streetObstructions: world.streetObstructions.map(({ x, z, w, d }) => ({ x, z, w, d })) };
+      return { streetObstructions: world.streetObstructions.map(({ x, z, w, d }) => ({ x, z, w, d })),
+        obstacles: [ ...world.blockers.filter((b) => b.enabled !== false).map(({ x, z, w, d }) => ({ x, z, w, d, heading: 0 })),
+          ...world.vehicles.filter((v) => v.mesh.visible && !(v.police && state.wanted < 3)).map((v) => vehicleBox(v)) ] };
     },
+    get jobs() { return JSON.parse(JSON.stringify(world.jobs.diagnostics)); },
+    get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null })); },
   };
   // BFCache preserves the page and its GPU resources. Dispose only on a real exit.
   addEventListener("pagehide", (event) => {
     if (!event.persisted) {
+      world.jobs.dispose();
       world.visuals?.dispose();
       mouseCapture.dispose();
       atmosphere.dispose();

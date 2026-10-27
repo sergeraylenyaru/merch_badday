@@ -21,7 +21,7 @@ test("both licensed human models contain real skins and changing recorded locomo
     });
     assert.ok(skins >= 4);
     assert.ok(artist);
-    for (const clip of ["Idle", "Walk", "Run", "Sprint", "Crouch", "Jump"]) {
+    for (const clip of ["Idle", "Walk", "Run", "Sprint", "Crouch", "Jump", 'PickUp', 'Fixing', 'Talk', 'Interact', 'WalkFormal']) {
       const animation = asset.animations.find((a) => a.name === clip);
       assert.ok(animation && animation.duration > 0.3 && animation.tracks.length > 20, `real ${clip} clip`);
     }
@@ -29,6 +29,30 @@ test("both licensed human models contain real skins and changing recorded locomo
     assert.ok(knee);
     assert.ok(Math.max(...knee.values) - Math.min(...knee.values) > 0.1, "walk must animate actual joint rotations");
   }
+});
+
+test('a carried carton stays in both real palms while recorded walking and turning continue', async () => {
+  const source = await load('merch-male');
+  const library = new AssetLibrary({ human: { url: 'fixture:carry' } }, { loader: { loadAsync: async () => source }, logger: { info() {}, warn() {} } });
+  await library.preload();
+  const model = library.instantiate('human', { height: 2.1 }), root = new Group(), carton = new Group();
+  root.add(model); carton.userData.carry = true;
+  for (const [side, name] of [[-1, 'CartHandleLeft'], [1, 'CartHandleRight']]) {
+    const anchor = new Group(); anchor.name = name; anchor.position.set(side * 0.35, 0, 0); carton.add(anchor);
+  }
+  const motion = createCharacterMotion({ mesh: root }, model);
+  for (let frame = 0; frame < 100; frame++) {
+    root.position.z += 2.25 / 60;
+    root.rotation.y = Math.sin(frame / 40) * 0.4;
+    root.updateMatrixWorld(true);
+    carton.position.copy(root.localToWorld(new Vector3(0, 1.28, 0.5)));
+    carton.quaternion.copy(root.quaternion);
+    motion.update(1 / 60, { carriedBox: carton, grounded: true, velocity: new Vector3(0, 0, 2.25), facing: root.rotation.y });
+    if (frame > 30) for (const error of motion.diagnostics.gripErrors) assert.ok(error < 0.04, `carry contact: ${error}`);
+  }
+  assert.equal(motion.diagnostics.state, 'carry-walk');
+  assert.equal(motion.diagnostics.animation.clip, 'Walk');
+  motion.dispose(); library.dispose();
 });
 
 test("merch wears a blue T-shirt, black trousers and a two-strap backpack", async () => {
@@ -58,6 +82,10 @@ test("real skinned rig plays recorded walking/running and still reaches both car
   assert.ok(motion.diagnostics.animation.weights.Walk > 0.9);
   for (let i = 0; i < 40; i++) motion.update(1 / 60, { velocity: new Vector3(0, 0, 6.8), grounded: true });
   assert.equal(motion.diagnostics.animation.clip, "Sprint");
+  for (let i = 0; i < 40; i++) motion.update(1 / 60, { staff: true, velocity: new Vector3(0, 0, 1.25), grounded: true });
+  assert.equal(motion.diagnostics.animation.clip, 'WalkFormal');
+  for (let i = 0; i < 40; i++) motion.update(1 / 60, { staff: true, social: true, velocity: new Vector3(), grounded: true });
+  assert.equal(motion.diagnostics.animation.clip, 'Talk');
   const cart = new Group();
   cart.position.z = 1.32;
   for (const [side, name] of [[-1, "CartHandleLeft"], [1, "CartHandleRight"]]) {
@@ -73,7 +101,7 @@ test("real skinned rig plays recorded walking/running and still reaches both car
   library.dispose();
 });
 
-test('actual deformed boots stay above a raised floor through walking, sprinting and crouching', async () => {
+test('actual deformed boots stay above a raised floor through walking, sprinting, crouching and kneeling repair', async () => {
   const source = await load('merch-male');
   const library = new AssetLibrary({ human: { url: 'fixture:floor' } }, { loader: { loadAsync: async () => source }, logger: { info() {}, warn() {} } });
   await library.preload();
@@ -91,6 +119,13 @@ test('actual deformed boots stay above a raised floor through walking, sprinting
       assert.ok(bounds.min.y >= root.position.y - 0.001, `boot penetrates floor: ${bounds.min.y}`);
       assert.ok(bounds.min.y <= root.position.y + 0.015, `supporting shoe floats: ${bounds.min.y}`);
     }
+  }
+  for (let frame = 0; frame < 96; frame++) {
+    motion.update(1 / 60, { grounded: true, velocity: new Vector3(), activity: { id: 1, clip: 'Fixing', duration: 1.6, remaining: 1.6 - frame / 60 } });
+    if (frame % 8) continue;
+    root.updateMatrixWorld(true);
+    const bounds = new Box3().setFromObject(model, true);
+    assert.ok(bounds.min.y >= root.position.y - .001 && bounds.min.y <= root.position.y + .015, `repair skin/floor: ${bounds.min.y}`);
   }
   motion.dispose();
   library.dispose();

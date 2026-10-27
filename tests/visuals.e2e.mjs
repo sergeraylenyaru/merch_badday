@@ -269,7 +269,8 @@ try {
   await missing.page.click("#begin");
   await missing.page.keyboard.press("KeyR");
   await missing.page.waitForTimeout(300);
-  assert.match(await missing.page.locator("#context").innerText(), /Отпустить/, "fallback cart must remain interactive");
+  assert.match(await missing.page.locator("#context").innerText(), /жёлтую зону/, "fallback cart must remain interactive");
+  assert.equal(await missing.page.evaluate(() => __MERCH__.motion.heldCartId), 0);
   await missing.page.keyboard.press("KeyR");
   const fallbackBefore = await missing.page.evaluate(() => __MERCH__.state.position);
   const fallbackStart = await missing.page.evaluate(() => __MERCH__.state.time);

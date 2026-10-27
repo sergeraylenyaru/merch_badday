@@ -3,6 +3,7 @@ import { freshState, SHOPS } from "../src/state.js";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { navigate } from './job-browser.mjs';
 const service = spawn(
   process.execPath,
   [
@@ -60,7 +61,8 @@ try {
   await page.click("#begin");
   await page.keyboard.press("KeyR");
   await page.waitForTimeout(500);
-  assert.match(await page.locator("#context").innerText(), /Отпустить/);
+  assert.match(await page.locator("#context").innerText(), /жёлтую зону/);
+  assert.equal(await page.evaluate(() => __MERCH__.motion.heldCartId), 0);
   async function walk(x, z, tolerance = 1.3) {
     for (let i = 0; i < 90; i++) {
       const p = await page.evaluate(() => __MERCH__.state.position);
@@ -88,7 +90,11 @@ try {
   console.log("CARTS", await page.evaluate(() => __MERCH__.state.shops[0]));
   assert.equal(await page.evaluate(() => __MERCH__.state.shops[0].carts), 2);
   await walk(-54, 34);
-  await walk(-55, 19);
+  for (let n = 0; n < 12; n++) {
+    const { director, position } = await page.evaluate(() => ({ director: __MERCH__.people.find((n) => n.kind === 'staff' && n.shop === 0).position, position: __MERCH__.state.position }));
+    if (Math.hypot(director[0] - position.x, director[2] - position.z) < 2.7) break;
+    await navigate(page, director[0], director[2], 1.5);
+  }
   await page.keyboard.press("KeyE");
   await page.waitForSelector('[data-choice="badge"]');
   await page.click('[data-choice="badge"]');
@@ -100,9 +106,9 @@ try {
     await page.evaluate(() => __MERCH__.state.shops[0]),
     await page.locator("#toast").innerText(),
   );
-  assert.equal(await page.evaluate(() => __MERCH__.state.shops[0].done), true);
-  console.log("SHOP COMPLETED");
-  await walk(-42, 32, 0.4);
+  assert.equal(await page.evaluate(() => __MERCH__.state.shops[0].done), false);
+  console.log("OPTIONAL CARTS AND BADGE DO NOT BYPASS PRIMARY JOB");
+  await navigate(page, -42, 32, 0.4);
   await page.keyboard.press("KeyE");
   await page.waitForFunction(() => __MERCH__.vehicles.some((vehicle) => vehicle.controlled));
   await page.waitForFunction(() => document.querySelector('#speed').textContent.includes('км'));
@@ -123,11 +129,13 @@ try {
   await page.click('[data-tab="Маршрут"]');
   assert.match(
     await page.locator('[data-shop="0"]').innerText(),
-    /подтверждён/,
+    /Свободное место/,
   );
   await page.reload();
   await page.waitForSelector("#begin");
-  assert.equal(await page.evaluate(() => __MERCH__.state.shops[0].done), true);
+  assert.equal(await page.evaluate(() => __MERCH__.state.shops[0].done), false);
+  assert.equal(await page.evaluate(() => __MERCH__.state.shops[0].badge), true);
+  assert.equal(await page.evaluate(() => __MERCH__.state.shops[0].carts), 2);
   console.log("PERSISTENCE PASS", errors);
   await page.close();
   async function scenario(s) {
@@ -151,13 +159,11 @@ try {
   s.position = { x: -47, z: -56 };
   let p = await scenario(s);
   await p.keyboard.press("KeyE");
-  await p.waitForSelector(".shelfitems");
-  await p.click('[data-item="0"]');
-  await p.click('[data-item="1"]');
-  await p.click('[data-item="1"]');
-  await p.click('[data-item="2"]');
-  assert.equal(await p.evaluate(() => __MERCH__.state.shops[1].shelf), true);
-  console.log("SHELF PASS");
+  await p.waitForSelector("#matchGrid");
+  assert.equal(await p.locator('[data-cell]').count(), 36);
+  assert.equal(await p.evaluate(() => __MERCH__.state.shops[1].job.match.moves), 18);
+  assert.equal(await p.evaluate(() => __MERCH__.state.shops[1].done), false);
+  console.log("MATCH-THREE ENTRY PASS (FULL GAME IN jobs.e2e.mjs)");
   await p.close();
   s = freshState();
   s.position = { x: 11, z: -44 };

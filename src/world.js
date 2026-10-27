@@ -3,6 +3,8 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import { SHOPS } from "./state.js";
 import { createVisuals } from "./visuals/index.js";
 import { PLAYER_SHAPE, AVENUES, buildingPlot, circleIntersectsBox, boxesIntersect, vehicleBox } from "./spatial.js";
+import { createJobWorld } from './jobs/world.js';
+import { createCartBody } from './physics/cart.js';
 export async function createWorld(scene, state) {
   await RAPIER.init();
   const physics = new RAPIER.World({ x: 0, y: -20, z: 0 });
@@ -34,11 +36,14 @@ export async function createWorld(scene, state) {
       const b = physics.createRigidBody(
         RAPIER.RigidBodyDesc.fixed().setTranslation(x, y, z),
       );
-      physics.createCollider(
+      const collider = physics.createCollider(
         RAPIER.ColliderDesc.cuboid(w / 2, h / 2, d / 2),
         b,
       );
-      blockers.push({ x, z, y, h, w: w / 2, d: d / 2 });
+      const blocker = { x, z, y, h, w: w / 2, d: d / 2, enabled: true };
+      blockers.push(blocker);
+      mesh.userData.blocker = blocker;
+      mesh.userData.colliderHandle = collider.handle;
     }
     return mesh;
   }
@@ -230,8 +235,9 @@ export async function createWorld(scene, state) {
     for (let j = 0; j < shop.required; j++) {
       const idx = carts.length;
       const saved = state.carts[idx];
-      const cx = saved?.x ?? x + 3 + (j % 2) * 3,
-        cz = saved?.z ?? z + 8 + Math.floor(j / 2) * 4;
+      const missionCargo = id === 2 && j < 2;
+      const cx = saved?.x ?? (missionCargo ? x - 23.3 + j * 2.6 : x + 3 + (j % 2) * 3),
+        cz = saved?.z ?? (missionCargo ? z - 1.5 : z + 8 + Math.floor(j / 2) * 4);
       const g = new T.Group();
       const basket = new T.Mesh(
         new T.BoxGeometry(1.15, 0.7, 1.5),
@@ -265,25 +271,13 @@ export async function createWorld(scene, state) {
         g.add(anchor);
       }
       scene.add(g);
-      const body = physics.createRigidBody(
-        RAPIER.RigidBodyDesc.dynamic()
-          .setTranslation(cx, 0.1, cz)
-          .setLinearDamping(4)
-          .setAngularDamping(5)
-          .lockRotations(),
-      );
       const heading = Number.isFinite(saved?.heading) ? saved.heading : 0;
-      body.setRotation({ x: 0, y: Math.sin(heading / 2), z: 0, w: Math.cos(heading / 2) }, true);
-      physics.createCollider(
-        RAPIER.ColliderDesc.cuboid(0.6, 0.6, 0.85)
-          .setTranslation(0, 0.65, 0)
-          .setMass(8)
-          .setFriction(0.6),
-        body,
-      );
-      carts.push({ mesh: g, body, shop: id, id: idx, delivered: false });
+      const body = createCartBody(physics, RAPIER, { x: cx, z: cz, heading, loaded: missionCargo });
+      carts.push({ mesh: g, body, shop: id, id: idx, missionCargo, rewarded: !!saved?.rewarded, gripped: false, delivered: false });
     }
-    vehicles.push(car(x + 16, z + 13, id % 4, vehicles.length));
+    const parked = car(x + 16, z + 13, id === 4 ? 3 : id % 4, vehicles.length);
+    parked.delivery = id === 4;
+    vehicles.push(parked);
     box(x + 17, 1.2, z + 4, 1.2, 2.4, 1.2, "#314d3e", true);
     label("КОФЕ", x + 17, 3, z + 4, "#ffe5a1", 0.9);
   }
@@ -376,7 +370,7 @@ export async function createWorld(scene, state) {
     if (x < -125 || x > 165 || z < -125 || z > 165) return true;
     if (
       blockers.some(
-        (b) => circleIntersectsBox(x, z, r, b),
+        (b) => b.enabled !== false && circleIntersectsBox(x, z, r, b),
       )
     )
       return true;
@@ -391,7 +385,7 @@ export async function createWorld(scene, state) {
     const c = Math.abs(Math.cos(heading)), s = Math.abs(Math.sin(heading));
     const rx = c * shape.w + s * shape.d, rz = s * shape.w + c * shape.d;
     if (x - rx < -125 || x + rx > 165 || z - rz < -125 || z + rz > 165) return true;
-    return blockers.some((b) => boxesIntersect(shape, b)) || vehicles.some((v) => v !== vehicle && v.mesh.visible
+    return blockers.some((b) => b.enabled !== false && boxesIntersect(shape, b)) || vehicles.some((v) => v !== vehicle && v.mesh.visible
       && !(v.police && state.wanted < 3) && boxesIntersect(shape, vehicleBox(v)));
   }
   const world = {
@@ -411,10 +405,13 @@ export async function createWorld(scene, state) {
     vehicleBlocked,
     groundHeight,
     blockers,
+    addSurface: surface,
+    state,
   };
   // Rendering supplies measured vehicle extents. Entity IDs, transforms,
   // interaction targets and physical bodies remain owned by the world.
   world.visuals = await createVisuals(scene, world, shopDecor);
+  world.jobs = createJobWorld(scene, world, state);
   world.streetObstructions = blockers.filter((blocker) => AVENUES.some((road) =>
     boxesIntersect(blocker, { x: road, z: 20, w: 7.5, d: 135 }) || boxesIntersect(blocker, { x: 20, z: road, w: 135, d: 7.5 })));
   return world;

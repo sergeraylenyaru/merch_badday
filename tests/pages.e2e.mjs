@@ -105,8 +105,17 @@ try {
   assert.ok(await page.evaluate((z) => __MERCH__.vehicles.find((v) => v.controlled).position[2] > z + 0.5, stopped.position[2]));
   await page.screenshot({ path: `${artifacts}/city-pages-traffic.png` });
   await page.close();
+  state = freshState(); state.selected = 1; state.position = { x: -47, z: -56 };
+  page = await scenario(state);
+  assert.equal(await page.evaluate(() => __MERCH__.jobs.gateOpen), false);
+  await page.keyboard.press('KeyE'); await page.locator('#matchGrid').waitFor();
+  assert.equal(await page.locator('[data-cell]').count(), 36);
+  assert.equal(await page.evaluate(() => document.pointerLockElement), null);
+  await page.screenshot({ path: `${artifacts}/pages-match3.png` });
+  await page.click('#close'); await page.waitForFunction(() => __MERCH__.view.pointerLocked);
+  await page.close();
   assert.deepEqual(errors, []);
-  console.log('PAGES ROOT /merch_badday/ / 17 GLBs / 8 SHOPS / FLOOR / CART / HANDS / POINTER / TRAFFIC PASS');
+  console.log('PAGES ROOT /merch_badday/ / 17 GLBs / 8 SHOPS / FLOOR / CART / HANDS / POINTER / TRAFFIC / MATCH3 / JOB GATE PASS');
 } finally {
   await browser?.close();
   await new Promise((resolve) => server.close(resolve));

@@ -31,6 +31,8 @@ CLIPS = {
     'CrouchWalk': 'Crouch_Fwd_Loop', 'Push': 'Push_Loop',
     'Jump': 'Jump_Start', 'Fall': 'Jump_Loop', 'Land': 'Jump_Land',
     'Punch': 'Punch_Jab', 'StrongPunch': 'Punch_Cross', 'Drive': 'Driving_Loop',
+    'Talk': 'Idle_Talking_Loop', 'Interact': 'Interact', 'PickUp': 'PickUp_Table',
+    'Fixing': 'Fixing_Kneeling', 'WalkFormal': 'Walk_Formal_Loop',
 }
 PAIRS = {'Root': 'root', 'Hips': 'pelvis', 'Abdomen': 'spine_01',
          'Torso': 'spine_02', 'Chest': 'spine_03', 'Neck': 'neck_01', 'Head': 'Head'}
@@ -209,7 +211,7 @@ for female in [False, True]:
         p.location = (0, 0, 0)
     armature['artist'] = 'Quaternius'
     armature['license'] = 'CC0-1.0'
-    armature['rigVersion'] = 3
+    armature['rigVersion'] = 4
     bpy.context.scene.render.fps = 30
     bpy.context.scene.frame_set(0)
     bpy.ops.object.select_all(action='DESELECT')

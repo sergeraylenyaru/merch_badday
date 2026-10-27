@@ -2,7 +2,7 @@ import * as T from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 /** A complete, themed storefront/interior on the shared walkable shop layout. */
-export function createDistrict(scene, { library, materials: m, box: collisionBox, shop }) {
+export function createDistrict(scene, { library, materials: m, box: collisionBox, shop, shopState }) {
   const root = new T.Group();
   root.name = `district-${shop.id + 1}`;
   root.position.set(shop?.x ?? -55, 0, shop?.z ?? 20);
@@ -16,6 +16,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   const style = m.style;
   const metrics = { shop: shop.id, name: shop.name, feature: style.feature, generatedMeshes: 0, modelMeshes: 0, modelPlacements: 0, collisionProxies: 0, triangles: 0 };
   let disposed = false;
+  let cabinetLamp = null, cabinetLight = null;
 
   function queue(geometry, material) {
     let list = batches.get(material);
@@ -128,7 +129,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   box(0, 0.065, 3.7, 15.5, 0.025, 2.5, m.floor);
   box(0, 0.081, 5.0, 15.5, 0.015, 0.16, m.metal);
   box(0, 0.077, 17.8, 38.6, 0.012, 0.2, m.marking);
-  box(-19.35, 0.13, 0, 0.25, 0.23, 36, m.plaster);
+  if (shop.id !== 2) box(-19.35, 0.13, 0, 0.25, 0.23, 36, m.plaster);
   box(19.35, 0.13, -4.25, 0.25, 0.23, 27.5, m.plaster);
   box(19.35, 0.13, 17.25, 0.25, 0.23, 1.5, m.plaster);
 
@@ -231,7 +232,13 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   for (const x of [-11.25, 11.25]) {
     proxy(x, 1.5, -6.55, 3.25, 2.7, 1.45);
     box(x, 1.55, -6.55, 3.25, 2.7, 1.45, m.navy);
-    box(x, 2.83, -5.78, 3.08, 0.12, 0.1, m.warmLight);
+    if (shop.id === 3 && x > 0) {
+      const geometry = new T.BoxGeometry(3.08, 0.12, 0.1);
+      const material = new T.MeshStandardMaterial({ color: '#83928b', emissive: '#ffe0a1', emissiveIntensity: 0, roughness: 0.6 });
+      generated.add(geometry); localMaterials.add(material);
+      cabinetLamp = new T.Mesh(geometry, material); cabinetLamp.position.set(x, 2.83, -5.78); root.add(cabinetLamp);
+      cabinetLight = new T.PointLight('#ffe1b2', 0, 4, 2); cabinetLight.position.set(x, 2.35, -5.25); root.add(cabinetLight);
+    } else box(x, 2.83, -5.78, 3.08, 0.12, 0.1, m.warmLight);
     box(x, 1.55, -5.8, 2.95, 2.28, 0.05, m.glass);
     for (const dx of [-1.47, 0, 1.47]) box(x + dx, 1.55, -5.75, 0.055, 2.4, 0.08, m.metal);
     for (const dx of [-0.13, 0.13]) box(x + dx, 1.45, -5.66, 0.035, 0.53, 0.065, m.metal);
@@ -416,6 +423,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
       box(side * 17.6, 6.47, 15.6, 1, 0.025, 0.3, m.warmLight);
     }
     proxy(side * 18.1, 3.4, 15.6, 0.24, 6.8, 0.24);
+    if (!(shop.id === 2 && side === -1)) {
     if (!model("bush", side * 18.0, 0.55, -0.7, { size: [1.3, 1.15, 2.3] })) {
       sphere(side * 18.0, 1.0, -0.7, 0.65, m.leaf);
       sphere(side * 18.0, 1.0, -1.35, 0.65, m.leaf);
@@ -424,7 +432,9 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
     box(side * 18.0, 0.34, -0.7, 1.5, 0.4, 2.65, m.plaster);
     box(side * 18.0, 0.55, -0.7, 1.35, 0.04, 2.5, m.darkMetal);
     proxy(side * 18.0, 0.34, -0.7, 1.5, 0.5, 2.65);
+    }
   }
+  if (shop.id !== 2) {
   if (!model("bench", -17.8, 0.055, 2.2, { size: [2.6, 0.95, 0.95] }, Math.PI / 2)) {
     for (let slat = 0; slat < 4; slat++) box(-17.8 + slat * 0.19, 0.65, 2.2, 0.15, 0.11, 2.4, m.wood);
     for (const z of [1.4, 3]) box(-17.5, 0.38, z, 0.65, 0.65, 0.13, m.darkMetal);
@@ -439,6 +449,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   model("box", -16.4, 0.14, -8, { height: 0.6 }, 0.18);
   model("box", -17.2, 0.14, -8.5, { height: 0.55 }, -0.3);
   model("box", -16.65, 0.74, -8.2, { height: 0.5 }, 0.6);
+  }
 
   // Distant architecture stays wholly outside the existing playable boundary.
   const skyline = [
@@ -491,7 +502,14 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   return {
     root,
     metrics,
-    update() {},
+    update(dt, time) {
+      if (cabinetLamp) {
+        const repaired = !!shopState?.job.repaired;
+        cabinetLamp.material.emissiveIntensity = repaired ? 1.1 : Math.sin(time * 11) > 0.97 ? 0.15 : 0;
+        cabinetLight.intensity = repaired ? 3 : 0;
+      }
+    },
+    get lampState() { return cabinetLamp ? { repaired: !!shopState?.job.repaired, intensity: cabinetLight.intensity, emission: cabinetLamp.material.emissiveIntensity } : null; },
     setQuality(quality) {
       for (const mesh of instanceMeshes) mesh.castShadow = quality === "high" && mesh.userData.shadowEligible;
     },

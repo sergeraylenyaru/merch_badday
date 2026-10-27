@@ -16,8 +16,8 @@ const original = (file) => `${base}models/original/${file}.glb?rig=2`;
 // Envelopes fit local models. Cars feed their measured body footprint back to
 // the world; entity identities, saved positions and physical bodies stay intact.
 export const MODEL_MANIFEST = {
-  hero: { url: `${base}models/characters/merch-male.glb?rig=3`, size: [1.3, 2.1, 0.9] },
-  staff: { url: `${base}models/characters/civilian-female.glb?rig=3`, size: [1.3, 2.1, 0.9] },
+  hero: { url: `${base}models/characters/merch-male.glb?rig=4`, size: [1.3, 2.1, 0.9] },
+  staff: { url: `${base}models/characters/civilian-female.glb?rig=4`, size: [1.3, 2.1, 0.9] },
   cart: { url: original("shopping-cart"), size: [1.2, 1.62, 1.75] },
   hatchback: { url: vendor("car_hatchback"), size: [2.5, 2.2, 4.6] },
   sedan: { url: vendor("car_sedan"), size: [2.5, 2.2, 4.6] },
@@ -88,6 +88,7 @@ export async function createVisuals(scene, world, shopDecor) {
       // each variant's length; a van no longer carries a generic large circle.
       entity.w = bounds.size[0] / 2;
       entity.l = bounds.size[2] / 2;
+      entity.h = bounds.size[1];
       model.traverse((node) => {
         if (node.userData.wheelRadius) entity.wheelRadius = node.userData.wheelRadius * node.getWorldScale(new Vector3()).x;
       });
@@ -204,7 +205,7 @@ export async function createVisuals(scene, world, shopDecor) {
   let controls = { active: false, heldCart: null };
 
   const districts = SHOPS.map((shop) => createDistrict(scene, {
-    library, materials: materials.forShop(SHOP_STYLES[shop.id]), box: world.box, shop,
+    library, materials: materials.forShop(SHOP_STYLES[shop.id]), box: world.box, shop, shopState: world.state.shops[shop.id],
   }));
   for (const meshes of shopDecor) for (const mesh of meshes) mesh.visible = false;
   const rollingVehicles = world.vehicles.map((vehicle) => {
@@ -265,9 +266,11 @@ export async function createVisuals(scene, world, shopDecor) {
         if (teleported || (entity === world.player && input.inVehicle)) velocity.set(0, 0, 0);
         else velocity.multiplyScalar(1 / Math.max(dt, 0.001));
         const isPlayer = entity === world.player;
+        if (input.active === false) continue;
         if (!isPlayer && entity.mesh.position.distanceToSquared(world.player.mesh.position) > 75 * 75) continue;
         entity.motion.update(dt, {
-          ...(isPlayer ? input : { active: entity.stun <= 0, grounded: true, crouch: false, attack: 0, guard: false }),
+          ...(isPlayer ? input : { active: entity.stun <= 0, grounded: true, crouch: false, attack: 0, guard: false,
+            staff: entity.kind === 'staff', social: entity.social, activity: entity.activity, lookAt: entity.lookAt }),
           active: isPlayer ? !input.inVehicle : entity.stun <= 0,
           velocity, facing: entity.mesh.rotation.y,
           heldCart: isPlayer ? input.heldCart : null,
@@ -291,6 +294,7 @@ export async function createVisuals(scene, world, shopDecor) {
         replacements: replacements.map((entry) => ({ ...entry, size: [...entry.size] })),
         districtMetrics: { ...districts[0].metrics },
         districts: districts.map((district) => ({ ...district.metrics, visible: district.root.visible })),
+        cabinet: districts[3].lampState,
       };
     },
     get motionDiagnostics() {

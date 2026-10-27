@@ -5,6 +5,7 @@ import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { freshState, SHOPS } from '../src/state.js';
+import { navigate } from './job-browser.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const artifacts = fileURLToPath(new URL('../.playwright/', import.meta.url));
@@ -67,6 +68,7 @@ try {
     const state = freshState();
     state.position = { x: shop.x, z: shop.z + 8 };
     state.selected = shop.id;
+    if (shop.id === 7) for (let i = 0; i < 5; i++) state.shops[i].done = true;
     const { context, page } = await scenario(state, `shop-${shop.id}`);
     const visuals = await page.evaluate(() => __MERCH__.visuals);
     assert.deepEqual(await page.evaluate(() => __MERCH__.navigation.streetObstructions), [], 'roads must remain clear of scenery');
@@ -81,21 +83,13 @@ try {
     grounded(await page.evaluate(() => __MERCH__.view));
     const skin = await page.evaluate(() => __MERCH__.motion.player);
     assert.ok(skin.soleClearance >= 0 && skin.soleClearance < 0.01, 'actual skin soles follow the raised surface');
+    const director = await page.evaluate((id) => __MERCH__.people.find((n) => n.kind === 'staff' && n.shop === id).position, shop.id);
+    await navigate(page, director[0], director[2], 1.6);
     await page.keyboard.press('KeyE');
     await page.locator('[data-choice=badge]').waitFor();
     assert.equal(await page.evaluate(() => __MERCH__.state.selected), shop.id);
     assert.equal(await page.evaluate(() => document.pointerLockElement), null);
     await page.click('#close');
-    if (shop.task === 'shelf') {
-      await walkTo(page, shop.x + 8, shop.z - 1);
-      await page.keyboard.press('KeyE');
-      await page.locator('.shelfitems').waitFor();
-      await page.click('[data-item="0"]');
-      await page.click('[data-item="1"]');
-      await page.click('[data-item="1"]');
-      await page.click('[data-item="2"]');
-      assert.equal(await page.evaluate((id) => __MERCH__.state.shops[id].shelf, shop.id), true);
-    }
     console.log('SHOP ENTRANCE / FLOOR / STAFF / QUEST PASS', shop.id + 1, shop.name, district.feature);
     await context.close();
   }

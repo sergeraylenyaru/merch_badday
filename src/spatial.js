@@ -45,7 +45,7 @@ export function vehicleDoor(vehicle, side = -1) {
 export function nearestBoardableVehicle(vehicles, position, reach = 2.6) {
   let result = null, distance = reach;
   for (const vehicle of vehicles) {
-    if (vehicle.police || vehicle.rival || !vehicle.mesh.visible) continue;
+    if (vehicle.police || vehicle.rival || vehicle.jobLocked || !vehicle.mesh.visible) continue;
     for (const side of [-1, 1]) {
       const door = vehicleDoor(vehicle, side), d = Math.hypot(position.x - door.x, position.z - door.z);
       if (d < distance) { result = vehicle; distance = d; }
