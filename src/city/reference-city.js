@@ -100,8 +100,8 @@ export function buildReferenceTerrain(world,scene){
  // Narrow surface tiles follow the rivers rather than the preview's grid.
  const water=[];
  for(let v=0;v<941;v+=8)for(let u=0;u<1672;u+=8)if(rawWater(u+4,v+4))water.push(point(u+4,v+4));
- const tiles=new T.InstancedMesh(new T.BoxGeometry(8*MAP.scale,.002,8*MAP.scale),new T.MeshStandardMaterial({color:'#287f9d',roughness:.25,metalness:.2}),water.length),matrix=new T.Matrix4();
- water.forEach((p,i)=>tiles.setMatrixAt(i,matrix.makeTranslation(p.x,.001,p.z)));scene.add(tiles);
+ const tiles=new T.InstancedMesh(new T.BoxGeometry(8*MAP.scale,.0006,8*MAP.scale),new T.MeshStandardMaterial({color:'#287f9d',roughness:.25,metalness:.2}),water.length),matrix=new T.Matrix4();
+ water.forEach((p,i)=>tiles.setMatrixAt(i,matrix.makeTranslation(p.x,.0005,p.z)));scene.add(tiles);
  // A flat pedestrian pier and the roundabout match the original map.
  const pier=point(PIER[0],(PIER[1]+PIER[3])/2);world.box(pier.x,.002,pier.z,PIER[4]*MAP.scale,.002,(PIER[3]-PIER[1])*MAP.scale,'#c4b395');
  const dock=point(865,876);world.box(dock.x,.002,dock.z,55*MAP.scale,.002,12*MAP.scale,'#c4b395');
