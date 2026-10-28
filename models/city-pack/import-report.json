@@ -1,0 +1,364 @@
+{
+  "models": {
+    "bank.glb": {
+      "source_sha256": "df88b4bca0b37820c27b3a11409cbed3108e7c4ced3bad48f10f07143bcd2fbc",
+      "bytes_before": 3161080,
+      "bytes_after": 681528,
+      "materials": 12,
+      "images": 36
+    },
+    "bar.glb": {
+      "source_sha256": "7b3d65ba42678f6248dff8ff7e4fbef3276d335ee0c1fa8d6137e66f11ff2bd3",
+      "bytes_before": 2812800,
+      "bytes_after": 85812,
+      "materials": 13,
+      "images": 39
+    },
+    "beach_tile.glb": {
+      "source_sha256": "86425587f30045e2ea89b59ab1b3ef3ce15dc31556d250276196fb0716cfa894",
+      "bytes_before": 780720,
+      "bytes_after": 8588,
+      "materials": 3,
+      "images": 9
+    },
+    "bench.glb": {
+      "source_sha256": "9ff851d5cd677fe87d263f55ce9938af6fed85fc6a62a0ceb5120ae459506e0f",
+      "bytes_before": 774904,
+      "bytes_after": 10848,
+      "materials": 3,
+      "images": 9
+    },
+    "bollard.glb": {
+      "source_sha256": "724fc1a9bc3cea19d78f2fd1d99aab6ae006ef7875c35ba14d1e711f59b6ab1e",
+      "bytes_before": 772928,
+      "bytes_after": 8316,
+      "materials": 3,
+      "images": 9
+    },
+    "bridge.glb": {
+      "source_sha256": "fd8ee78ab3ab89a908ddee64026d88d986ec20090a66075311c622315057e481",
+      "bytes_before": 524016,
+      "bytes_after": 7632,
+      "materials": 2,
+      "images": 6
+    },
+    "bus.glb": {
+      "source_sha256": "4c3b1e25ce9068dffaab5814cc92e80ab061d47f96c3f8b68b0726fc6969bb89",
+      "bytes_before": 1642684,
+      "bytes_after": 25216,
+      "materials": 7,
+      "images": 21
+    },
+    "bus_stop.glb": {
+      "source_sha256": "a65622f00c87b7c38028e0f14ecb4c2f3493f68c42555e03b6acf32efab28bac",
+      "bytes_before": 1620936,
+      "bytes_after": 12780,
+      "materials": 7,
+      "images": 21
+    },
+    "cafe.glb": {
+      "source_sha256": "23a30ceb1a91901bdfaa84b875a77c59d8fd4fb92d9700fcaf0bceadb046cf6f",
+      "bytes_before": 2814588,
+      "bytes_after": 85872,
+      "materials": 13,
+      "images": 39
+    },
+    "car_blue.glb": {
+      "source_sha256": "7e92ca5ebf2329e2ba3cbf48c36722ee9e9b1e981e6d6917455b375f05f5bd4f",
+      "bytes_before": 1640428,
+      "bytes_after": 22476,
+      "materials": 7,
+      "images": 21
+    },
+    "car_red.glb": {
+      "source_sha256": "ae5c4d91d1832c7685a538d687f449b8df70aaedcdba1ae374d1641cef3d2241",
+      "bytes_before": 1383644,
+      "bytes_after": 21156,
+      "materials": 6,
+      "images": 18
+    },
+    "carousel.glb": {
+      "source_sha256": "3649708e0dbf3fa7a754fbb5b71e8b0172db7fbd7cea41691dc49116729cb846",
+      "bytes_before": 1308240,
+      "bytes_after": 33884,
+      "materials": 5,
+      "images": 15
+    },
+    "circus_tent.glb": {
+      "source_sha256": "d79cc44cfc004529218cb4e14471afd4716723805c5b682e5195cb94cd5129c6",
+      "bytes_before": 784620,
+      "bytes_after": 19832,
+      "materials": 3,
+      "images": 9
+    },
+    "city_hall.glb": {
+      "source_sha256": "01660e7c49cb4ec47e2842b4d2617a6519321355c5868ead76e8cce12ba54fcb",
+      "bytes_before": 2307072,
+      "bytes_after": 353280,
+      "materials": 10,
+      "images": 30
+    },
+    "crosswalk.glb": {
+      "source_sha256": "dd5ceb65326d4b12e8bee91cbcae2ceef55ab8b78ec6f1daaa1ce570d1186088",
+      "bytes_before": 522596,
+      "bytes_after": 6140,
+      "materials": 2,
+      "images": 6
+    },
+    "dumpsters.glb": {
+      "source_sha256": "4154bdf064faede0fe48726d97f0da2676e451530c3282fd526ca9dc1cd705a7",
+      "bytes_before": 1550868,
+      "bytes_after": 17892,
+      "materials": 6,
+      "images": 18
+    },
+    "ferris_wheel.glb": {
+      "source_sha256": "44f7c82faa71fa594e9e261e416ee5ed8eb6f8ee0676f7937a97a926d0329719",
+      "bytes_before": 1342216,
+      "bytes_after": 67776,
+      "materials": 5,
+      "images": 15
+    },
+    "flower_bed.glb": {
+      "source_sha256": "d95ddceb50981ce83e71d0a3c760589b508a62e31058f259ce416257edc96f08",
+      "bytes_before": 1063600,
+      "bytes_after": 26232,
+      "materials": 4,
+      "images": 12
+    },
+    "fountain.glb": {
+      "source_sha256": "4642e4a1d9517f5cc564ad80cc6ff0c1f578c76b7ba32fda4df482f4fcdcb57c",
+      "bytes_before": 806268,
+      "bytes_after": 34788,
+      "materials": 3,
+      "images": 9
+    },
+    "fountain_large.glb": {
+      "source_sha256": "e5ae9833c273f2834d6d0909062484279132d1c81bbe363d84c39e4b24235738",
+      "bytes_before": 798648,
+      "bytes_after": 33984,
+      "materials": 3,
+      "images": 9
+    },
+    "garage.glb": {
+      "source_sha256": "32aee0b47bc1360257e29fc1bca060d30e8bbe4acc83dc1544a379b167bbbd7f",
+      "bytes_before": 1042896,
+      "bytes_after": 16040,
+      "materials": 4,
+      "images": 12
+    },
+    "kiosk.glb": {
+      "source_sha256": "34c79d1489b5ac8fa455c1fab86c76eee0bf06da33339cac67c416e144539575",
+      "bytes_before": 2536240,
+      "bytes_after": 55028,
+      "materials": 12,
+      "images": 36
+    },
+    "office_midrise.glb": {
+      "source_sha256": "50f5e8b9fa1f8939f2140cf2bd5d460d15a6d981444b55209280c7f18fa23ae8",
+      "bytes_before": 2275452,
+      "bytes_after": 850392,
+      "materials": 7,
+      "images": 21
+    },
+    "office_round_tower.glb": {
+      "source_sha256": "3a72634c5f03261ca4cb37d16257fbe7d53403939b83178546eb97ce058be10a",
+      "bytes_before": 2683564,
+      "bytes_after": 1258508,
+      "materials": 7,
+      "images": 21
+    },
+    "office_tower.glb": {
+      "source_sha256": "b8693445a8e07de4a5fa5cd968e272401e80645ce33978a7656c0c4c14182515",
+      "bytes_before": 3159056,
+      "bytes_after": 1734000,
+      "materials": 7,
+      "images": 21
+    },
+    "panel_5_story.glb": {
+      "source_sha256": "6b3e53c04bc6a39e7e40c5e48c20f8999ee51f2ef5820ccba648f1fd45c4e4d3",
+      "bytes_before": 4562092,
+      "bytes_after": 1061896,
+      "materials": 15,
+      "images": 45
+    },
+    "panel_5_story_long.glb": {
+      "source_sha256": "8b7e07c3bc5cd63d7f4fd1bca203968e49aa7e57e5431ad76453ca863a533216",
+      "bytes_before": 4858736,
+      "bytes_after": 1358544,
+      "materials": 15,
+      "images": 45
+    },
+    "panel_9_story.glb": {
+      "source_sha256": "564bbdde6c778e728333faa308c4fc6a01d611cc5acdaabaacbab58518670d01",
+      "bytes_before": 4986944,
+      "bytes_after": 1486752,
+      "materials": 15,
+      "images": 45
+    },
+    "park_stage.glb": {
+      "source_sha256": "091d922155c681d650146f29d7aa21cce61dbca317920357e9395729e42556c2",
+      "bytes_before": 1027424,
+      "bytes_after": 7360,
+      "materials": 4,
+      "images": 12
+    },
+    "park_tile.glb": {
+      "source_sha256": "d7de1a5115b156afab6b9e2a81529de6363acd2cef59274169b3ebd16098c5bc",
+      "bytes_before": 1844092,
+      "bytes_after": 33160,
+      "materials": 7,
+      "images": 21
+    },
+    "parking_lot.glb": {
+      "source_sha256": "59c728c46a8149631b4f8cb081b0c2e3ff785c378c80b96ce62b4f4b6ca969fb",
+      "bytes_before": 524152,
+      "bytes_after": 7692,
+      "materials": 2,
+      "images": 6
+    },
+    "playground.glb": {
+      "source_sha256": "bbd20d85b80e9a0ca768bfe6e85e1e04e5352607e4f6159b29084957151fd2e2",
+      "bytes_before": 1029916,
+      "bytes_after": 9552,
+      "materials": 4,
+      "images": 12
+    },
+    "public_toilet.glb": {
+      "source_sha256": "974e8e2849752fcd677455e74d531d8f8d64a929cb16b4d1e6c3b7fd893dadab",
+      "bytes_before": 849440,
+      "bytes_after": 6600,
+      "materials": 4,
+      "images": 12
+    },
+    "restaurant.glb": {
+      "source_sha256": "55b3c256fb78aa293f6f74b759e8f782ba73960f9e11cf7280cfd0a5f435b91d",
+      "bytes_before": 2816452,
+      "bytes_after": 85880,
+      "materials": 13,
+      "images": 39
+    },
+    "ride_round.glb": {
+      "source_sha256": "19c83696636f27e6dd97c736c37754e3a585c7cc6e3841126db31cdb8b36dfb3",
+      "bytes_before": 775504,
+      "bytes_after": 10112,
+      "materials": 3,
+      "images": 9
+    },
+    "road_intersection.glb": {
+      "source_sha256": "230f85230311d9f064741dfdcf8ec73b54aaf2e7e0462a4a03b359c71f717998",
+      "bytes_before": 811220,
+      "bytes_after": 7584,
+      "materials": 3,
+      "images": 9
+    },
+    "road_straight.glb": {
+      "source_sha256": "550700328d7d84ca5c5ca8af133065a9c587ac1e3dcfc8c7f63a883d2b34ba0e",
+      "bytes_before": 811220,
+      "bytes_after": 7584,
+      "materials": 3,
+      "images": 9
+    },
+    "sandbox.glb": {
+      "source_sha256": "5559a0831a767664c2911f04cf8f82511a23d0a219885fce8a83533c806ef1b6",
+      "bytes_before": 1027984,
+      "bytes_after": 7876,
+      "materials": 4,
+      "images": 12
+    },
+    "shop_small.glb": {
+      "source_sha256": "3d1f79c23321fd2992224b3dbb173bf8f8cb25cecc303f44e4d31ff3e0c491a7",
+      "bytes_before": 2546012,
+      "bytes_after": 62596,
+      "materials": 12,
+      "images": 36
+    },
+    "shop_supermarket.glb": {
+      "source_sha256": "e8371fbe2f8feff84bf3f572be2e955716c8ee5f727c22ab8bc165cfebf0809a",
+      "bytes_before": 2548008,
+      "bytes_after": 62628,
+      "materials": 12,
+      "images": 36
+    },
+    "shrub.glb": {
+      "source_sha256": "ad512811ab5968a11cbb222106fd35a5f012af910d6f8fffca7c4cf189edc77f",
+      "bytes_before": 809180,
+      "bytes_after": 22400,
+      "materials": 3,
+      "images": 9
+    },
+    "small_house.glb": {
+      "source_sha256": "99de85151f217363dd04009f450f04dc3c5ee780063e408c6bc8089e309ea44a",
+      "bytes_before": 2284100,
+      "bytes_after": 88432,
+      "materials": 10,
+      "images": 30
+    },
+    "streetlight.glb": {
+      "source_sha256": "71acc0e2c176b80591254b6694ca335bf0b20ddd3311a44d51e43eb51275b619",
+      "bytes_before": 1045124,
+      "bytes_after": 8968,
+      "materials": 4,
+      "images": 12
+    },
+    "traffic_light.glb": {
+      "source_sha256": "830b7fc14620e18bb29fd76dd5e4a00d81e168c8c3861cc2db6b62e1678399e7",
+      "bytes_before": 1293684,
+      "bytes_after": 15000,
+      "materials": 5,
+      "images": 15
+    },
+    "trash_bin.glb": {
+      "source_sha256": "3e12dfd87d056fec196528aa7a3716fec2d998b5fcacec14567bdbf8bdbcea66",
+      "bytes_before": 514372,
+      "bytes_after": 4748,
+      "materials": 2,
+      "images": 6
+    },
+    "tree.glb": {
+      "source_sha256": "470c74142205f3d3918335db0bec5fa81b944eb37a7942a9cd037ba23545a0a4",
+      "bytes_before": 818112,
+      "bytes_after": 31332,
+      "materials": 3,
+      "images": 9
+    },
+    "van.glb": {
+      "source_sha256": "64fce289fe6dbfefa5f08242ec379360a5c540abf39ffb5ee865d050358980fc",
+      "bytes_before": 1640464,
+      "bytes_after": 22628,
+      "materials": 7,
+      "images": 21
+    },
+    "warehouse.glb": {
+      "source_sha256": "bf64a56a7f92d803072c99e911d48686e94a3932dc41ecd20093bfad42ae9700",
+      "bytes_before": 2553316,
+      "bytes_after": 72016,
+      "materials": 12,
+      "images": 36
+    },
+    "water_tile.glb": {
+      "source_sha256": "f240db38c2313e6f68120797368991ca39ea5b32a73fbf4cd1592029ff841970",
+      "bytes_before": 514536,
+      "bytes_after": 4656,
+      "materials": 2,
+      "images": 6
+    },
+    "reference/city_reference_quality_demo.glb": {
+      "source_sha256": "1206d957789f46f416b694c76e29d1fab40bd54ada4dc6909314e0fa777fc45c",
+      "bytes_before": 17114384,
+      "bytes_after": 9829904,
+      "materials": 39,
+      "images": 117
+    },
+    "reference/terrain.glb": {
+      "source_sha256": "fcb344a44349f293d8fd0d3b4d61922b8f5b073c7636bbe36b70941d335f58f4",
+      "bytes_before": 1938376,
+      "bytes_after": 98120,
+      "materials": 7,
+      "images": 21
+    }
+  },
+  "shared_textures": 126,
+  "geometry_changed": false,
+  "texture_pixels_changed": false
+}

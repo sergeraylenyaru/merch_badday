@@ -3,12 +3,13 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 
 // Preserve imported PBR materials, UVs, normal/tangent data and material groups.
 // The old flattening pass discarded UVs and replaced every material with white.
-export function prepareCityAsset(source){
+export function prepareCityAsset(source,pool=null){
  source.updateMatrixWorld(true);
  const up=new Matrix4().makeRotationX(-Math.PI/2),bounds=new Box3(),groups=new Map(),batches=[];
  const originals=new Set(),materials=new Set(),textures=new Set();
  source.traverse(node=>{
   if(!node.isMesh)return;
+  if(pool)node.material=Array.isArray(node.material)?node.material.map(m=>pool.material(m)):pool.material(node.material);
   const geometry=node.geometry.clone().applyMatrix4(new Matrix4().multiplyMatrices(up,node.matrixWorld));
   if(!geometry.attributes.normal)geometry.computeVertexNormals();geometry.computeBoundingBox();bounds.union(geometry.boundingBox);originals.add(node.geometry);
   for(const m of Array.isArray(node.material)?node.material:[node.material]){materials.add(m);for(const value of Object.values(m))if(value?.isTexture)textures.add(value);}
@@ -23,5 +24,5 @@ export function prepareCityAsset(source){
   if(geometries.length>1)geometries.forEach(g=>g.dispose());batches.push({geometry,material});
  }
  originals.forEach(g=>g.dispose());
- return {bounds,batches,dispose(){for(const b of batches)b.geometry.dispose();textures.forEach(t=>t.dispose());materials.forEach(m=>m.dispose());}};
+ return {bounds,batches,dispose(){for(const b of batches)b.geometry.dispose();if(!pool){textures.forEach(t=>t.dispose());materials.forEach(m=>m.dispose());}}};
 }

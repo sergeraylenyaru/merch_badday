@@ -4,7 +4,7 @@ import {freshState,SHOPS} from '../src/state.js';
 import {point,START} from '../src/city/reference-layout.js';
 const app=await startBrowser(5223);
 try{
- for(const [name,u,v] of [['residential',200,310],['park',850,560],['business',1450,310]]){
+ for(const [name,u,v] of [['residential',200,365],['park',850,560],['business',1450,310]]){
   const s=freshState();s.position=point(u,v);const {page,context}=await app.scenario(s,'reference-'+name);
   await advance(page,.2);const city=await page.evaluate(()=>({city:__MERCH__.city,renderer:__MERCH__.renderer,position:__MERCH__.state.position}));console.log(name,city);assert.equal(city.city.source,'user-map');assert.ok(city.city.modelTypes>10);await page.screenshot({path:`.playwright/reference-${name}.png`});
   if(name==='residential'){

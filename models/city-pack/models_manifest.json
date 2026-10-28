@@ -1,0 +1,247 @@
+{
+  "bank": {
+    "faces": 12726,
+    "material_count": 12,
+    "detailed_building": true
+  },
+  "bar": {
+    "faces": 1194,
+    "material_count": 13,
+    "detailed_building": true
+  },
+  "beach_tile": {
+    "faces": 168,
+    "material_count": 3,
+    "detailed_building": false
+  },
+  "bench": {
+    "faces": 240,
+    "material_count": 3,
+    "detailed_building": false
+  },
+  "bollard": {
+    "faces": 140,
+    "material_count": 3,
+    "detailed_building": false
+  },
+  "bridge": {
+    "faces": 168,
+    "material_count": 2,
+    "detailed_building": false
+  },
+  "bus": {
+    "faces": 480,
+    "material_count": 7,
+    "detailed_building": false
+  },
+  "bus_stop": {
+    "faces": 96,
+    "material_count": 7,
+    "detailed_building": false
+  },
+  "cafe": {
+    "faces": 1194,
+    "material_count": 13,
+    "detailed_building": true
+  },
+  "car_blue": {
+    "faces": 384,
+    "material_count": 7,
+    "detailed_building": false
+  },
+  "car_red": {
+    "faces": 384,
+    "material_count": 6,
+    "detailed_building": false
+  },
+  "carousel": {
+    "faces": 1104,
+    "material_count": 5,
+    "detailed_building": false
+  },
+  "circus_tent": {
+    "faces": 648,
+    "material_count": 3,
+    "detailed_building": false
+  },
+  "city_hall": {
+    "faces": 6334,
+    "material_count": 10,
+    "detailed_building": true
+  },
+  "crosswalk": {
+    "faces": 108,
+    "material_count": 2,
+    "detailed_building": false
+  },
+  "dumpsters": {
+    "faces": 396,
+    "material_count": 6,
+    "detailed_building": false
+  },
+  "ferris_wheel": {
+    "faces": 2576,
+    "material_count": 5,
+    "detailed_building": false
+  },
+  "flower_bed": {
+    "faces": 896,
+    "material_count": 4,
+    "detailed_building": false
+  },
+  "fountain": {
+    "faces": 1032,
+    "material_count": 3,
+    "detailed_building": false
+  },
+  "fountain_large": {
+    "faces": 1000,
+    "material_count": 3,
+    "detailed_building": false
+  },
+  "garage": {
+    "faces": 180,
+    "material_count": 4,
+    "detailed_building": true
+  },
+  "kiosk": {
+    "faces": 702,
+    "material_count": 12,
+    "detailed_building": true
+  },
+  "office_midrise": {
+    "faces": 16108,
+    "material_count": 7,
+    "detailed_building": true
+  },
+  "office_round_tower": {
+    "faces": 23956,
+    "material_count": 7,
+    "detailed_building": true
+  },
+  "office_tower": {
+    "faces": 33100,
+    "material_count": 7,
+    "detailed_building": true
+  },
+  "panel_5_story": {
+    "faces": 19816,
+    "material_count": 15,
+    "detailed_building": true
+  },
+  "panel_5_story_long": {
+    "faces": 25540,
+    "material_count": 15,
+    "detailed_building": true
+  },
+  "panel_9_story": {
+    "faces": 28744,
+    "material_count": 15,
+    "detailed_building": true
+  },
+  "park_stage": {
+    "faces": 72,
+    "material_count": 4,
+    "detailed_building": false
+  },
+  "park_tile": {
+    "faces": 1120,
+    "material_count": 7,
+    "detailed_building": false
+  },
+  "parking_lot": {
+    "faces": 168,
+    "material_count": 2,
+    "detailed_building": false
+  },
+  "playground": {
+    "faces": 120,
+    "material_count": 4,
+    "detailed_building": false
+  },
+  "public_toilet": {
+    "faces": 48,
+    "material_count": 4,
+    "detailed_building": false
+  },
+  "restaurant": {
+    "faces": 1194,
+    "material_count": 13,
+    "detailed_building": true
+  },
+  "ride_round": {
+    "faces": 240,
+    "material_count": 3,
+    "detailed_building": false
+  },
+  "road_intersection": {
+    "faces": 132,
+    "material_count": 3,
+    "detailed_building": false
+  },
+  "road_straight": {
+    "faces": 132,
+    "material_count": 3,
+    "detailed_building": false
+  },
+  "sandbox": {
+    "faces": 84,
+    "material_count": 4,
+    "detailed_building": false
+  },
+  "shop_small": {
+    "faces": 826,
+    "material_count": 12,
+    "detailed_building": true
+  },
+  "shop_supermarket": {
+    "faces": 826,
+    "material_count": 12,
+    "detailed_building": true
+  },
+  "shrub": {
+    "faces": 768,
+    "material_count": 3,
+    "detailed_building": false
+  },
+  "small_house": {
+    "faces": 1408,
+    "material_count": 10,
+    "detailed_building": true
+  },
+  "streetlight": {
+    "faces": 96,
+    "material_count": 4,
+    "detailed_building": false
+  },
+  "traffic_light": {
+    "faces": 324,
+    "material_count": 5,
+    "detailed_building": false
+  },
+  "trash_bin": {
+    "faces": 48,
+    "material_count": 2,
+    "detailed_building": false
+  },
+  "tree": {
+    "faces": 1168,
+    "material_count": 3,
+    "detailed_building": false
+  },
+  "van": {
+    "faces": 396,
+    "material_count": 7,
+    "detailed_building": false
+  },
+  "warehouse": {
+    "faces": 1006,
+    "material_count": 12,
+    "detailed_building": true
+  },
+  "water_tile": {
+    "faces": 48,
+    "material_count": 2,
+    "detailed_building": false
+  }
+}

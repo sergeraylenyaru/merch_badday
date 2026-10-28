@@ -1,3 +1,4 @@
+import {createCityMaterialPool} from './shared-materials.js';
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {prepareCityAsset} from './city-assets.js';
@@ -58,10 +59,12 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
   for(let i=0;i<3;i++){const p=point(u+(i-1)*14,v);if(!clearShop(u+(i-1)*14,v,12))continue;world.vehicles.push(car(p.x,p.z,i%3,world.vehicles.length));}
  }
  for(let i=0;i<6;i++){const [u,v]=[[160,215],[320,210],[370,540],[720,455],[910,420],[1430,290]][i];if(!clearShop(u,v))continue;const p=point(u,v);const person=human(p.x,.5+p.z,'#82806e','resident');person.role=i<3?'Жительница у подъезда':'Отдыхает в парке';person.seated=true;person.activity={id:'bench-'+i,clip:'Drive',duration:1,remaining:1};world.people.push(person);}
- const loader=new GLTFLoader();
+ const loader=new GLTFLoader(),materialPool=createCityMaterialPool();
+ const cacheWasEnabled=T.Cache.enabled,previousKeys=new Set(Object.keys(T.Cache.files));T.Cache.enabled=true;
+ try {
  await Promise.all([...placements].map(async([name,list])=>{
-  const gltf=await loader.loadAsync(`${import.meta.env.BASE_URL}models/city-pack/${name}.glb`);
-  const asset=prepareCityAsset(gltf.scene);preparedAssets.push(asset);const b=asset.bounds;
+  const gltf=await loader.loadAsync(`${import.meta.env.BASE_URL}models/city-pack/${name}.glb?pbr=1`);
+  const asset=prepareCityAsset(gltf.scene,materialPool);preparedAssets.push(asset);const b=asset.bounds;
   const nativeW=b.max.x-b.min.x,nativeD=b.max.z-b.min.z,nativeH=b.max.y-b.min.y;
   list=list.map(p=>{
     const c=Math.abs(Math.cos(p.angle)),s=Math.abs(Math.sin(p.angle));
@@ -88,7 +91,12 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
     });root.add(instances);
   }
  }));
- return {diagnostics:{boroughs:BOROUGHS,localShops:LOCAL_SHOPS,source:'user-map',modelTypes:placements.size,placements:placedCount,tracedBuildings:traced},update(dt){hub.rotation.z+=dt*.09;for(const cabin of animated)cabin.rotation.z=-hub.rotation.z;},dispose(){preparedAssets.forEach(a=>a.dispose());root.traverse(n=>{if(n.isMesh&&!n.isInstancedMesh){n.geometry?.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}});root.removeFromParent();}};
+ } finally {
+  T.Cache.enabled=cacheWasEnabled;
+  for(const key of Object.keys(T.Cache.files))if(!previousKeys.has(key)&&key.includes("models/city-pack/"))T.Cache.remove(key);
+ }
+ materialPool.finishLoading();
+ return {diagnostics:{assetRevision:"pbr-1",resources:materialPool.diagnostics,boroughs:BOROUGHS,localShops:LOCAL_SHOPS,source:'user-map',modelTypes:placements.size,placements:placedCount,tracedBuildings:traced},update(dt){hub.rotation.z+=dt*.09;for(const cabin of animated)cabin.rotation.z=-hub.rotation.z;},dispose(){preparedAssets.forEach(a=>a.dispose());materialPool.dispose();root.traverse(n=>{if(n.isMesh&&!n.isInstancedMesh){n.geometry?.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}});root.removeFromParent();}};
 }
 
 export function buildReferenceTerrain(world,scene){
@@ -100,7 +108,7 @@ export function buildReferenceTerrain(world,scene){
  // Narrow surface tiles follow the rivers rather than the preview's grid.
  const water=[];
  for(let v=0;v<941;v+=8)for(let u=0;u<1672;u+=8)if(rawWater(u+4,v+4))water.push(point(u+4,v+4));
- const tiles=new T.InstancedMesh(new T.BoxGeometry(8*MAP.scale,.0006,8*MAP.scale),new T.MeshStandardMaterial({color:'#287f9d',roughness:.25,metalness:.2}),water.length),matrix=new T.Matrix4();
+ const tiles=new T.InstancedMesh(new T.BoxGeometry(8*MAP.scale,.0006,8*MAP.scale),world.terrainMaterials?.water ?? new T.MeshStandardMaterial({color:'#287f9d',roughness:.25,metalness:.2}),water.length),matrix=new T.Matrix4();
  water.forEach((p,i)=>tiles.setMatrixAt(i,matrix.makeTranslation(p.x,.0005,p.z)));scene.add(tiles);
  // A flat pedestrian pier and the roundabout match the original map.
  const pier=point(PIER[0],(PIER[1]+PIER[3])/2);world.box(pier.x,.002,pier.z,PIER[4]*MAP.scale,.002,(PIER[3]-PIER[1])*MAP.scale,'#c4b395');

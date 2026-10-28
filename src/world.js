@@ -1,3 +1,4 @@
+import {createTerrainMaterials,tileBoxUV} from './city/terrain-materials.js';
 import {createReferenceCity, buildReferenceTerrain, isReferenceWater} from './city/reference-city.js';
 import {MAP, point, pixel, START, ROADS} from './city/reference-layout.js';
 import * as T from "three";
@@ -17,7 +18,8 @@ export async function createWorld(scene, state) {
     zones = [],
     shelves = [],
     secrets = [];
-  const mat = (color) => new T.MeshStandardMaterial({ color, roughness: 0.85 });
+  const terrainMaterials=await createTerrainMaterials();
+  const mat = (color) => terrainMaterials.byColor.get(color) ?? new T.MeshStandardMaterial({ color, roughness: 0.85 });
   const materials = new Map();
   const shopDecor = SHOPS.map(() => []);
   const surfaces = [];
@@ -29,6 +31,7 @@ export async function createWorld(scene, state) {
       materials.set(color, m);
     }
     const mesh = new T.Mesh(new T.BoxGeometry(w, h, d), m);
+    if(m.userData.tileSize)tileBoxUV(mesh.geometry,w,h,d,m.userData.tileSize);
     mesh.position.set(x, y, z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -82,7 +85,7 @@ export async function createWorld(scene, state) {
       height = Math.max(height, surface.height);
     return height;
   }
-  buildReferenceTerrain({box},scene);
+  buildReferenceTerrain({box,terrainMaterials},scene);
   function human(x, z, color, kind = "civilian", shop = -1) {
     const g = new T.Group();
     const torso = new T.Mesh(new T.BoxGeometry(0.75, 1, 0.45), mat(color));
@@ -355,6 +358,7 @@ export async function createWorld(scene, state) {
   }
   const world = {
     physics,
+    disposeTerrain:()=>terrainMaterials.dispose(),
     RAPIER,
     box,
     label,

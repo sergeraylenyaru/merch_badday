@@ -1401,6 +1401,7 @@ try {
   addEventListener("pagehide", (event) => {
     if (!event.persisted) {
       world.boroughs.dispose();
+      world.disposeTerrain?.();
       world.jobs.dispose();
       world.visuals?.dispose();
       mouseCapture.dispose();
