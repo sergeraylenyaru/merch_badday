@@ -1,22 +1,29 @@
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { MAP, point, WORK_STOPS, ROADS, nearRoad, pixel, meetsStreet } from './reference-layout.js';
+import {prepareCityAsset} from './city-assets.js';
+import {MAP_BUILDINGS} from './map-buildings.js';
+import { MAP, point, WORK_STOPS, ROADS, nearRoad, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT } from './reference-layout.js';
+export {isReferenceWater} from './reference-layout.js';
 import { BOROUGHS, LOCAL_SHOPS } from './layout.js';
 
 // Hand-placed against map_reference.png, rather than the approximate preview GLB.
 export async function createReferenceCity(scene,world,{human,car,label}) {
  let placedCount=0;
  const root=new T.Group(); root.name='uploaded-reference-city';scene.add(root);
- const placements=new Map(), collision=[], animated=[];
- const clearShop=(u,v,r=0)=>WORK_STOPS.every(s=>Math.abs(u-s.u)>92+r || Math.abs(v-s.v)>74+r);
+ const placements=new Map(), collision=[], animated=[], preparedAssets=[];
+ const traced=[];
+ const clearShop=(u,v,r=0)=>WORK_STOPS.every(s=>Math.abs(u-s.u)>52+r || Math.abs(v-s.v)>44+r);
  function add(name,u,v,scale=1,angle=0,solid=false,force=false){
    if(!force && (!clearShop(u,v,14) || nearRoad(u,v,12))) return;
    const list=placements.get(name)||[];list.push({u,v,scale,angle,solid});placements.set(name,list);
  }
- // Courtyard blocks, with gaps for entrances and paths.
- for(const [u,v,rot,long] of [[110,60,0,1],[280,110,1,0],[190,190,1,1],[70,190,1,1],[350,75,0,0],[440,130,1,1],[570,110,0,0],[570,300,1,1],[330,255,0,0],[430,260,0,0],[70,425,0,0],[190,455,1,1],[290,455,1,1],[425,445,1,1],[340,550,0,0],[170,650,0,0],[570,600,1,1],[420,740,1,0],[110,650,0,0]])
-  add(long?'panel_5_story_long':'panel_5_story',u,v,1,rot*Math.PI/2,true);
+ // Measured footprint placement replaces guessed scales and broad exclusions.
+ for(const [name,u,v,width,depth,angle] of MAP_BUILDINGS){
+   const list=placements.get(name)||[];list.push({u,v,width,depth,angle:angle*Math.PI/180,scale:1,solid:true,traced:true});placements.set(name,list);
+ }
+ for(const v of [48,90,710,744])for(let i=0;i<10;i++){
+  const u=56+i*16,list=placements.get('garage')||[];list.push({u,v,width:14,depth:26,angle:0,scale:1,solid:true,traced:true});placements.set('garage',list);
+ }
  for(const [u,v] of [[330,170],[350,500],[110,460],[570,430]])add('playground',u,v,1,0,true);
  for(const [u,v] of [[150,470],[355,520]])add('sandbox',u,v,1,0,true);
  for(const [u,v] of [[90,735],[180,735],[70,85],[175,85]])add('garage',u,v,1,0,true);
@@ -32,8 +39,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  // Street furniture follows the main boulevard and residential streets.
  for(let u=80;u<1660;u+=120){add('streetlight',u,310,1,0,false,true);add('streetlight',u+45,370,1,0,false,true);}
  for(const u of [215,520,1130,1410])add('bus_stop',u,305,1,0,true,true);
- // Downtown landmark footprints follow the map; work stores retain interiors.
- for(const [name,u,v,scale] of [['office_tower',1230,90,1],['office_midrise',1320,105,1],['city_hall',1490,160,1.5],['office_round_tower',1600,170,1.25],['office_midrise',1230,460,1.15],['office_tower',1510,450,1.1],['office_tower',1610,400,1.1],['bank',1460,100,1],['fountain_large',1480,265,.85],['warehouse',1480,710,1]])add(name,u,v,scale,0,true);
+ add('fountain_large',1483,253,1,0,true,true);
  LOCAL_SHOPS.forEach((s,i)=>{const p=pixel(s.x,s.z);add(i<2?'shop_small':i<4?'cafe':'shop_supermarket',p.x,p.y,1,0,true,true);label(s.name,s.x,6,s.z+4,'#ffe5ab',1.4);});
  // Deterministic vegetation fills parkland and courtyards, avoiding stores,
  // streets, waterways and landmark footprints.
@@ -41,7 +47,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  for(let i=0;i<1400;i++){
   const u=35+random()*1600,v=30+random()*740;
   if(!clearShop(u,v,8)||nearRoad(u,v,20)||isReferenceWater(u,v))continue;
-  if([...placements].some(([n,list])=>!['tree','shrub','bench','trash_bin','streetlight','bus_stop'].includes(n)&&list.some(p=>Math.hypot(u-p.u,v-p.v)<45)))continue;
+  if([...placements].some(([n,list])=>!['tree','shrub','bench','trash_bin','streetlight','bus_stop'].includes(n)&&list.some(p=>(p.width?Math.abs(u-p.u)<p.width/2+12&&Math.abs(v-p.v)<p.depth/2+12:Math.hypot(u-p.u,v-p.v)<45))))continue;
   add(i%5?'tree':'shrub',u,v,.85+random()*.45);
  }
  for(const [u,v] of [[150,215],[320,210],[370,540],[720,455],[910,420],[1010,530],[1430,290],[1500,610]]){add('bench',u,v,1,0,true);add('trash_bin',u+12,v,1,0,true);}
@@ -53,46 +59,55 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  }
  for(let i=0;i<6;i++){const [u,v]=[[160,215],[320,210],[370,540],[720,455],[910,420],[1430,290]][i];if(!clearShop(u,v))continue;const p=point(u,v);const person=human(p.x,.5+p.z,'#82806e','resident');person.role=i<3?'Жительница у подъезда':'Отдыхает в парке';person.seated=true;person.activity={id:'bench-'+i,clip:'Drive',duration:1,remaining:1};world.people.push(person);}
  const loader=new GLTFLoader();
- const material=new T.MeshStandardMaterial({color:0xffffff,vertexColors:true,roughness:.8});
  await Promise.all([...placements].map(async([name,list])=>{
   const gltf=await loader.loadAsync(`${import.meta.env.BASE_URL}models/city-pack/${name}.glb`);
-  const geometries=[];gltf.scene.updateMatrixWorld(true);
-  gltf.scene.traverse(n=>{if(!n.isMesh)return;let g=n.geometry.clone().applyMatrix4(n.matrixWorld);g.rotateX(-Math.PI/2);if(g.index){const old=g;g=g.toNonIndexed();old.dispose();}if(!g.attributes.normal)g.computeVertexNormals();for(const attr of Object.keys(g.attributes))if(!['position','normal','color'].includes(attr))g.deleteAttribute(attr);if(!g.attributes.color)g.setAttribute('color',new T.Float32BufferAttribute(new Float32Array(g.attributes.position.count*3).fill(1),3));geometries.push(g);});
-  const geometry=mergeGeometries(geometries);geometries.forEach(g=>g.dispose());geometry.computeBoundingBox();const b=geometry.boundingBox;
-  list=list.filter(p=>{if(!p.solid)return true;const pos=point(p.u,p.v);return !meetsStreet(pos.x,pos.z,(b.max.x-b.min.x)*p.scale,(b.max.z-b.min.z)*p.scale,p.angle);});
+  const asset=prepareCityAsset(gltf.scene);preparedAssets.push(asset);const b=asset.bounds;
+  const nativeW=b.max.x-b.min.x,nativeD=b.max.z-b.min.z,nativeH=b.max.y-b.min.y;
+  list=list.map(p=>{
+    const c=Math.abs(Math.cos(p.angle)),s=Math.abs(Math.sin(p.angle));
+    const sx=p.width?(p.width*MAP.scale)/(c*nativeW+s*nativeD):p.scale;
+    const sz=p.depth?(p.depth*MAP.scale)/(s*nativeW+c*nativeD):p.scale;
+    const scale=new T.Vector3(sx,p.scale,sz);
+    // swap dimensions for a 90-degree building rotation
+    if(p.width&&s>.5){scale.x=sz;scale.z=sx;}
+    const width=c*nativeW*scale.x+s*nativeD*scale.z,depth=s*nativeW*scale.x+c*nativeD*scale.z;
+    return {...p,scaleVector:scale,worldWidth:width,worldDepth:depth};
+  }).filter(p=>!p.solid||!meetsStreet(point(p.u,p.v).x,point(p.u,p.v).z,p.worldWidth,p.worldDepth));
   placedCount+=list.length;
-  const instances=new T.InstancedMesh(geometry,material,list.length);instances.name='city-pack-'+name;instances.castShadow=true;instances.receiveShadow=true;
-  const matrix=new T.Matrix4(),q=new T.Quaternion();
-  list.forEach((p,i)=>{const pos=point(p.u,p.v);q.setFromAxisAngle(new T.Vector3(0,1,0),p.angle);matrix.compose(new T.Vector3(pos.x,.006-b.min.y*p.scale,pos.z),q,new T.Vector3().setScalar(p.scale));instances.setMatrixAt(i,matrix);
-   if(p.solid){const w=(b.max.x-b.min.x)*p.scale,d=(b.max.z-b.min.z)*p.scale,h=(b.max.y-b.min.y)*p.scale;const proxy=world.box(pos.x,h/2,pos.z,Math.abs(Math.cos(p.angle))*w+Math.abs(Math.sin(p.angle))*d,h,Math.abs(Math.sin(p.angle))*w+Math.abs(Math.cos(p.angle))*d,'#70796d',true);proxy.visible=false;collision.push(proxy);}
-  });root.add(instances);gltf.scene.traverse(n=>{if(n.isMesh){n.geometry.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}});
+  for(const p of list){
+    if(p.traced)traced.push({model:name,u:p.u,v:p.v,width:p.worldWidth/MAP.scale,depth:p.worldDepth/MAP.scale});
+    if(p.solid){const pos=point(p.u,p.v),h=nativeH*p.scale;const proxy=world.box(pos.x,h/2,pos.z,p.worldWidth,h,p.worldDepth,'#70796d',true);proxy.visible=false;collision.push(proxy);}
+  }
+  const matrix=new T.Matrix4(),q=new T.Quaternion(),center=b.getCenter(new T.Vector3());center.y=b.min.y;
+  for(const [index,batch]of asset.batches.entries()){
+    const instances=new T.InstancedMesh(batch.geometry,batch.material,list.length);instances.name=`city-pack-${name}-${index}`;instances.castShadow=true;instances.receiveShadow=true;
+    list.forEach((p,i)=>{
+      const pos=point(p.u,p.v);q.setFromAxisAngle(new T.Vector3(0,1,0),p.angle);
+      const origin=center.clone().multiply(p.scaleVector).applyQuaternion(q).negate().add(new T.Vector3(pos.x,.006,pos.z));
+      matrix.compose(origin,q,p.scaleVector);instances.setMatrixAt(i,matrix);
+    });root.add(instances);
+  }
  }));
- return {diagnostics:{boroughs:BOROUGHS,localShops:LOCAL_SHOPS,source:'user-map',modelTypes:placements.size,placements:placedCount},update(dt){hub.rotation.z+=dt*.09;for(const cabin of animated)cabin.rotation.z=-hub.rotation.z;},dispose(){root.traverse(n=>{n.geometry?.dispose();});material.dispose();root.removeFromParent();}};
+ return {diagnostics:{boroughs:BOROUGHS,localShops:LOCAL_SHOPS,source:'user-map',modelTypes:placements.size,placements:placedCount,tracedBuildings:traced},update(dt){hub.rotation.z+=dt*.09;for(const cabin of animated)cabin.rotation.z=-hub.rotation.z;},dispose(){preparedAssets.forEach(a=>a.dispose());root.traverse(n=>{if(n.isMesh&&!n.isInstancedMesh){n.geometry?.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}});root.removeFromParent();}};
 }
 
-// Water is impassable, except at mapped road/foot bridges. Use the same
-// definition for rendering, walking and vehicles, so banks cannot swallow feet.
-export function isReferenceWater(u,v){
- if(v>815 && !(u>1370&&u<1410))return true;
- const left=625+(v>650?-(v-650)*.18:v<150?(150-v)*.4:0);
- const right=1120+(v>650?(v-650)*.2:v<200?-(200-v)*.2:0);
- const river=Math.abs(u-left)<12 || (v<740&&Math.abs(u-right)<11);
- const bridge=(v>320&&v<365)||(v>60&&v<95)||(v>680&&v<725)||(v>460&&v<500);
- return river&&!bridge;
-}
 export function buildReferenceTerrain(world,scene){
  for(const [a,b,c,d,width] of ROADS){
   const start=point(a,b),end=point(c,d),length=Math.hypot(end.x-start.x,end.z-start.z),angle=Math.atan2(end.x-start.x,end.z-start.z);
-  const road=world.box((start.x+end.x)/2,.009,(start.z+end.z)/2,width*MAP.scale,.012,length,'#414f59');road.rotation.y=angle;
-  for(let t=3;t<length;t+=7){const paint=world.box(start.x+Math.sin(angle)*t,.018,start.z+Math.cos(angle)*t,.15,.002,2.4,'#dfdfbf');paint.rotation.y=angle;}
+  const road=world.box((start.x+end.x)/2,.001,(start.z+end.z)/2,width*MAP.scale,.002,length,'#414f59');road.rotation.y=angle;
+  for(let t=3;t<length;t+=7){const paint=world.box(start.x+Math.sin(angle)*t,.003,start.z+Math.cos(angle)*t,.15,.001,2.4,'#dfdfbf');paint.rotation.y=angle;}
  }
  // Narrow surface tiles follow the rivers rather than the preview's grid.
  const water=[];
- for(let v=0;v<941;v+=8)for(let u=0;u<1672;u+=8)if(isReferenceWater(u+4,v+4))water.push(point(u+4,v+4));
- const tiles=new T.InstancedMesh(new T.BoxGeometry(2.4,.008,2.4),new T.MeshStandardMaterial({color:'#287f9d',roughness:.25,metalness:.2}),water.length),matrix=new T.Matrix4();
- water.forEach((p,i)=>tiles.setMatrixAt(i,matrix.makeTranslation(p.x,.005,p.z)));scene.add(tiles);
+ for(let v=0;v<941;v+=8)for(let u=0;u<1672;u+=8)if(rawWater(u+4,v+4))water.push(point(u+4,v+4));
+ const tiles=new T.InstancedMesh(new T.BoxGeometry(8*MAP.scale,.002,8*MAP.scale),new T.MeshStandardMaterial({color:'#287f9d',roughness:.25,metalness:.2}),water.length),matrix=new T.Matrix4();
+ water.forEach((p,i)=>tiles.setMatrixAt(i,matrix.makeTranslation(p.x,.001,p.z)));scene.add(tiles);
+ // A flat pedestrian pier and the roundabout match the original map.
+ const pier=point(PIER[0],(PIER[1]+PIER[3])/2);world.box(pier.x,.002,pier.z,PIER[4]*MAP.scale,.002,(PIER[3]-PIER[1])*MAP.scale,'#c4b395');
+ const dock=point(865,876);world.box(dock.x,.002,dock.z,55*MAP.scale,.002,12*MAP.scale,'#c4b395');
+ const round=point(ROUNDABOUT.u,ROUNDABOUT.v),island=new T.Mesh(new T.CylinderGeometry(23*MAP.scale,23*MAP.scale,.01,48),new T.MeshStandardMaterial({color:'#688754'}));island.position.set(round.x,-.002,round.z);scene.add(island);
  // Beach and promenade under the park, as shown on the supplied map.
- for(const [u,v,w,d,color] of [[875,800,450,26,'#d7bf88'],[875,778,450,12,'#bdb7a4']]){const p=point(u,v);world.box(p.x,.012,p.z,w*.3,.008,d*.3,color);}
+ for(const [u,v,w,d,color] of [[875,800,450,26,'#d7bf88'],[875,778,450,12,'#bdb7a4']]){const p=point(u,v);world.box(p.x,.002,p.z,w*MAP.scale,.002,d*MAP.scale,color);}
  // Footpaths connect the park entrances to the fountain and promenade.
- for(const [u,v,w,d] of [[850,515,14,440],[855,400,410,14],[850,745,475,15],[775,110,16,90]]){const p=point(u,v);world.box(p.x,.012,p.z,w*.3,.008,d*.3,'#bcad8e');}
+ for(const [u,v,w,d] of [[850,560,14,360],[850,400,340,14],[850,748,420,14],[775,110,14,80]]){const p=point(u,v);world.box(p.x,.002,p.z,w*MAP.scale,.002,d*MAP.scale,'#bcad8e');}
 }

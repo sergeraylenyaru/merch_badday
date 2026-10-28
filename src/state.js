@@ -98,7 +98,7 @@ export const SHOPS = [
 }));
 export const freshState = () => ({
   version: 1,
-  cityVersion: 2,
+  cityVersion: 3,
   overtime: false,
   wantedElapsed: 0,
   shift: {...makeShift(),upgrades:{...career().upgrades}},
@@ -197,8 +197,8 @@ export function load(storage = localStorage) {
       if(s.shops.length===8&&Array.isArray(v.vehicles)){v.vehicles=[...v.vehicles];v.vehicles.splice(8,0,null);}
       const migrating = s.missionVersion !== 2;
       v.missionVersion = 2;
-      if (s.cityVersion !== 2) {
-        v.cityVersion = 2; v.position = {...START}; v.carts=[]; v.vehicles=[]; v.carrying=null;
+      if (s.cityVersion !== 3) {
+        v.cityVersion = 3; v.position = {...START}; v.carts=[]; v.vehicles=[]; v.carrying=null;
       }
       v.wantedElapsed = Number.isFinite(v.wantedElapsed) ? v.wantedElapsed : 0;
       if (!v.shift?.order || v.shift.order.length !== 9) v.shift = makeShift();

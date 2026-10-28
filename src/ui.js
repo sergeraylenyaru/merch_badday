@@ -1,4 +1,5 @@
-import {MAP,pixel,districtAt,WORK_STOPS} from './city/reference-layout.js';
+import {mapViewport} from './city/map-view.js';
+import {MAP,pixel,districtAt,WORK_STOPS,MAP_MARKERS,point} from './city/reference-layout.js';
 import { BOROUGHS, boroughFor, LOCAL_SHOPS } from './city/layout.js';
 import { SHOPS } from "./state.js";
 import { JOBS, EXPIRY_BATCHES, PRICE_ITEMS, jobDone, jobProgress, isShopUnlocked } from './jobs/catalog.js';
@@ -7,7 +8,7 @@ import { poweredContacts, circuitConnected } from './jobs/circuit.js';
 export function createUI(state, actions) {
   const root = document.createElement("div");
   document.body.append(root);
-  root.innerHTML = `<div class="hud hidden" id="hud"><div class="topline"><div><div class="brand">ПЛОХОЙ ДЕНЬ МЕРЧА<small>ЕЩЁ ОДНА ОБЫЧНАЯ СМЕНА</small></div><div class="objective panel"><div class="eyebrow">РАБОЧИЙ МАРШРУТ <span id="routeCount"></span></div><h2 id="targetName"></h2><p id="targetDesc"></p><div class="progressbar"><i id="routeBar"></i></div><div class="row"><span id="cartCount"></span><span id="distance"></span></div></div></div><div class="clock"><strong id="clock">08:00</strong><p>ДО КОНЦА СМЕНЫ <span id="remaining"></span></p><div class="wanted" id="wanted">☆☆☆☆☆</div><div class="speed" id="speed"></div></div></div><div class="bottomline"><div class="bottomleft"><div class="mapbox panel"><canvas id="minimap" width="300" height="300"></canvas><div class="mapcaption"><span>СЕВЕРНЫЙ РАЙОН</span><span>↑ N</span></div></div><div class="statbox panel"><div class="eyebrow">МЕРЧЕНДАЙЗЕР · СТАЖЁР</div><div class="stat"><span>ЗДОРОВЬЕ</span><div class="meter"><i id="hpBar"></i></div><span id="hp"></span></div><div class="stat"><span>СТРЕСС</span><div class="meter stress"><i id="stressBar"></i></div><span id="stress"></span></div><div class="row" style="font-size:11px;color:#d8c28e" id="money"></div></div></div><div class="controls"><span><b>WASD</b>движение</span><span><b>E</b>действие</span><span><b>R</b>тележка</span><span><b>M</b>телефон</span><span><b>ESC</b>пауза</span></div></div></div><div class="crosshair hidden" id="crosshair"></div><div class="context hidden" id="context"><span></span></div><div class="toast" id="toast"></div><div id="overlay"></div><div class="loading" id="loading">СОБИРАЕМ ТЕЛЕЖКИ…</div>`;
+  root.innerHTML = `<div class="hud hidden" id="hud"><div class="topline"><div><div class="brand">ПЛОХОЙ ДЕНЬ МЕРЧА<small>ЕЩЁ ОДНА ОБЫЧНАЯ СМЕНА</small></div><div class="objective panel"><div class="eyebrow">РАБОЧИЙ МАРШРУТ <span id="routeCount"></span></div><h2 id="targetName"></h2><p id="targetDesc"></p><div class="progressbar"><i id="routeBar"></i></div><div class="row"><span id="cartCount"></span><span id="distance"></span></div></div></div><div class="clock"><strong id="clock">08:00</strong><p>ДО КОНЦА СМЕНЫ <span id="remaining"></span></p><div class="wanted" id="wanted">☆☆☆☆☆</div><div class="speed" id="speed"></div></div></div><div class="bottomline"><div class="bottomleft"><div class="mapbox panel"><canvas id="minimap" width="300" height="300"></canvas><div class="mapcaption"><span>СЕВЕРНЫЙ РАЙОН</span><span>↑ N</span></div></div><div class="statbox panel"><div class="eyebrow">МЕРЧЕНДАЙЗЕР · СТАЖЁР</div><div class="stat"><span>ЗДОРОВЬЕ</span><div class="meter"><i id="hpBar"></i></div><span id="hp"></span></div><div class="stat"><span>СТРЕСС</span><div class="meter stress"><i id="stressBar"></i></div><span id="stress"></span></div><div class="row" style="font-size:11px;color:#d8c28e" id="money"></div></div></div><div class="controls"><span><b>WASD</b>движение</span><span><b>E</b>действие</span><span><b>R</b>тележка</span><span><b>M</b>планшет</span><span><b>ESC</b>пауза</span></div></div></div><div class="crosshair hidden" id="crosshair"></div><div class="context hidden" id="context"><span></span></div><div class="toast" id="toast"></div><div id="overlay"></div><div class="loading" id="loading">СОБИРАЕМ ТЕЛЕЖКИ…</div>`;
   const $ = (id) => document.getElementById(id);
   const mapImage=new Image();mapImage.src=`${import.meta.env.BASE_URL}maps/city-reference.png`;
   let toastTimer,
@@ -24,16 +25,19 @@ export function createUI(state, actions) {
     const h=canvas.height,mini=canvas.id==='minimap';
     const player=pixel(state.position.x,state.position.z);
     // The same affine transform positions models, markers and the navigator.
-    const span=mini?760:MAP.width,zoom=w/span;
-    const originX=mini?Math.max(0,Math.min(MAP.width-span,player.x-span/2)):0;
-    const visibleHeight=h/zoom;
-    const originY=mini?Math.max(0,Math.min(MAP.height-visibleHeight,player.y-visibleHeight/2)):0;
-    const xy=(x,z)=>{const p=pixel(x,z);return {x:(p.x-originX)*zoom,y:(p.y-originY)*zoom};};
-    ctx.fillStyle='#294b56';ctx.fillRect(0,0,w,h);
-    if(mapImage.complete&&mapImage.naturalWidth)ctx.drawImage(mapImage,-originX*zoom,-originY*zoom,MAP.width*zoom,MAP.height*zoom);
+    const view=mapViewport(w,h,state.position,mini),xy=view.project;
+    canvas.dataset.mapZoom=String(view.zoom);
+    ctx.fillStyle='#132830';ctx.fillRect(0,0,w,h);
+    if(mapImage.complete&&mapImage.naturalWidth)ctx.drawImage(mapImage,view.offsetX,view.offsetY,MAP.width*view.zoom,MAP.height*view.zoom);
     const target=xy(SHOPS[state.selected].x,SHOPS[state.selected].z),me=xy(state.position.x,state.position.z);
     ctx.setLineDash([4,5]);ctx.strokeStyle='#ffe18b';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(me.x,me.y);ctx.lineTo(target.x,target.y);ctx.stroke();ctx.setLineDash([]);
-    for(const shop of SHOPS){const p=xy(shop.x,shop.z);ctx.beginPath();ctx.arc(p.x,p.y,shop.id===state.selected?10:7,0,Math.PI*2);ctx.fillStyle=state.shops[shop.id].done?'#78bc77':!isShopUnlocked(state,shop.id)?'#647383':shop.id===state.selected?'#ffd46a':'#1c88b9';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#102331';ctx.font='bold 9px Arial';ctx.textAlign='center';ctx.fillText(shop.code,p.x,p.y+3);}
+    for(const shop of SHOPS){
+      const done=state.shops[shop.id].done,selected=shop.id===state.selected,locked=!isShopUnlocked(state,shop.id);
+      if(!done&&!selected&&!locked)continue;
+      const location=point(...MAP_MARKERS[shop.id]),p=xy(location.x,location.z),radius=Math.max(8,17*view.zoom);
+      ctx.beginPath();ctx.arc(p.x,p.y,radius,0,Math.PI*2);ctx.strokeStyle=done?'#8be59a':locked?'#859296':'#ffe18b';ctx.lineWidth=selected?3:2;ctx.stroke();
+      if(done||locked){ctx.fillStyle=done?'#235a3c':'#34454b';ctx.fill();ctx.fillStyle='#fff';ctx.font=`bold ${Math.max(10,radius)}px Arial`;ctx.textAlign='center';ctx.fillText(done?'✓':'×',p.x,p.y+radius*.4);}
+    }
     ctx.save();ctx.translate(me.x,me.y);ctx.rotate(-(world?.player.mesh.rotation.y??0)+Math.PI);ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(6,6);ctx.lineTo(0,3);ctx.lineTo(-6,6);ctx.closePath();ctx.fillStyle='#fff6c8';ctx.fill();ctx.strokeStyle='#102331';ctx.lineWidth=2;ctx.stroke();ctx.restore();
   }
   function update(world, vehicle) {
@@ -75,7 +79,13 @@ export function createUI(state, actions) {
       ? `${Math.round(Math.abs(vehicle.speed) * 3.6)} км/ч`
       : "";
     map($("minimap"), world);
-    if ($("bigmap")) map($("bigmap"), world);
+    if ($("bigmap")) {
+      const canvas=$("bigmap"),rect=canvas.getBoundingClientRect(),ratio=Math.min(devicePixelRatio||1,1.5);
+      const width=Math.round(rect.width*ratio),height=Math.round(rect.height*ratio);
+      if(width>0&&height>0&&(canvas.width!==width||canvas.height!==height)){canvas.width=width;canvas.height=height;}
+      map(canvas, world);
+      $("tabletGoal").textContent=`${s.code} · ${s.name} · ${Math.round(Math.hypot(s.x-state.position.x,s.z-state.position.z))} м`;
+    }
   }
   function clear() {
     overlayEpoch++;
@@ -106,7 +116,7 @@ export function createUI(state, actions) {
   }
   function pause(help = false) {
     show(
-      `<div class="modal"><div class="window settings"><div class="eyebrow">${help ? "ПАМЯТКА МЕРЧЕНДАЙЗЕРА" : "КОФЕ-БРЕЙК"}</div><h2>${help ? "Как пережить эту смену" : "Смена на паузе"}</h2><p>WASD — ходить или вести машину; Бег по умолчанию; удерживайте Shift — ходьба / ручной тормоз; Space — прыжок / тормоз; Ctrl — присесть; C — камера. Мышь — обзор; курсор автоматически скрыт в игре и появляется в меню, телефоне и диалогах.</p><p>E — разговор, полка, кофе, сесть / выйти из машины. R — взяться за ручку / отпустить тележку; в фургоне — загрузить / выгрузить. С тележкой WASD — движение, мышь или стрелки ← → — поворот. F / ЛКМ — удар, G — сильный удар, Q — блок. M — телефон; Tab — карта.</p><p>Работа каждой точки указана в телефоне: парковка, три в ряд, склад, ремонт, разгрузка, сроки, ценники и поиск ТСД. ГиперМакс открывается после пяти визитов. Директоры обходят зал — найдите их после задания. Обычные тележки в жёлтой зоне дают бонус, они не обязательны для всех магазинов. Прогресс сохраняется автоматически; телефон и диалоги ставят игру на паузу.</p><label>Чувствительность мыши<input id="sensitivity" type="range" min="0.2" max="2" step="0.1" value="${actions.settings.sensitivity}"></label><label>Громкость<input id="volume" type="range" min="0" max="1" step="0.05" value="${actions.settings.volume}"></label><label>Качество<select id="quality"><option value="low">Экономное</option><option value="high">Высокое</option></select></label><div class="actions"><button class="primary" id="resume">${help ? "ПОНЯТНО, НА МАРШРУТ" : "ПРОДОЛЖИТЬ"}</button><button class="secondary" id="finish">Завершить день</button><button class="secondary" id="quit">Бросить маршрут</button><button class="secondary" id="new">Новая смена</button></div></div></div>`,
+      `<div class="modal"><div class="window settings"><div class="eyebrow">${help ? "ПАМЯТКА МЕРЧЕНДАЙЗЕРА" : "КОФЕ-БРЕЙК"}</div><h2>${help ? "Как пережить эту смену" : "Смена на паузе"}</h2><p>WASD — ходить или вести машину; Бег по умолчанию; удерживайте Shift — ходьба / ручной тормоз; Space — прыжок / тормоз; Ctrl — присесть; C — камера. Мышь — обзор; курсор автоматически скрыт в игре и появляется в меню, телефоне и диалогах.</p><p>E — разговор, полка, кофе, сесть / выйти из машины. R — взяться за ручку / отпустить тележку; в фургоне — загрузить / выгрузить. С тележкой WASD — движение, мышь или стрелки ← → — поворот. F / ЛКМ — удар, G — сильный удар, Q — блок. M — планшет с картой; Tab — карта.</p><p>Работа каждой точки указана в телефоне: парковка, три в ряд, склад, ремонт, разгрузка, сроки, ценники и поиск ТСД. ГиперМакс открывается после пяти визитов. Директоры обходят зал — найдите их после задания. Обычные тележки в жёлтой зоне дают бонус, они не обязательны для всех магазинов. Прогресс сохраняется автоматически; телефон и диалоги ставят игру на паузу.</p><label>Чувствительность мыши<input id="sensitivity" type="range" min="0.2" max="2" step="0.1" value="${actions.settings.sensitivity}"></label><label>Громкость<input id="volume" type="range" min="0" max="1" step="0.05" value="${actions.settings.volume}"></label><label>Качество<select id="quality"><option value="low">Экономное</option><option value="high">Высокое</option></select></label><div class="actions"><button class="primary" id="resume">${help ? "ПОНЯТНО, НА МАРШРУТ" : "ПРОДОЛЖИТЬ"}</button><button class="secondary" id="finish">Завершить день</button><button class="secondary" id="quit">Бросить маршрут</button><button class="secondary" id="new">Новая смена</button></div></div></div>`,
     );
     $("quality").value = actions.settings.quality;
     $("quality").onchange = (e) => actions.configure("quality", e.target.value);
@@ -135,14 +145,20 @@ export function createUI(state, actions) {
         .join("");
     if (tab === "Карта")
       body =
-        '<canvas id="bigmap" width="668" height="376"></canvas><p class="message">Жёлтый — цель · стрелка — вы · C / P / O — рабочие точки. Пунктир — направление к цели.</p>';
+        '<p class="message">Карта города открыта слева. Нажмите на рабочую точку, чтобы выбрать цель.<br><br>Жёлтый — цель · стрелка — вы · зелёный — визит закрыт. Пунктир показывает направление.</p>';
     if (tab === "Показатели")
       body = `<div class="message">Репутация: ${Math.round(state.reputation)} / 100<br>Стресс: ${Math.round(state.stress)} / 100<br>Деньги: ${state.money} ₽<br>Премия: ${state.bonus} ₽<br>Конфликты: ${state.conflicts}<br>Штрафы: ${state.fines} ₽<br>Закрыто: ${state.shops.filter((s) => s.done).length} / ${SHOPS.length}<br>Осталось: ${Math.max(0,Math.ceil((1500 - state.time) / 60))} мин</div><div class="actions"><button id="energy" class="secondary">Энергетик · 70 ₽</button><button id="boots" class="secondary">Обувь для бега · 150 ₽ премии</button><button id="gloves" class="secondary">Перчатки для груза · 120 ₽ премии</button><button id="dimaDeal" class="secondary">Дима: договориться о сроках · 40 ₽</button></div>`;
     if (tab === "Фото")
       body = `<p class="message">Необязательный фотоотчёт: встаньте рядом с магазином. Фото сохраняет текущий вид камеры; задания у каждой точки свои.</p><button class="primary" id="takePhoto">СДЕЛАТЬ ФОТО</button><div id="photoResult"></div>`;
     show(
-      `<div class="modal"><div class="phone"><div class="phonebar"><span>МЕРЧФОН • 4G</span><button class="close" id="close">×</button></div><h2>Рабочий телефон</h2><div class="tabs">${tabs.map((t) => `<button data-tab="${t}" class="${t === tab ? "active" : ""}">${t}</button>`).join("")}</div><div id="phoneBody">${body}</div></div></div>`,
+      `<div class="modal tablet-modal"><div class="phone tablet" role="dialog" aria-modal="true" aria-label="Рабочий планшет"><div class="phonebar tabletbar"><span>МЕРЧПЛАНШЕТ · ГОРОДСКОЙ МАРШРУТ</span><button class="close" id="close" aria-label="Закрыть планшет">×</button></div><div class="tablet-layout"><section class="tablet-map" aria-label="Карта города"><div class="tablet-mapbar"><span>ТРИ РАЙОНА · ДЕВЯТЬ ВИЗИТОВ</span><strong id="tabletGoal"></strong></div><div class="tablet-mapstage"><canvas id="bigmap" width="1672" height="941" aria-label="Карта районов и положение игрока"></canvas></div><div class="tablet-mapfooter"><span>↑ СЕВЕР · НАЖМИТЕ НА МАГАЗИН, ЧТОБЫ ВЫБРАТЬ ЦЕЛЬ</span><span>M / ESC — ЗАКРЫТЬ</span></div></section><aside class="tablet-sidebar"><h2>Рабочий день</h2><nav class="tabs" aria-label="Меню планшета">${tabs.map((t) => `<button data-tab="${t}" class="${t === tab ? "active" : ""}" aria-pressed="${t === tab}">${t}</button>`).join("")}</nav><div id="phoneBody" tabindex="0">${body}</div></aside></div></div></div>`,
     );
+    $("bigmap").onclick=(event)=>{
+      const canvas=$("bigmap"),rect=canvas.getBoundingClientRect();
+      const p=mapViewport(canvas.width,canvas.height,state.position).unproject((event.clientX-rect.left)*canvas.width/rect.width,(event.clientY-rect.top)*canvas.height/rect.height);
+      const nearest=SHOPS.map(shop=>({shop,d:Math.min(Math.hypot(pixel(shop.x,shop.z).x-p.u,pixel(shop.x,shop.z).y-p.v),Math.hypot(MAP_MARKERS[shop.id][0]-p.u,MAP_MARKERS[shop.id][1]-p.v))})).sort((a,b)=>a.d-b.d)[0];
+      if(nearest?.d<45){state.selected=nearest.shop.id;phone(tab);}
+    };
     $("close").onclick = actions.resume;
     document
       .querySelectorAll("[data-tab]")
@@ -156,7 +172,7 @@ export function createUI(state, actions) {
     );
     if (tab === "Сообщения")
       document
-        .querySelectorAll(".message")
+        .querySelectorAll("#phoneBody .message")
         .forEach(
           (el, i) =>
             (el.textContent = state.messages[state.messages.length - 1 - i]),

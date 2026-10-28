@@ -66,11 +66,11 @@ export async function createWorld(scene, state) {
     visualBucket?.push(p);
     return p;
   }
-  const ground = box(0, -0.5, 0, 550, 1, 330, "#708666");
+  const ground = box(0, -0.5, 0, 710, 1, 430, "#708666");
   const gb = physics.createRigidBody(
     RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.5, 0),
   );
-  physics.createCollider(RAPIER.ColliderDesc.cuboid(275, 0.5, 165), gb);
+  physics.createCollider(RAPIER.ColliderDesc.cuboid(355, 0.5, 215), gb);
   function surface(x, z, width, depth, height) {
     surfaces.push({ x, z, w: width / 2, d: depth / 2, height });
     const body = physics.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x, height / 2, z));

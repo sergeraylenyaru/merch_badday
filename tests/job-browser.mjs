@@ -67,7 +67,7 @@ function path(start, goal, obstacles) {
   const minZ = start.z - Math.ceil((Math.max(0, start.z - goal.z) + margin) / step) * step;
   const width = Math.ceil((Math.abs(start.x - goal.x) + margin * 2) / step) + 2;
   const height = Math.ceil((Math.abs(start.z - goal.z) + margin * 2) / step) + 2;
-  const blocked = (point) => point.x < -247 || point.x > 249 || point.z < -137 || point.z > 103 || obstacles.some((box) => circleIntersectsBox(point.x, point.z, 0.36, box));
+  const blocked = (point) => point.x < -330 || point.x > 331 || point.z < -184 || point.z > 182 || obstacles.some((box) => circleIntersectsBox(point.x, point.z, 0.36, box));
   const visible = (a, b) => {
     const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.18));
     for (let i = 1; i <= n; i++) if (blocked({ x: a.x + (b.x - a.x) * i / n, z: a.z + (b.z - a.z) * i / n })) return false;

@@ -1,5 +1,5 @@
 import {tickWanted,raiseWanted,freeRoam,runningSpeed,SHIFT_DURATION} from './city/gameplay.js';
-import {START,point} from './city/reference-layout.js';
+import {START,point,pixel} from './city/reference-layout.js';
 import {buyEquipment,dealWithDima} from './city/shift.js';
 import * as T from "three";
 import "@fontsource/manrope/cyrillic-400.css";
@@ -1099,7 +1099,11 @@ try {
       }
       v.speed = 6;
       v.mesh.position.x += dt * v.speed;
-      v.heading = Math.PI/2;
+      const u=pixel(v.mesh.position.x,0).x,t=T.MathUtils.clamp((u-1340)/100,0,1);
+      const arc=u>=1340&&u<=1440?Math.sin(Math.PI*t)**2*36:0;
+      v.mesh.position.z=point(0,343+arc).z;
+      const slope=u>=1340&&u<=1440?36*Math.PI/100*Math.sin(2*Math.PI*t):0;
+      v.heading = Math.atan2(1,slope);
       v.mesh.rotation.y = v.heading;
       if (v.mesh.position.x > point(1650,340).x) v.mesh.position.x = point(20,340).x;
       v.mesh.position.y = world.groundHeight(v.mesh.position.x, v.mesh.position.z);

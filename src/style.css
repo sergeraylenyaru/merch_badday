@@ -626,3 +626,51 @@ button:disabled {
 .circuit-grid { position: relative; width: min(350px, calc(100dvh - 330px)); }
 .circuit-grid::before, .circuit-grid::after { position: absolute; top: calc(50% - 18px); color: #efc96b; font-size: 26px; font-weight: bold; content: '→'; }
 .circuit-grid::before { left: -25px; } .circuit-grid::after { right: -25px; }
+
+/* The tablet always keeps the map visible; the existing menu occupies 20%. */
+.phone.tablet {
+  width: min(1600px, 96vw);
+  height: min(940px, 92dvh);
+  max-height: 92dvh;
+  padding: 0;
+  overflow: hidden;
+  border: 9px solid #101c20;
+  border-radius: 24px;
+  background: #14262c;
+  display: flex;
+  flex-direction: column;
+}
+.tabletbar { flex: 0 0 44px; padding: 0 18px; align-items: center; border-bottom: 1px solid #8ba3aa26; }
+.tabletbar .close { position: static; width: 34px; height: 34px; padding: 0; }
+.tablet-layout { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 1fr); flex: 1; min-height: 0; }
+.tablet-map { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #10262d; }
+.tablet-mapbar { padding: 16px 20px; border-bottom: 1px solid #8ba3aa26; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+.tablet-mapbar span, .tablet-mapfooter { font-size: 10px; letter-spacing: 1px; color: #a7bbb9; }
+.tablet-mapbar strong { font-size: 14px; color: #f4d28a; margin-left: auto; }
+.tablet-mapstage { flex: 1; min-height: 0; position: relative; }
+.phone.tablet #bigmap { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; display: block; cursor: crosshair; }
+.tablet-mapfooter { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 12px 20px; border-top: 1px solid #8ba3aa26; }
+.tablet-sidebar { min-width: 0; min-height: 0; border-left: 1px solid #8ba3aa26; padding: 12px; display: flex; flex-direction: column; background: #1a302e; }
+.phone.tablet h2 { font-size: 23px; margin: 0 0 10px; }
+.tablet .tabs { flex-direction: column; flex-wrap: nowrap; gap: 4px; }
+.tablet .tabs button { text-align: left; font-size: 12px; padding: 10px; }
+.tablet #phoneBody { min-height: 0; overflow: auto; overscroll-behavior: contain; margin-top: 12px; scrollbar-width: thin; }
+.tablet .shoprow { padding: 10px 8px; overflow-wrap: anywhere; }
+.tablet .shoprow .n { font-size: 17px; margin-right: 6px; }
+.tablet .shoprow strong { font-size: 11px; line-height: 1.5; display: block; }
+.tablet .shoprow small { font-size: 10px; line-height: 1.5; }
+.tablet .message { padding: 10px; font-size: 11px; overflow-wrap: anywhere; margin-top: 0; margin-bottom: 8px; }
+.tablet .actions { flex-direction: column; gap: 6px; }
+.tablet #phoneBody button { max-width: 100%; font-size: 11px; }
+.tablet #phoneBody .photo { width: 100%; }
+@media (max-width: 700px) {
+  .phone.tablet { width: 99vw; height: 96dvh; max-height: 96dvh; border-width: 5px; border-radius: 14px; }
+  .tablet-sidebar { padding: 5px; }
+  .phone.tablet h2 { font-size: 15px; }
+  .tablet .tabs button { padding: 8px 3px; font-size: 10px; overflow-wrap: anywhere; }
+  .tablet .shoprow strong { font-size: 9px; }
+  .tablet .shoprow small { font-size: 8px; }
+  .tablet-mapbar, .tablet-mapfooter { padding: 10px; }
+  .tablet-mapbar strong { margin-left: 0; font-size: 12px; }
+  .tablet-mapfooter { font-size: 8px; }
+}
