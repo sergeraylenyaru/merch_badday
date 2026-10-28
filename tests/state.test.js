@@ -54,7 +54,10 @@ test('HyperMax unlocks after five confirmed visits, not five unfinished tasks', 
   state.shops[7].job.scannerReturned = true;
   assert.equal(canComplete(state, 7), true);
 });
-test('saved boards, circuit, carried carton and distinct deliveries survive reload', () => {
+test('saved boards, circuit, carried carton and distinct deliveries survive reload', (t) => {
+  // Invalid saves create a random fresh route from Date.now(). Freeze time
+  // for this persistence comparison so a millisecond boundary cannot fail CI.
+  t.mock.method(Date, 'now', () => 1793190000000);
   const state = freshState();
   finishPrimary(state, 1); complete(state, 1);
   state.shops[2].job.delivered = [5]; state.shops[3].job.circuit[0] = 3;
