@@ -5,7 +5,7 @@ import { mkdir } from "node:fs/promises";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { freshState } from "../src/state.js";
+import { freshState, SHOPS } from "../src/state.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const artifacts = fileURLToPath(new URL("../.playwright/", import.meta.url));
@@ -114,8 +114,8 @@ try {
   });
   const context = await browser.newContext({ viewport: { width: 800, height: 600 } });
   const fixture = freshState();
-  fixture.position = { x: -52, z: 30 };
-  fixture.carts = [{ x: -52, z: 28 }, { x: -65, z: 31 }];
+  fixture.position = { x: SHOPS[0].x+3, z: SHOPS[0].z+10 };
+  fixture.carts = [{ x: SHOPS[0].x+3, z: SHOPS[0].z+8 }, { x: SHOPS[0].x-10, z: SHOPS[0].z+11 }];
   await context.addInitScript((state) => {
     if (sessionStorage.getItem("motion-fixture")) return;
     localStorage.setItem("merch-badday-v1", JSON.stringify(state));
@@ -201,11 +201,11 @@ try {
     __MERCH__.motion.player.gripWeight < 0.01 && __MERCH__.motion.player.state === "idle",
   undefined, { timeout: 60000 });
 
-  const walk = await inputFor(page, ["KeyS"], 0.45);
+  const walk = await inputFor(page, ["KeyS", "Shift"], 0.45);
   assert.equal(walk.motion.player.state, "walk");
   assert.equal(walk.motion.player.animation?.clip, "Walk", "walking plays the recorded skeleton clip");
   assert.ok(walk.motion.player.speed > 1, "walk has measured travel speed");
-  const run = await inputFor(page, ["KeyS", "Shift"], 0.45);
+  const run = await inputFor(page, ["KeyS"], 0.65);
   assert.equal(run.motion.player.state, "run");
   assert.ok(["Run", "Sprint"].includes(run.motion.player.animation?.clip), "running plays a recorded run/sprint clip");
   assert.ok(run.motion.player.speed > walk.motion.player.speed + 1, "running is faster than walking");

@@ -1,3 +1,4 @@
+import {meetsStreet} from '../city/reference-layout.js';
 import * as T from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
@@ -25,6 +26,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   }
 
   function proxy(x, y, z, width, height, depth) {
+    if(meetsStreet(root.position.x+x,root.position.z+z,width,depth))return;
     if (!collisionBox) return;
     const mesh = collisionBox(root.position.x + x, y, root.position.z + z,
       width, height, depth, m.colors.navy, true);
@@ -46,6 +48,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   }
 
   function box(x, y, z, width, height, depth, material, rotationY = 0) {
+    if(y>0.1 && (Math.abs(x)>14.5||z>8||z<-9) && meetsStreet(root.position.x+x,root.position.z+z,width,depth,rotationY))return;
     if (y < 0.1 && height <= 0.025 && (material === m.marking || material === m.mustard)) {
       // Paint lies on its paving/road, instead of forming a floating 3cm slab
       // that hides the tips of correctly grounded shoes.
@@ -60,6 +63,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   }
 
   function cylinder(x, y, z, radius, height, material, rotationX = 0) {
+    if((Math.abs(x)>14.5||z>8||z<-9)&&meetsStreet(root.position.x+x,root.position.z+z,radius*2,radius*2))return;
     const geometry = new T.CylinderGeometry(radius, radius, height, 12);
     if (rotationX) geometry.rotateX(rotationX);
     geometry.translate(x, y, z);
@@ -67,6 +71,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   }
 
   function sphere(x, y, z, radius, material) {
+    if((Math.abs(x)>14.5||z>8||z<-9)&&meetsStreet(root.position.x+x,root.position.z+z,radius*2,radius*2))return;
     const geometry = new T.IcosahedronGeometry(radius, 1);
     geometry.translate(x, y, z);
     // Merge batches consistently: both primitives and detail meshes are indexed.
@@ -95,6 +100,8 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
     instance.position.set(x, y, z);
     instance.rotation.y = rotationY;
     instance.updateMatrixWorld(true);
+    const bounds=new T.Box3().setFromObject(instance),size=bounds.getSize(new T.Vector3());
+    if(meetsStreet(root.position.x+x,root.position.z+z,size.x,size.z)){library.release(instance);return true;}
     let accepted = 0;
     instance.traverse((node) => {
       if (!node.isMesh || node.isSkinnedMesh) return;
@@ -123,8 +130,8 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   // receives the new surface; road positions and traffic routes are unchanged.
   const roadSide = shop.x === -55 ? 1 : -1;
   box(roadSide * 24.75, 0.027, 13, 10.5, 0.025, 7, m.asphalt);
-  box(roadSide * 37.5, 0.045, 14, 15, 0.015, 40, m.asphalt);
-  for (let x = 31; x < 45; x += 2) box(roadSide * x, 0.067, 18, 1.1, 0.01, 2.5, m.marking);
+
+
   box(0, 0.065, -3, 27.9, 0.025, 11, m.floor);
   box(0, 0.065, 3.7, 15.5, 0.025, 2.5, m.floor);
   box(0, 0.081, 5.0, 15.5, 0.015, 0.16, m.metal);
@@ -458,7 +465,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
     [-95, 75, "buildingA", 28], [-31, -160, "buildingC", 31],
     [7, -162, "buildingA", 25], [48, -163, "buildingC", 34],
   ];
-  for (const [x, z, id, height] of shop.id === 0 ? skyline : []) {
+  for (const [x, z, id, height] of []) {
     if (!model(id, x, 0, z, { height, shadow: false }, x < -80 ? Math.PI / 2 : 0)) {
       box(x, height / 2, z, 17, height, 18, m.plaster);
       for (let y = 3; y < height - 1; y += 3) {

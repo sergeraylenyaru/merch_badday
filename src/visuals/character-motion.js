@@ -127,7 +127,7 @@ export function createCharacterMotion(entity, model) {
   const entityQ = new Quaternion(), cartQ = new Quaternion(), rotation = new Quaternion(), tilt = new Quaternion();
   const localVelocity = new Vector3(), pole = new Vector3(), target = new Vector3(), travelDirection = new Vector3();
   const lastVelocity = new Vector3(), acceleration = new Vector3(), balanceAxis = new Vector3();
-  let bodyLean = 0, headTurn = 0, lastActivityId = null;
+  let bodyLean = 0, headTurn = 0, lastActivityId = null, floorOffset = 0, locomotionRun = false;
   const euler = new Euler();
   const fallbackTargets = [new Vector3(-0.45, 1.5, -0.85), new Vector3(0.45, 1.5, -0.85)];
   let speed = 0, distance = 0, phase = 0, moving = 0, running = 0, crouching = 0, gripWeight = 0;
@@ -137,6 +137,7 @@ export function createCharacterMotion(entity, model) {
   const gripErrors = [], feetErrors = [];
   const mixer = model.animations?.some((clip) => clip.name === "Walk") ? new AnimationMixer(model) : null;
   const actions = new Map();
+  const capturedPose = records.map(record=>({q:record.node.quaternion.clone(),p:record.node.position.clone()}));
   const closedFingers = new Map();
   let activeClip = "Idle";
   if (mixer) {
@@ -165,7 +166,7 @@ export function createCharacterMotion(entity, model) {
     let next = input.activity?.clip ?? (input.inVehicle ? "Drive" : !grounded ? lastVertical > 0 ? "Jump" : "Fall"
       : input.attack > 0 ? input.attackKind === "strong" ? "StrongPunch" : "Punch"
         : landing > 0.2 ? "Land" : input.crouch ? rawSpeed > 0.08 ? "CrouchWalk" : "Crouch"
-          : rawSpeed > 6 && !held ? "Sprint" : rawSpeed > 0.08 ? input.staff ? 'WalkFormal' : "Walk" : input.social ? 'Talk' : "Idle");
+          : locomotionRun && !held ? "Sprint" : rawSpeed > 0.08 ? input.staff ? 'WalkFormal' : "Walk" : input.social ? 'Talk' : "Idle");
     if (!actions.has(next)) next = "Idle";
     if (next !== activeClip || (input.activity && input.activity.id !== lastActivityId)) {
       const previous = actions.get(activeClip);
@@ -181,9 +182,9 @@ export function createCharacterMotion(entity, model) {
       const weight = damp(action.getEffectiveWeight(), name === next ? 1 : 0, 14, dt);
       action.setEffectiveWeight(weight);
       let rate = 1;
-      if (name === "Walk") rate = MathUtils.clamp(rawSpeed / 1.6, 0.45, 1.9);
+      if (name === "Walk") rate = MathUtils.clamp(speed / 1.6, 0.45, 1.9);
       if (name === 'WalkFormal') rate = MathUtils.clamp(rawSpeed / 1.15, 0.5, 1.6);
-      if (name === "Run" || name === "Sprint") rate = MathUtils.clamp(rawSpeed / 4.8, 0.7, 1.7);
+      if (name === "Run" || name === "Sprint") rate = MathUtils.clamp(speed / 4.8, 0.7, 1.7);
       if (name === "CrouchWalk") rate = MathUtils.clamp(rawSpeed / 1.3, 0.5, 1.6);
       if ((input.firstPerson || held || input.activity?.approach) && (name === "Walk" || name === "CrouchWalk") && localVelocity.z < -Math.abs(localVelocity.x) * 0.5) rate *= -1;
       if (name === "Punch" || name === "StrongPunch") rate = action.getClip().duration / (name === "Punch" ? 0.35 : 0.85);
@@ -228,7 +229,13 @@ export function createCharacterMotion(entity, model) {
     const gaitMoving = active && grounded && !input.inVehicle && gaitSpeed > 0.05;
     const started = gaitMoving && !wasMoving;
     moving = damp(moving, gaitMoving ? 1 : 0, 14, dt);
-    running = damp(running, rawSpeed > 6 && !held && !input.crouch ? 1 : 0, 9, dt);
+    // Hysteresis prevents walk/sprint clip resets on uneven frame times,
+    // braking and glancing collisions. Acceleration is already damped by gameplay.
+    if (!held && !input.crouch) {
+      if (speed > 5.8) locomotionRun = true;
+      else if (speed < 4.9) locomotionRun = false;
+    } else locomotionRun = false;
+    running = damp(running, locomotionRun ? 1 : 0, 9, dt);
     crouching = damp(crouching, input.crouch && !held && grounded ? 1 : 0, 12, dt);
     gripWeight = damp(gripWeight, held ? 1 : 0, 17, dt);
     if (gripWeight > 0.995) gripWeight = 1;
@@ -263,6 +270,14 @@ export function createCharacterMotion(entity, model) {
     const recorded = !!mixer;
     if (mixer) {
       recordedPose(step, input, held, rawSpeed);
+      // Filter the captured pose before contacts/IK, preserving a continuous
+      // body pose through clip changes, turns and uneven render intervals.
+      const blend=1-Math.exp(-28*step);
+      records.forEach((record,i)=>{
+        const prior=capturedPose[i];
+        prior.q.slerp(record.node.quaternion,blend);prior.p.lerp(record.node.position,blend);
+        record.node.quaternion.copy(prior.q);record.node.position.copy(prior.p);
+      });
       if (held) for (const record of records) if (/Index|Middle|Ring|Pinky|Thumb/.test(record.node.name)) {
         const closed = closedFingers.get(record.node); if (closed) record.node.quaternion.slerp(closed, gripWeight);
       }
@@ -400,11 +415,14 @@ export function createCharacterMotion(entity, model) {
         lowest = Math.min(lowest, leg.actual.y);
       }
       const floor = root.getWorldPosition(target).y + (legs[0]?.neutralContact.y || 0);
-      if (Number.isFinite(lowest)) model.position.y += floor - lowest;
+      // Ground the actual boot vertices below; a second independent correction
+      // from ankle markers made the torso bounce at support-foot changes.
       model.updateWorldMatrix(true, true);
       for (const leg of legs) if (leg) {
         leg.contact.getWorldPosition(leg.actual);
-        const supporting = leg.actual.y < floor + 0.055 && rawSpeed > 0.08;
+        // Fast locomotion uses the recorded toe-off, rather than repeatedly
+        // pinning/releasing an unreachable foot every frame at running speed.
+        const supporting = !locomotionRun && leg.actual.y < floor + 0.055 && rawSpeed > 0.08;
         if (supporting && !leg.wasStance) { leg.plant.copy(leg.actual).setY(floor); leg.end.getWorldQuaternion(leg.plantRotation); }
         leg.wasStance = supporting;
         if (supporting) {
@@ -430,8 +448,12 @@ export function createCharacterMotion(entity, model) {
       }
       const floor = root.getWorldPosition(target).y;
       const correction = floor + 0.004 - bottom;
-      model.position.y += correction / Math.max(rootScale.y, 1e-6);
-      soleClearance = bottom + correction - floor;
+      const desired = correction / Math.max(rootScale.y, 1e-6);
+      // Raise immediately to keep shoes out of the pavement; settle downward
+      // over time instead of snapping the entire skin at heel/toe transitions.
+      floorOffset = desired > floorOffset ? desired : Math.min(desired + 0.008, damp(floorOffset, desired, 18, dt));
+      model.position.y += floorOffset;
+      soleClearance = bottom + floorOffset * rootScale.y - floor;
       model.updateMatrixWorld(true);
     } else soleClearance = null;
 
@@ -494,7 +516,8 @@ export function createCharacterMotion(entity, model) {
     lastFacing = root.rotation.y;
     lastGrounded = true;
     lastVertical = 0;
-    lastVelocity.set(0, 0, 0); bodyLean = headTurn = 0; lastActivityId = null;
+    lastVelocity.set(0, 0, 0); bodyLean = headTurn = floorOffset = 0; lastActivityId = null; locomotionRun=false;
+    records.forEach((record,i)=>{capturedPose[i].q.copy(record.node.quaternion);capturedPose[i].p.copy(record.node.position);});
     wasMoving = false;
     model.updateWorldMatrix(true, true);
     for (const leg of legs) if (leg) {

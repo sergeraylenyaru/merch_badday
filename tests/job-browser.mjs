@@ -54,7 +54,7 @@ export async function walkTo(page, x, z, tolerance = 0.35, maxSteps = 160) {
     const dx = x - p.x, dz = z - p.z;
     if (Math.hypot(dx, dz) < tolerance) return;
     const forward = -Math.sin(yaw) * dx - Math.cos(yaw) * dz, side = Math.cos(yaw) * dx - Math.sin(yaw) * dz;
-    const keys = [];
+    const keys = ['ShiftLeft'];
     if (Math.abs(forward) > Math.max(.04, Math.abs(side) * .4142)) keys.push(forward > 0 ? 'KeyW' : 'KeyS');
     if (Math.abs(side) > Math.max(.04, Math.abs(forward) * .4142)) keys.push(side > 0 ? 'KeyD' : 'KeyA');
     await hold(page, keys, Math.hypot(dx, dz) < 0.9 ? 0.04 : 0.17);
@@ -67,7 +67,7 @@ function path(start, goal, obstacles) {
   const minZ = start.z - Math.ceil((Math.max(0, start.z - goal.z) + margin) / step) * step;
   const width = Math.ceil((Math.abs(start.x - goal.x) + margin * 2) / step) + 2;
   const height = Math.ceil((Math.abs(start.z - goal.z) + margin * 2) / step) + 2;
-  const blocked = (point) => point.x < -124.5 || point.x > 164.5 || point.z < -124.5 || point.z > 164.5 || obstacles.some((box) => circleIntersectsBox(point.x, point.z, 0.36, box));
+  const blocked = (point) => point.x < -247 || point.x > 249 || point.z < -137 || point.z > 103 || obstacles.some((box) => circleIntersectsBox(point.x, point.z, 0.36, box));
   const visible = (a, b) => {
     const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.18));
     for (let i = 1; i <= n; i++) if (blocked({ x: a.x + (b.x - a.x) * i / n, z: a.z + (b.z - a.z) * i / n })) return false;

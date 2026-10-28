@@ -1,3 +1,4 @@
+import { WORK_STOPS, START } from './city/reference-layout.js';
 import {makeShift,urgentReward,career,remember} from './city/shift.js';
 import { JOBS, newJob, jobDone, isShopUnlocked } from './jobs/catalog.js';
 import { newPlanogram } from './jobs/match3.js';
@@ -88,14 +89,18 @@ export const SHOPS = [
   name,
   npc,
   description: JOBS[i].description,
-  x,
-  z,
+  x: WORK_STOPS[i].x,
+  z: WORK_STOPS[i].z,
+  code: WORK_STOPS[i].code,
   color,
   required,
   task: JOBS[i].type,
 }));
 export const freshState = () => ({
   version: 1,
+  cityVersion: 2,
+  overtime: false,
+  wantedElapsed: 0,
   shift: {...makeShift(),upgrades:{...career().upgrades}},
   career: career(),
   missionVersion: 2,
@@ -113,7 +118,7 @@ export const freshState = () => ({
   energy: 0,
   ending: null,
   selected: 0,
-  position: { x: -42, z: 34 },
+  position: {...START},
   shops: SHOPS.map((shop) => ({
     carts: 0,
     done: false,
@@ -192,6 +197,10 @@ export function load(storage = localStorage) {
       if(s.shops.length===8&&Array.isArray(v.vehicles)){v.vehicles=[...v.vehicles];v.vehicles.splice(8,0,null);}
       const migrating = s.missionVersion !== 2;
       v.missionVersion = 2;
+      if (s.cityVersion !== 2) {
+        v.cityVersion = 2; v.position = {...START}; v.carts=[]; v.vehicles=[]; v.carrying=null;
+      }
+      v.wantedElapsed = Number.isFinite(v.wantedElapsed) ? v.wantedElapsed : 0;
       if (!v.shift?.order || v.shift.order.length !== 9) v.shift = makeShift();
       if (!v.career?.loyalty || v.career.loyalty.length !== 9) v.career=career();
       v.shift.upgrades={...v.shift.upgrades,...v.career.upgrades};

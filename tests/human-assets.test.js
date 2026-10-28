@@ -130,3 +130,12 @@ test('actual deformed boots stay above a raised floor through walking, sprinting
   motion.dispose();
   library.dispose();
 });
+
+test('recorded sprint stays continuous around the speed boundary instead of restarting clips each frame', async()=>{
+ const source=await load('merch-male');
+ const library=new AssetLibrary({human:{url:'fixture:continuous'}},{loader:{loadAsync:async()=>source},logger:{info(){},warn(){}}});await library.preload();
+ const model=library.instantiate('human',{height:2.1}),root=new Group();root.add(model);const motion=createCharacterMotion({mesh:root},model);
+ for(let frame=0;frame<80;frame++){root.position.z+=6.8/60;motion.update(1/60,{grounded:true,velocity:new Vector3(0,0,6.8)});}
+ for(let frame=0;frame<90;frame++){const speed=6+Math.sin(frame*1.7)*.15,dt=frame%3?1/60:1/30;root.position.z+=speed*dt;motion.update(dt,{grounded:true,velocity:new Vector3(0,0,speed)});assert.equal(motion.diagnostics.animation.clip,'Sprint');assert.ok(motion.diagnostics.soleClearance>=0&&motion.diagnostics.soleClearance<.016);}
+ motion.reset();assert.equal(motion.diagnostics.animation.clip,'Idle');motion.dispose();library.dispose();
+});

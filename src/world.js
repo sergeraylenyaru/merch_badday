@@ -1,9 +1,10 @@
-import {createBoroughs} from './city/boroughs.js';
+import {createReferenceCity, buildReferenceTerrain, isReferenceWater} from './city/reference-city.js';
+import {MAP, point, pixel, START, ROADS} from './city/reference-layout.js';
 import * as T from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
 import { SHOPS } from "./state.js";
 import { createVisuals } from "./visuals/index.js";
-import { PLAYER_SHAPE, AVENUES, buildingPlot, circleIntersectsBox, boxesIntersect, vehicleBox } from "./spatial.js";
+import { PLAYER_SHAPE, circleIntersectsBox, boxesIntersect, vehicleBox } from "./spatial.js";
 import { createJobWorld } from './jobs/world.js';
 import { createCartBody } from './physics/cart.js';
 export async function createWorld(scene, state) {
@@ -65,11 +66,11 @@ export async function createWorld(scene, state) {
     visualBucket?.push(p);
     return p;
   }
-  const ground = box(20, -0.5, 20, 300, 1, 300, "#708666");
+  const ground = box(0, -0.5, 0, 550, 1, 330, "#708666");
   const gb = physics.createRigidBody(
-    RAPIER.RigidBodyDesc.fixed().setTranslation(20, -0.5, 20),
+    RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.5, 0),
   );
-  physics.createCollider(RAPIER.ColliderDesc.cuboid(150, 0.5, 150), gb);
+  physics.createCollider(RAPIER.ColliderDesc.cuboid(275, 0.5, 165), gb);
   function surface(x, z, width, depth, height) {
     surfaces.push({ x, z, w: width / 2, d: depth / 2, height });
     const body = physics.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x, height / 2, z));
@@ -81,20 +82,7 @@ export async function createWorld(scene, state) {
       height = Math.max(height, surface.height);
     return height;
   }
-  for (const v of AVENUES) {
-    surface(v, 20, 15, 270, 0.05);
-    surface(20, v, 270, 15, 0.05);
-    box(v, 0.015, 20, 15, 0.06, 270, "#3d484b");
-    box(20, 0.02, v, 270, 0.06, 15, "#3d484b");
-    for (let j = -105; j < 155; j += 10) {
-      box(v, 0.052, j, 0.22, 0.002, 4, "#e5dbb6");
-      box(j, 0.052, v, 4, 0.002, 0.22, "#e5dbb6");
-    }
-    for (let j = -100; j < 145; j += 32) {
-      box(v + 10, 2.5, j, 0.18, 5, 0.18, "#34433e");
-      box(v + 9.2, 5, j, 2, 0.15, 0.5, "#e9c486");
-    }
-  }
+  buildReferenceTerrain({box},scene);
   function human(x, z, color, kind = "civilian", shop = -1) {
     const g = new T.Group();
     const torso = new T.Mesh(new T.BoxGeometry(0.75, 1, 0.45), mat(color));
@@ -283,47 +271,33 @@ export async function createWorld(scene, state) {
     label("КОФЕ", x + 17, 3, z + 4, "#ffe5a1", 0.9);
   }
   visualBucket = null;
-  vehicles.push(car(-21, 35, 2, vehicles.length));
+  vehicles.push(car(START.x+6, START.z+5, 2, vehicles.length));
   for (let i = 0; i < 6; i++) {
-    const v = car(-21, -90 + i * 36, i % 4, vehicles.length, true);
+    const p = point(70+i*245,340);
+    const v = car(p.x, p.z, i % 4, vehicles.length, true);
     if(i===0){v.visualModel="suv";v.displayName="Кроссовер";}
     vehicles.push(v);
   }
   for (let i = 0; i < 24; i++) {
-    const x = [-29, 46, 69][i % 3],
-      z = -85 + Math.floor(i / 3) * 30;
+    const shop=SHOPS[i%9],x=shop.x+(i%2?20:-20),z=shop.z+14;
     people.push(
       human(x, z, ["#cb985c", "#758eb2", "#a77d91", "#94a774"][i % 4]),
     );
   }
   for (let i = 0; i < 3; i++) {
-    const p = human(-110 + i * 15, -95, "#577d9a", "police");
+    const loc=point([220,800,1450][i],380);
+    const p = human(loc.x,loc.z,"#577d9a", "police");
     people.push(p);
   }
-  for (let i = 0; i < 34; i++) {
-    const x = -116 + (i % 7) * 40,
-      z = -113 + Math.floor(i / 7) * 58;
-    if (SHOPS.some((s) => Math.hypot(s.x - x, s.z - z) < 25)) continue;
-    if (AVENUES.some((road) => Math.abs(x - road) < 10.5 || Math.abs(z - road) < 10.5)) continue;
-    box(x, 1.6, z, 0.5, 3.2, 0.5, "#6d6750", true);
-    const tree = new T.Mesh(new T.IcosahedronGeometry(3, 0), mat("#4c7557"));
-    tree.position.set(x, 4, z);
-    scene.add(tree);
-  }
   for (let i = 0; i < 4; i++) {
-    const x = -90 + i * 65,
-      z = 126;
+    const {x,z}=point(...[[200,700],[800,710],[1450,600],[900,150]][i]);
     const m = box(x, 0.8, z, 0.8, 0.8, 0.8, "#e8c568");
     secrets.push({ mesh: m, taken: false });
   }
-  // A bus shelter and benches along the avenue.
-  box(43, 2.6, 34, 3, 0.3, 9, "#6b938b");
-  box(44.3, 1.3, 34, 0.15, 2.5, 9, "#98b1a1");
-  box(43, 0.65, 34, 1.3, 0.3, 6, "#af9871", true);
-  label("ОСТАНОВКА · 08", 43, 3.3, 34, "#f7e6b9", 1.5);
   const policeVehicles = [];
   for (let i = 0; i < 3; i++) {
-    const v = car(-108 + i * 10, -112, 2, vehicles.length);
+    const loc=point([220,800,1450][i],385);
+    const v = car(loc.x,loc.z,2,vehicles.length);
     v.police = true;
     const light = new T.Mesh(new T.BoxGeometry(1.2, 0.2, 0.5), mat("#517db7"));
     light.position.set(0, 2.5, 0);
@@ -332,10 +306,11 @@ export async function createWorld(scene, state) {
     policeVehicles.push(v);
     vehicles.push(v);
   }
-  const rival = car(8, 130, 1, vehicles.length, true);
+  const rivalStart=point(200,385);
+  const rival = car(rivalStart.x,rivalStart.z,1,vehicles.length,true);
   rival.rival = true;
   vehicles.push(rival);
-  label("КОЛЛЕГА ДИМА", 8, 4, 130, "#edda9b", 1);
+  label("КОЛЛЕГА ДИМА", rivalStart.x, 4, rivalStart.z, "#edda9b", 1);
   // Keep pre-existing IDs stable for saved games; extra cars replace the
   // formerly decorative, non-interactive sedans on each shop's left bay.
   for (const shop of SHOPS) vehicles.push(car(shop.x - 17, shop.z + 12, shop.id % 2 ? 0 : 2, vehicles.length));
@@ -356,7 +331,8 @@ export async function createWorld(scene, state) {
   for (const person of [...people, player]) person.mesh.position.y = groundHeight(person.mesh.position.x, person.mesh.position.z);
   for (const v of vehicles) v.mesh.position.y = groundHeight(v.mesh.position.x, v.mesh.position.z);
   function blocked(x, z, r = PLAYER_SHAPE.radius, ignoreCar = null) {
-    if (x < -125 || x > 165 || z < -125 || z > 165) return true;
+    const p=pixel(x,z);
+    if(p.x<8||p.x>1664||p.y<8||p.y>930||isReferenceWater(p.x,p.y))return true;
     if (
       blockers.some(
         (b) => b.enabled !== false && circleIntersectsBox(x, z, r, b),
@@ -373,7 +349,7 @@ export async function createWorld(scene, state) {
     const shape = vehicleBox(vehicle, x, z, heading);
     const c = Math.abs(Math.cos(heading)), s = Math.abs(Math.sin(heading));
     const rx = c * shape.w + s * shape.d, rz = s * shape.w + c * shape.d;
-    if (x - rx < -125 || x + rx > 165 || z - rz < -125 || z + rz > 165) return true;
+    for(const dx of [-rx,rx])for(const dz of [-rz,rz]){const p=pixel(x+dx,z+dz);if(p.x<8||p.x>1664||p.y<8||p.y>930||isReferenceWater(p.x,p.y))return true;}
     return blockers.some((b) => b.enabled !== false && boxesIntersect(shape, b)) || vehicles.some((v) => v !== vehicle && v.mesh.visible
       && !(v.police && state.wanted < 3) && boxesIntersect(shape, vehicleBox(v)));
   }
@@ -399,11 +375,13 @@ export async function createWorld(scene, state) {
   };
   // Rendering supplies measured vehicle extents. Entity IDs, transforms,
   // interaction targets and physical bodies remain owned by the world.
-  world.boroughs = createBoroughs(scene,world,{human,car,label});
+  world.boroughs = await createReferenceCity(scene,world,{human,car,label});
   world.visuals = await createVisuals(scene, world, shopDecor);
   world.jobs = createJobWorld(scene, world, state);
   for(const cart of carts) cart.mesh.scale.set(.74,.84,.74);
-  world.streetObstructions = blockers.filter((blocker) => AVENUES.some((road) =>
-    boxesIntersect(blocker, { x: road, z: 20, w: 7.5, d: 135 }) || boxesIntersect(blocker, { x: 20, z: road, w: 135, d: 7.5 })));
+  world.streetObstructions = blockers.filter(blocker=>ROADS.some(([a,b,c,d,width])=>{
+    const start=point(a,b),end=point(c,d);
+    return boxesIntersect(blocker,{x:(start.x+end.x)/2,z:(start.z+end.z)/2,w:width*MAP.scale/2,d:Math.hypot(end.x-start.x,end.z-start.z)/2,heading:Math.atan2(end.x-start.x,end.z-start.z)});
+  }));
   return world;
 }

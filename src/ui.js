@@ -1,3 +1,4 @@
+import {MAP,pixel,districtAt,WORK_STOPS} from './city/reference-layout.js';
 import { BOROUGHS, boroughFor, LOCAL_SHOPS } from './city/layout.js';
 import { SHOPS } from "./state.js";
 import { JOBS, EXPIRY_BATCHES, PRICE_ITEMS, jobDone, jobProgress, isShopUnlocked } from './jobs/catalog.js';
@@ -8,6 +9,7 @@ export function createUI(state, actions) {
   document.body.append(root);
   root.innerHTML = `<div class="hud hidden" id="hud"><div class="topline"><div><div class="brand">ПЛОХОЙ ДЕНЬ МЕРЧА<small>ЕЩЁ ОДНА ОБЫЧНАЯ СМЕНА</small></div><div class="objective panel"><div class="eyebrow">РАБОЧИЙ МАРШРУТ <span id="routeCount"></span></div><h2 id="targetName"></h2><p id="targetDesc"></p><div class="progressbar"><i id="routeBar"></i></div><div class="row"><span id="cartCount"></span><span id="distance"></span></div></div></div><div class="clock"><strong id="clock">08:00</strong><p>ДО КОНЦА СМЕНЫ <span id="remaining"></span></p><div class="wanted" id="wanted">☆☆☆☆☆</div><div class="speed" id="speed"></div></div></div><div class="bottomline"><div class="bottomleft"><div class="mapbox panel"><canvas id="minimap" width="300" height="300"></canvas><div class="mapcaption"><span>СЕВЕРНЫЙ РАЙОН</span><span>↑ N</span></div></div><div class="statbox panel"><div class="eyebrow">МЕРЧЕНДАЙЗЕР · СТАЖЁР</div><div class="stat"><span>ЗДОРОВЬЕ</span><div class="meter"><i id="hpBar"></i></div><span id="hp"></span></div><div class="stat"><span>СТРЕСС</span><div class="meter stress"><i id="stressBar"></i></div><span id="stress"></span></div><div class="row" style="font-size:11px;color:#d8c28e" id="money"></div></div></div><div class="controls"><span><b>WASD</b>движение</span><span><b>E</b>действие</span><span><b>R</b>тележка</span><span><b>M</b>телефон</span><span><b>ESC</b>пауза</span></div></div></div><div class="crosshair hidden" id="crosshair"></div><div class="context hidden" id="context"><span></span></div><div class="toast" id="toast"></div><div id="overlay"></div><div class="loading" id="loading">СОБИРАЕМ ТЕЛЕЖКИ…</div>`;
   const $ = (id) => document.getElementById(id);
+  const mapImage=new Image();mapImage.src=`${import.meta.env.BASE_URL}maps/city-reference.png`;
   let toastTimer,
     tab = "Маршрут", overlayEpoch = 0;
   function toast(t) {
@@ -19,45 +21,20 @@ export function createUI(state, actions) {
   function map(canvas, world) {
     const ctx = canvas.getContext("2d"),
       w = canvas.width;
-    ctx.fillStyle = "#304839";
-    ctx.fillRect(0, 0, w, w);
-    const p = (x) => ((x + 130) / 300) * w;
-    ctx.strokeStyle = "#76816b";
-    ctx.lineWidth = w * 0.045;
-    for (const v of [-17.5, 57.5]) {
-      ctx.beginPath();
-      ctx.moveTo(p(v), 0);
-      ctx.lineTo(p(v), w);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, p(v));
-      ctx.lineTo(w, p(v));
-      ctx.stroke();
-    }
-    for (const s of LOCAL_SHOPS) { ctx.fillStyle="#68746e"; ctx.fillRect(p(s.x)-3,p(s.z)-3,6,6); }
-    SHOPS.forEach((s) => {
-      ctx.fillStyle = state.shops[s.id].done
-        ? "#95b68c"
-        : !isShopUnlocked(state, s.id) ? '#606967' : s.id === state.selected
-          ? "#f1c76d"
-          : "#bbbea0";
-      ctx.fillRect(p(s.x) - 7, p(s.z) - 7, 14, 14);
-      ctx.fillStyle = "#23372a";
-      ctx.font = `bold ${Math.round(w * 0.035)}px Arial`;
-      ctx.textAlign = "center";
-      ctx.fillText(String(s.id + 1), p(s.x), p(s.z) + 4);
-    });
-    if (world)
-      for (const n of world.people.filter(
-        (n) => n.kind === "police" && state.wanted > 0,
-      )) {
-        ctx.fillStyle = "#90b9df";
-        ctx.fillRect(p(n.mesh.position.x) - 3, p(n.mesh.position.z) - 3, 6, 6);
-      }
-    ctx.fillStyle = "#fff0bd";
-    ctx.beginPath();
-    ctx.arc(p(state.position.x), p(state.position.z), 5, 0, Math.PI * 2);
-    ctx.fill();
+    const h=canvas.height,mini=canvas.id==='minimap';
+    const player=pixel(state.position.x,state.position.z);
+    // The same affine transform positions models, markers and the navigator.
+    const span=mini?760:MAP.width,zoom=w/span;
+    const originX=mini?Math.max(0,Math.min(MAP.width-span,player.x-span/2)):0;
+    const visibleHeight=h/zoom;
+    const originY=mini?Math.max(0,Math.min(MAP.height-visibleHeight,player.y-visibleHeight/2)):0;
+    const xy=(x,z)=>{const p=pixel(x,z);return {x:(p.x-originX)*zoom,y:(p.y-originY)*zoom};};
+    ctx.fillStyle='#294b56';ctx.fillRect(0,0,w,h);
+    if(mapImage.complete&&mapImage.naturalWidth)ctx.drawImage(mapImage,-originX*zoom,-originY*zoom,MAP.width*zoom,MAP.height*zoom);
+    const target=xy(SHOPS[state.selected].x,SHOPS[state.selected].z),me=xy(state.position.x,state.position.z);
+    ctx.setLineDash([4,5]);ctx.strokeStyle='#ffe18b';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(me.x,me.y);ctx.lineTo(target.x,target.y);ctx.stroke();ctx.setLineDash([]);
+    for(const shop of SHOPS){const p=xy(shop.x,shop.z);ctx.beginPath();ctx.arc(p.x,p.y,shop.id===state.selected?10:7,0,Math.PI*2);ctx.fillStyle=state.shops[shop.id].done?'#78bc77':!isShopUnlocked(state,shop.id)?'#647383':shop.id===state.selected?'#ffd46a':'#1c88b9';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#102331';ctx.font='bold 9px Arial';ctx.textAlign='center';ctx.fillText(shop.code,p.x,p.y+3);}
+    ctx.save();ctx.translate(me.x,me.y);ctx.rotate(-(world?.player.mesh.rotation.y??0)+Math.PI);ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(6,6);ctx.lineTo(0,3);ctx.lineTo(-6,6);ctx.closePath();ctx.fillStyle='#fff6c8';ctx.fill();ctx.strokeStyle='#102331';ctx.lineWidth=2;ctx.stroke();ctx.restore();
   }
   function update(world, vehicle) {
     const s = SHOPS[state.selected],
@@ -69,10 +46,10 @@ export function createUI(state, actions) {
     $("clock").textContent =
       `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
     $("remaining").textContent =
-      `${Math.max(0, Math.ceil((1500 - state.time) / 60))} МИН`;
+      state.overtime ? "СВОБОДНЫЙ РЕЖИМ" : `${Math.max(0, Math.ceil((1500 - state.time) / 60))} МИН`;
     $("routeCount").textContent = `${done} / ${SHOPS.length}`;
     $("routeBar").style.width = `${(done / SHOPS.length) * 100}%`;
-    document.querySelector(".mapcaption span").textContent = BOROUGHS[state.position.x < -17.5 ? 0 : state.position.x < 57.5 ? 1 : 2].name;
+    document.querySelector(".mapcaption span").textContent = BOROUGHS[districtAt(state.position.x)].name;
     $("targetName").textContent =
       `${String(s.id + 1).padStart(2, "0")} / ${s.name}`;
     $("targetDesc").textContent = p.done ? 'Визит подтверждён. Выберите следующую точку в телефоне.'
@@ -121,7 +98,7 @@ export function createUI(state, actions) {
       shop.done || shop.carts > 0 || shop.badge || shop.shelf || shop.photo,
     );
     show(
-      `<div class="veil"><div class="intro"><div class="tag">ГОРОДСКАЯ ПЕСОЧНИЦА · ПЕРВАЯ СМЕНА</div><h1>ПЛОХОЙ ДЕНЬ<br><em>МЕРЧА.</em></h1><p class="subtitle">Девять магазинов. Один мерчендайзер.<br>Ноль причин задерживаться на работе.</p><p>Паркуйся, разгружай товар, решай полочные головоломки и договаривайся с директорами. В каждой точке своя работа. Или посмотри, насколько плохим может стать этот день.</p><div class="actions"><button class="primary" id="begin">${hasProgress ? "ПРОДОЛЖИТЬ СМЕНУ" : "ВЫЙТИ НА МАРШРУТ"} ↗</button>${hasProgress ? '<button class="secondary" id="newShift" title="Сбросить текущий маршрут и начать с 08:00">НОВАЯ СМЕНА</button>' : ""}<button class="secondary" id="how">КАК ВЫЖИТЬ?</button></div><div class="introfooter"><div><b>08</b>ТОРГОВЫХ ТОЧЕК</div><div><b>25</b>МИНУТ ДО КОНЦА ДНЯ</div><div><b>∞</b>НЕУДАЧНЫХ РЕШЕНИЙ</div></div></div><div class="buildtag">СЕВЕРНЫЙ РАЙОН / У ДОМА</div></div>`,
+      `<div class="veil"><div class="intro"><div class="tag">ГОРОДСКАЯ ПЕСОЧНИЦА · ПЕРВАЯ СМЕНА</div><h1>ПЛОХОЙ ДЕНЬ<br><em>МЕРЧА.</em></h1><p class="subtitle">Девять магазинов. Один мерчендайзер.<br>Ноль причин задерживаться на работе.</p><p>Паркуйся, разгружай товар, решай полочные головоломки и договаривайся с директорами. В каждой точке своя работа. Или посмотри, насколько плохим может стать этот день.</p><div class="actions"><button class="primary" id="begin">${hasProgress ? "ПРОДОЛЖИТЬ СМЕНУ" : "ВЫЙТИ НА МАРШРУТ"} ↗</button>${hasProgress ? '<button class="secondary" id="newShift" title="Сбросить текущий маршрут и начать с 08:00">НОВАЯ СМЕНА</button>' : ""}<button class="secondary" id="how">КАК ВЫЖИТЬ?</button></div><div class="introfooter"><div><b>09</b>ТОРГОВЫХ ТОЧЕК</div><div><b>25</b>МИНУТ ДО КОНЦА ДНЯ</div><div><b>∞</b>НЕУДАЧНЫХ РЕШЕНИЙ</div></div></div><div class="buildtag">СЕВЕРНЫЙ РАЙОН / У ДОМА</div></div>`,
     );
     $("begin").onclick = actions.resume;
     $("how").onclick = () => pause(true);
@@ -129,7 +106,7 @@ export function createUI(state, actions) {
   }
   function pause(help = false) {
     show(
-      `<div class="modal"><div class="window settings"><div class="eyebrow">${help ? "ПАМЯТКА МЕРЧЕНДАЙЗЕРА" : "КОФЕ-БРЕЙК"}</div><h2>${help ? "Как пережить эту смену" : "Смена на паузе"}</h2><p>WASD — ходить или вести машину; Shift — бег / ручной тормоз; Space — прыжок / тормоз; Ctrl — присесть; C — камера. Мышь — обзор; курсор автоматически скрыт в игре и появляется в меню, телефоне и диалогах.</p><p>E — разговор, полка, кофе, сесть / выйти из машины. R — взяться за ручку / отпустить тележку; в фургоне — загрузить / выгрузить. С тележкой WASD — движение, мышь или стрелки ← → — поворот. F / ЛКМ — удар, G — сильный удар, Q — блок. M — телефон; Tab — карта.</p><p>Работа каждой точки указана в телефоне: парковка, три в ряд, склад, ремонт, разгрузка, сроки, ценники и поиск ТСД. ГиперМакс открывается после пяти визитов. Директоры обходят зал — найдите их после задания. Обычные тележки в жёлтой зоне дают бонус, они не обязательны для всех магазинов. Прогресс сохраняется автоматически; телефон и диалоги ставят игру на паузу.</p><label>Чувствительность мыши<input id="sensitivity" type="range" min="0.2" max="2" step="0.1" value="${actions.settings.sensitivity}"></label><label>Громкость<input id="volume" type="range" min="0" max="1" step="0.05" value="${actions.settings.volume}"></label><label>Качество<select id="quality"><option value="low">Экономное</option><option value="high">Высокое</option></select></label><div class="actions"><button class="primary" id="resume">${help ? "ПОНЯТНО, НА МАРШРУТ" : "ПРОДОЛЖИТЬ"}</button><button class="secondary" id="finish">Завершить день</button><button class="secondary" id="quit">Бросить маршрут</button><button class="secondary" id="new">Новая смена</button></div></div></div>`,
+      `<div class="modal"><div class="window settings"><div class="eyebrow">${help ? "ПАМЯТКА МЕРЧЕНДАЙЗЕРА" : "КОФЕ-БРЕЙК"}</div><h2>${help ? "Как пережить эту смену" : "Смена на паузе"}</h2><p>WASD — ходить или вести машину; Бег по умолчанию; удерживайте Shift — ходьба / ручной тормоз; Space — прыжок / тормоз; Ctrl — присесть; C — камера. Мышь — обзор; курсор автоматически скрыт в игре и появляется в меню, телефоне и диалогах.</p><p>E — разговор, полка, кофе, сесть / выйти из машины. R — взяться за ручку / отпустить тележку; в фургоне — загрузить / выгрузить. С тележкой WASD — движение, мышь или стрелки ← → — поворот. F / ЛКМ — удар, G — сильный удар, Q — блок. M — телефон; Tab — карта.</p><p>Работа каждой точки указана в телефоне: парковка, три в ряд, склад, ремонт, разгрузка, сроки, ценники и поиск ТСД. ГиперМакс открывается после пяти визитов. Директоры обходят зал — найдите их после задания. Обычные тележки в жёлтой зоне дают бонус, они не обязательны для всех магазинов. Прогресс сохраняется автоматически; телефон и диалоги ставят игру на паузу.</p><label>Чувствительность мыши<input id="sensitivity" type="range" min="0.2" max="2" step="0.1" value="${actions.settings.sensitivity}"></label><label>Громкость<input id="volume" type="range" min="0" max="1" step="0.05" value="${actions.settings.volume}"></label><label>Качество<select id="quality"><option value="low">Экономное</option><option value="high">Высокое</option></select></label><div class="actions"><button class="primary" id="resume">${help ? "ПОНЯТНО, НА МАРШРУТ" : "ПРОДОЛЖИТЬ"}</button><button class="secondary" id="finish">Завершить день</button><button class="secondary" id="quit">Бросить маршрут</button><button class="secondary" id="new">Новая смена</button></div></div></div>`,
     );
     $("quality").value = actions.settings.quality;
     $("quality").onchange = (e) => actions.configure("quality", e.target.value);
@@ -148,7 +125,7 @@ export function createUI(state, actions) {
     if (tab === "Маршрут")
       body = [...SHOPS].sort((a,b)=>state.shift.order.indexOf(a.id)-state.shift.order.indexOf(b.id)).map(
         (s) =>
-          `<button class="shoprow" data-shop="${s.id}"><span class="n">${String(s.id + 1).padStart(2, "0")}</span><strong>${boroughFor(s.id).name} · ${s.name} ${state.shops[s.id].done ? "✓" : state.selected === s.id ? "← ЦЕЛЬ" : ""}</strong><small>${state.shift.urgent.includes(s.id) ? "СРОЧНО +80 ₽ ДО "+Math.floor(state.shift.deadlines[s.id]/60)+" МИН · " : ""}ДОВЕРИЕ ${state.career.loyalty[s.id]} · ${JOBS[s.id].title} · ${jobProgress(state, s.id)}</small></button>`,
+          `<button class="shoprow" data-shop="${s.id}"><span class="n">${String(s.id + 1).padStart(2, "0")}</span><strong>${boroughFor(s.id).name} · ${s.code} · ${s.name} ${state.shops[s.id].done ? "✓" : state.selected === s.id ? "← ЦЕЛЬ" : ""}</strong><small>${state.shift.urgent.includes(s.id) ? "СРОЧНО +80 ₽ ДО "+Math.floor(state.shift.deadlines[s.id]/60)+" МИН · " : ""}ДОВЕРИЕ ${state.career.loyalty[s.id]} · ${JOBS[s.id].title} · ${jobProgress(state, s.id)}</small></button>`,
       ).join("");
     if (tab === "Сообщения")
       body = state.messages
@@ -158,9 +135,9 @@ export function createUI(state, actions) {
         .join("");
     if (tab === "Карта")
       body =
-        '<canvas id="bigmap" width="500" height="500"></canvas><p class="message">Жёлтый — цель · белый — вы · синий — полиция</p>';
+        '<canvas id="bigmap" width="668" height="376"></canvas><p class="message">Жёлтый — цель · стрелка — вы · C / P / O — рабочие точки. Пунктир — направление к цели.</p>';
     if (tab === "Показатели")
-      body = `<div class="message">Репутация: ${Math.round(state.reputation)} / 100<br>Стресс: ${Math.round(state.stress)} / 100<br>Деньги: ${state.money} ₽<br>Премия: ${state.bonus} ₽<br>Конфликты: ${state.conflicts}<br>Штрафы: ${state.fines} ₽<br>Закрыто: ${state.shops.filter((s) => s.done).length} / ${SHOPS.length}<br>Осталось: ${Math.ceil((1500 - state.time) / 60)} мин</div><div class="actions"><button id="energy" class="secondary">Энергетик · 70 ₽</button><button id="boots" class="secondary">Обувь для бега · 150 ₽ премии</button><button id="gloves" class="secondary">Перчатки для груза · 120 ₽ премии</button><button id="dimaDeal" class="secondary">Дима: договориться о сроках · 40 ₽</button></div>`;
+      body = `<div class="message">Репутация: ${Math.round(state.reputation)} / 100<br>Стресс: ${Math.round(state.stress)} / 100<br>Деньги: ${state.money} ₽<br>Премия: ${state.bonus} ₽<br>Конфликты: ${state.conflicts}<br>Штрафы: ${state.fines} ₽<br>Закрыто: ${state.shops.filter((s) => s.done).length} / ${SHOPS.length}<br>Осталось: ${Math.max(0,Math.ceil((1500 - state.time) / 60))} мин</div><div class="actions"><button id="energy" class="secondary">Энергетик · 70 ₽</button><button id="boots" class="secondary">Обувь для бега · 150 ₽ премии</button><button id="gloves" class="secondary">Перчатки для груза · 120 ₽ премии</button><button id="dimaDeal" class="secondary">Дима: договориться о сроках · 40 ₽</button></div>`;
     if (tab === "Фото")
       body = `<p class="message">Необязательный фотоотчёт: встаньте рядом с магазином. Фото сохраняет текущий вид камеры; задания у каждой точки свои.</p><button class="primary" id="takePhoto">СДЕЛАТЬ ФОТО</button><div id="photoResult"></div>`;
     show(
@@ -293,9 +270,10 @@ export function createUI(state, actions) {
   function shelf(shop) { planogram(shop); }
   function ending() {
     show(
-      `<div class="modal"><div class="window"><div class="eyebrow">СМЕНА ОКОНЧЕНА · ВЫ ЭТО ПЕРЕЖИЛИ</div><h2>${state.ending}</h2><p>Точек закрыто: ${state.shops.filter((s) => s.done).length} / ${SHOPS.length}<br>Тележек собрано: ${state.shops.reduce((n, s) => n + s.carts, 0)}<br>Репутация: ${Math.round(state.reputation)} · Стресс: ${Math.round(state.stress)}<br>Конфликтов: ${state.conflicts} · Штрафов: ${state.fines} ₽<br>Время в пути: ${Math.floor(state.time / 60)} мин ${Math.floor(state.time % 60)} сек</p><h2>Премия: ${Math.max(0, state.bonus - state.conflicts * 50)} ₽</h2><p>Региональный: «Спасибо за отчёт. Завтра тот же маршрут».</p><button class="primary" id="restart">ЕЩЁ ОДИН ПЛОХОЙ ДЕНЬ ↗</button></div></div>`,
+      `<div class="modal"><div class="window"><div class="eyebrow">СМЕНА ОКОНЧЕНА · ВЫ ЭТО ПЕРЕЖИЛИ</div><h2>${state.ending}</h2><p>Точек закрыто: ${state.shops.filter((s) => s.done).length} / ${SHOPS.length}<br>Тележек собрано: ${state.shops.reduce((n, s) => n + s.carts, 0)}<br>Репутация: ${Math.round(state.reputation)} · Стресс: ${Math.round(state.stress)}<br>Конфликтов: ${state.conflicts} · Штрафов: ${state.fines} ₽<br>Время в пути: ${Math.floor(state.time / 60)} мин ${Math.floor(state.time % 60)} сек</p><h2>Премия: ${Math.max(0, state.bonus - state.conflicts * 50)} ₽</h2><p>Региональный: «Спасибо за отчёт. Завтра тот же маршрут».</p><div class="actions"><button class="primary" id="freeRoam">ПРОДОЛЖИТЬ ГУЛЯТЬ ПО ГОРОДУ</button><button class="secondary" id="restart">НАЧАТЬ СНАЧАЛА ↗</button></div></div></div>`,
     );
     $("restart").onclick = actions.restart;
+    $("freeRoam").onclick = actions.freeRoam;
   }
   return {
     root,

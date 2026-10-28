@@ -1,3 +1,5 @@
+import {tickWanted,raiseWanted,freeRoam,runningSpeed,SHIFT_DURATION} from './city/gameplay.js';
+import {START,point} from './city/reference-layout.js';
 import {buyEquipment,dealWithDima} from './city/shift.js';
 import * as T from "three";
 import "@fontsource/manrope/cyrillic-400.css";
@@ -52,7 +54,6 @@ let world,
   vertical = 0,
   attack = 0,
   attackKind = "quick",
-  lastCrime = -100,
   arrest = 0,
   accumulator = 0,
   lastSave = 0,
@@ -143,10 +144,9 @@ function resume() {
   mouseCapture?.capture();
 }
 function crime(amount = 1) {
-  state.wanted = Math.min(5, Math.max(state.wanted, amount) + 0.35);
+  raiseWanted(state,amount);
   state.reputation -= 3;
   state.stress += 5;
-  lastCrime = state.time;
   normalize(state);
 }
 function initAudio() {
@@ -368,6 +368,7 @@ try {
     finish: () => end(),
     quit: () => end(true),
     restart,
+    freeRoam(){freeRoam(state);snapshot();resume();},
     talk,
     planogramSwap,
     resetPlanogram,
@@ -805,11 +806,7 @@ try {
             ? 1.7
             : held
               ? held.missionCargo ? 2.7 : 3.2
-              : keys.has("ShiftLeft")
-                ? state.energy > 0
-                  ? 10
-                  : state.shift.upgrades.boots ? 7.5 : 6.8
-                : 2.8) * (state.health < 25 ? 0.65 : 1);
+              : runningSpeed(state,keys.has("ShiftLeft")||keys.has("ShiftRight"))) * (state.health < 25 ? 0.65 : 1);
       let dx = -Math.sin(yaw) * forward + Math.cos(yaw) * side,
         dz = -Math.cos(yaw) * forward - Math.sin(yaw) * side;
       if (activity?.approach) { dx = activity.approach.x - pos.x; dz = activity.approach.z - pos.z; }
@@ -1101,10 +1098,10 @@ try {
         continue;
       }
       v.speed = 6;
-      v.mesh.position.z += dt * v.speed;
-      v.heading = 0;
-      v.mesh.rotation.y = 0;
-      if (v.mesh.position.z > 150) v.mesh.position.z = -115;
+      v.mesh.position.x += dt * v.speed;
+      v.heading = Math.PI/2;
+      v.mesh.rotation.y = v.heading;
+      if (v.mesh.position.x > point(1650,340).x) v.mesh.position.x = point(20,340).x;
       v.mesh.position.y = world.groundHeight(v.mesh.position.x, v.mesh.position.z);
       v.impactCooldown = Math.max(0, (v.impactCooldown || 0) - dt);
       if (!vehicle && v.impactCooldown === 0 && circleIntersectsBox(player.x, player.z, PLAYER_SHAPE.radius, vehicleBox(v))) {
@@ -1132,17 +1129,7 @@ try {
     }
     if (state.energy > 0) state._energyActive = true;
     state.stress += dt * 0.017;
-    if (
-      state.wanted > 0 &&
-      state.time - lastCrime > 25 &&
-      !world.people.some(
-        (n) =>
-          n.kind === "police" &&
-          n.mesh.position.distanceTo(world.player.mesh.position) < 30,
-      )
-    ) {
-      state.wanted = Math.max(0, state.wanted - dt * 0.1);
-    }
+    tickWanted(state,dt);
     if (state.time - lastMessage > 120) {
       lastMessage = state.time;
       message(
@@ -1196,12 +1183,12 @@ try {
         vehicle = null;
         world.player.mesh.visible = true;
       }
-      world.player.mesh.position.set(-42, 0, 34);
+      world.player.mesh.position.set(START.x, 0, START.z);
       held = null;
       message("Медпункт: −150 ₽ и потеря времени. Можно продолжать смену.");
     }
     normalize(state);
-    if (state.time >= 1500) {
+    if (state.time >= SHIFT_DURATION && !state.overtime) {
       end();
       return;
     }
@@ -1336,7 +1323,7 @@ try {
     marker.rotation.z = Math.PI;
     marker.visible = !state.shops[state.selected].done;
     atmosphere.update({
-      day: state.time / 1500,
+      day: Math.min(1,state.time / 1500),
       weather: state.weather,
       player: world.player.mesh.position,
       dt,

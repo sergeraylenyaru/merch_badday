@@ -13,6 +13,7 @@ await cp(new URL("dist/assets/", root), new URL("assets/", root), {
 await cp(new URL("dist/models/", root), new URL("models/", root), {
   recursive: true,
 });
+await cp(new URL("dist/maps/", root), new URL("maps/", root), { recursive: true });
 await cp(new URL("dist/index.html", root), new URL("index.html", root));
 await cp(new URL("dist/icon.svg", root), new URL("icon.svg", root));
 await writeFile(new URL(".nojekyll", root), "");
