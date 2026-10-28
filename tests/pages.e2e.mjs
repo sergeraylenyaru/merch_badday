@@ -58,8 +58,8 @@ try {
   const visuals = await page.evaluate(() => __MERCH__.visuals);
   assert.equal(visuals.assets.loaded, 17);
   assert.equal(models.length, 17);
-  assert.equal(visuals.districts.length, 8);
-  assert.equal(new Set(visuals.districts.map((d) => d.feature)).size, 8);
+  assert.equal(visuals.districts.length, 9);
+  assert.equal(new Set(visuals.districts.map((d) => d.feature)).size, 9);
   assert.deepEqual(await page.evaluate(() => __MERCH__.navigation.streetObstructions), []);
   assert.ok(models.some((r) => r.url.endsWith('/vehicles/van.glb')));
   assert.ok(models.some((r) => r.url.endsWith('/vehicles/truck.glb')));
@@ -96,7 +96,7 @@ try {
   page = await scenario(state);
   await page.waitForFunction(() => /Остановить и сесть/.test(document.querySelector('#context').innerText));
   await page.keyboard.press('KeyE');
-  await page.waitForFunction(() => __MERCH__.vehicles.some((v) => v.id === 9 && v.claimed && v.controlled));
+  await page.waitForFunction(() => __MERCH__.vehicles.some((v) => v.id === __MERCH__.state.shops.length + 1 && v.claimed && v.controlled));
   const stopped = await page.evaluate(() => __MERCH__.vehicles.find((v) => v.controlled));
   await advance(page, 0.4);
   assert.deepEqual(await page.evaluate(() => __MERCH__.vehicles.find((v) => v.controlled).position), stopped.position);
@@ -115,7 +115,7 @@ try {
   await page.click('#close'); await page.waitForFunction(() => __MERCH__.view.pointerLocked);
   await page.close();
   assert.deepEqual(errors, []);
-  console.log('PAGES ROOT /merch_badday/ / 17 GLBs / 8 SHOPS / FLOOR / CART / HANDS / POINTER / TRAFFIC / MATCH3 / JOB GATE PASS');
+  console.log('PAGES ROOT /merch_badday/ / 17 GLBs / 9 SHOPS / FLOOR / CART / HANDS / POINTER / TRAFFIC / MATCH3 / JOB GATE PASS');
 } finally {
   await browser?.close();
   await new Promise((resolve) => server.close(resolve));

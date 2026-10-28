@@ -64,7 +64,7 @@ try {
   browser = await chromium.launch({ executablePath: process.env.BROWSER_PATH || (existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined), headless: true,
     args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader'] });
   const profiles = new Set();
-  for (const shop of SHOPS) {
+  for (const shop of process.env.CITY_ONLY === "traffic" ? [] : SHOPS) {
     const state = freshState();
     state.position = { x: shop.x, z: shop.z + 8 };
     state.selected = shop.id;
@@ -93,7 +93,7 @@ try {
     console.log('SHOP ENTRANCE / FLOOR / STAFF / QUEST PASS', shop.id + 1, shop.name, district.feature);
     await context.close();
   }
-  assert.equal(profiles.size, 8);
+  if(process.env.CITY_ONLY !== "traffic") assert.equal(profiles.size, 9);
 
   // A real 62.5cm gap between the side wall and refrigerated case. The old
   // 1.3m blocking diameter made this visible route impossible to traverse.
@@ -114,54 +114,54 @@ try {
   state = freshState();
   state.position = { x: -23.2, z: -87 };
   ({ context, page } = await scenario(state, 'traffic-takeover'));
-  const initial = await page.evaluate(() => __MERCH__.vehicles.find((v) => v.id === 9));
-  await page.waitForFunction((z) => __MERCH__.vehicles.find((v) => v.id === 9).position[2] > z + 0.2, initial.position[2]);
+  const initial = await page.evaluate(() => __MERCH__.vehicles.find((v) => v.id === __MERCH__.state.shops.length + 1));
+  await page.waitForFunction((z) => __MERCH__.vehicles.find((v) => v.id === __MERCH__.state.shops.length + 1).position[2] > z + 0.2, initial.position[2]);
   await page.waitForFunction(() => /Остановить и сесть/.test(document.querySelector('#context').innerText));
   const health = await page.evaluate(() => __MERCH__.state.health);
   await page.keyboard.press('KeyE');
-  await page.waitForFunction(() => __MERCH__.vehicles.some((v) => v.id === 9 && v.claimed && v.controlled));
+  await page.waitForFunction(() => __MERCH__.vehicles.some((v) => v.id === __MERCH__.state.shops.length + 1 && v.claimed && v.controlled));
   const stopped = await page.evaluate(() => __MERCH__.vehicles.find((v) => v.controlled));
   await advance(page, 0.5);
   const still = await page.evaluate(() => __MERCH__.vehicles.find((v) => v.controlled));
   assert.deepEqual(still.position, stopped.position, 'traffic AI must stop controlling the occupied car');
   assert.equal(await page.evaluate(() => __MERCH__.state.health), health, 'no phantom collision with the occupied car');
   assert.ok(await page.evaluate(() => __MERCH__.state.wanted >= 1));
-  const wheelsBefore = await page.evaluate(() => __MERCH__.motion.vehicles.find((v) => v.id === 9).wheelAngles);
+  const wheelsBefore = await page.evaluate(() => __MERCH__.motion.vehicles.find((v) => v.id === __MERCH__.state.shops.length + 1).wheelAngles);
   await page.keyboard.down('KeyW');
   try { await advance(page, 0.65); } finally { await page.keyboard.up('KeyW'); }
   const driven = await page.evaluate(() => __MERCH__.vehicles.find((v) => v.controlled));
   assert.ok(driven.position[2] > stopped.position[2] + 0.5);
-  const wheelsAfter = await page.evaluate(() => __MERCH__.motion.vehicles.find((v) => v.id === 9).wheelAngles);
+  const wheelsAfter = await page.evaluate(() => __MERCH__.motion.vehicles.find((v) => v.id === __MERCH__.state.shops.length + 1).wheelAngles);
   assert.equal(wheelsAfter.length, 4);
   assert.ok(wheelsAfter.some((angle, i) => Math.abs(angle - wheelsBefore[i]) > 0.1));
   await page.screenshot({ path: `${artifacts}city-traffic-driving.png` });
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => !__MERCH__.vehicles.some((v) => v.controlled));
   grounded(await page.evaluate(() => __MERCH__.view));
-  const parked = await page.evaluate(() => __MERCH__.vehicles.find((v) => v.id === 9));
+  const parked = await page.evaluate(() => __MERCH__.vehicles.find((v) => v.id === __MERCH__.state.shops.length + 1));
   await advance(page, 0.5);
-  assert.deepEqual(await page.evaluate(() => __MERCH__.vehicles.find((v) => v.id === 9).position), parked.position);
+  assert.deepEqual(await page.evaluate(() => __MERCH__.vehicles.find((v) => v.id === __MERCH__.state.shops.length + 1).position), parked.position);
   await page.keyboard.press('KeyM'); // Actual save from the phone.
   await page.reload();
   await page.locator('#begin').waitFor();
-  const restored = await page.evaluate(() => __MERCH__.vehicles.find((v) => v.id === 9));
+  const restored = await page.evaluate(() => __MERCH__.vehicles.find((v) => v.id === __MERCH__.state.shops.length + 1));
   assert.equal(restored.claimed, true);
   assert.deepEqual(restored.position, parked.position);
   await page.click('#begin');
   await advance(page, 0.4);
-  assert.deepEqual(await page.evaluate(() => __MERCH__.vehicles.find((v) => v.id === 9).position), parked.position);
+  assert.deepEqual(await page.evaluate(() => __MERCH__.vehicles.find((v) => v.id === __MERCH__.state.shops.length + 1).position), parked.position);
   await page.keyboard.press('KeyE');
-  await page.waitForFunction(() => __MERCH__.vehicles.some((v) => v.id === 9 && v.controlled));
+  await page.waitForFunction(() => __MERCH__.vehicles.some((v) => v.id === __MERCH__.state.shops.length + 1 && v.controlled));
   console.log('MOVING TRAFFIC / TAKEOVER / NO SELF-COLLISION / DRIVE / WHEELS / EXIT / SAVE / REENTER PASS');
   await context.close();
   // Drive across the block formerly intruded on by the x=-30,z=-30 tower.
   state = freshState();
   state.position = { x: -23.2, z: -45 };
   state.vehicles = Array.from({ length: 10 }, () => null);
-  state.vehicles[9] = { x: -21, z: -46, heading: 0, claimed: true };
+  state.vehicles[SHOPS.length + 1] = { x: -21, z: -46, heading: 0, claimed: true };
   ({ context, page } = await scenario(state, 'clear-road-drive'));
   await page.keyboard.press('KeyE');
-  await page.waitForFunction(() => __MERCH__.vehicles.some((v) => v.id === 9 && v.controlled));
+  await page.waitForFunction(() => __MERCH__.vehicles.some((v) => v.id === __MERCH__.state.shops.length + 1 && v.controlled));
   await page.keyboard.down('KeyW');
   try { await advance(page, 3); } finally { await page.keyboard.up('KeyW'); }
   const throughBlock = await page.evaluate(() => __MERCH__.vehicles.find((v) => v.controlled));
@@ -170,7 +170,7 @@ try {
   console.log('DRIVE THROUGH FORMER SCENERY OBSTRUCTION PASS', throughBlock.position);
   await context.close();
   assert.deepEqual(errors, []);
-  console.log('ALL EIGHT SHOPS / VEHICLE VARIANTS / HUMAN SCALE PASS');
+  console.log('ALL NINE SHOPS / VEHICLE VARIANTS / HUMAN SCALE PASS');
 } finally {
   await browser?.close();
   service.kill('SIGTERM');

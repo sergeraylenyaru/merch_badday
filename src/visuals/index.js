@@ -123,13 +123,13 @@ export async function createVisuals(scene, world, shopDecor) {
 
   replace(world.player, "hero", true);
   world.people.forEach((person, index) => {
-    const female = person.kind === 'staff' ? [0, 2, 6].includes(person.shop) : person.kind !== 'police' && index % 2 === 0;
+    const female = person.role === 'elder' || (person.kind === 'staff' ? [0, 2, 6, 8].includes(person.shop) : person.kind !== 'police' && index % 2 === 0);
     replace(person, female ? 'staff' : 'hero', true);
   });
   for (const vehicle of world.vehicles) replace(vehicle, vehicle.police ? 'police' : vehicle.visualModel);
   // The existing cart collider bottom is local Y=0.05; match that resting
   // plane without changing the rigid body's placement or collision response.
-  for (const cart of world.carts) replace(cart, "cart", false, 0.05);
+  for (const cart of world.carts) replace(cart, "cart", false, 0);
   // First person renders the same animated arm meshes at their exact world
   // transforms. The full avatar remains hidden, so its head/chest cannot fill
   // the camera. Shared source resources belong to the library; masked arm

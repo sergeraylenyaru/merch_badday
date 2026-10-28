@@ -1,3 +1,4 @@
+import {buyEquipment,dealWithDima} from './city/shift.js';
 import * as T from "three";
 import "@fontsource/manrope/cyrillic-400.css";
 import "@fontsource/manrope/cyrillic-700.css";
@@ -377,6 +378,8 @@ try {
     replacePrice,
     photo,
     energy,
+    equipment(item){ if(buyEquipment(state,item)) { snapshot(); notify("Снаряжение куплено за премию."); } else notify("Недостаточно премии или предмет уже куплен."); ui.phone("Показатели"); },
+    dima(){if(dealWithDima(state)){snapshot();notify("Дима договорился с точками: срочные визиты продлены на две минуты.");}else notify("Договор уже заключён или не хватает 40 ₽.");ui.phone("Показатели");},
   });
   world = await createWorld(scene, state);
   world.visuals?.setQuality?.(settings.quality);
@@ -447,7 +450,7 @@ try {
     if (world.jobs.activity) return 'Выполняем работу…';
     const pos = world.player.mesh.position;
     const task = world.jobs.nearest(pos);
-    if (state.carrying) return task?.type === 'drop' ? 'E · Поставить коробку в приёмку' : 'Коробка в руках · отнесите в голубую приёмку магазина «СуперЦена»';
+    if (state.carrying) return task?.type === 'drop' ? 'E · Поставить коробку в приёмку' : 'Коробка в руках · R у грузовика — взять вторую; отнесите в голубую приёмку магазина «СуперЦена»';
     if (held) return held.missionCargo ? 'R · Оставить грузовую тележку в голубой приёмке' : 'R · Вернуть в жёлтую зону за бонус';
     if (task) return `E · ${task.label}`;
     const npc = nearest(
@@ -498,6 +501,7 @@ try {
     if (task) {
       state.selected = task.shop;
       const shop = SHOPS[task.shop];
+      if (task.type === 'receipt') { state.shops[8].job.collected=true; snapshot(); notify('Накладная у вас. Передайте её управляющей.'); return; }
       if (task.type === 'locked') { notify(`Магазин откроется после пяти визитов. Сейчас ${state.shops.filter((s) => s.done).length}/5.`); return; }
       if (held) { notify('Сначала отпустите ручку тележки: R.'); return; }
       if (['pickup', 'drop', 'search'].includes(task.type)) {
@@ -575,6 +579,7 @@ try {
     }
   }
   function grab() {
+    if(state.carrying && world.jobs.addSecond()) {notify("Берём вторую коробку. Две быстрее, но обзор хуже и шаг медленнее.");return;}
     if (state.carrying || world.jobs.activity) { notify('Сейчас руки заняты работой.'); return; }
     if (vehicle) {
       if (![1, 3].includes(vehicle.type)) {
@@ -796,14 +801,14 @@ try {
       const activity = world.jobs.activity, busy = !!activity, carrying = !!state.carrying;
       const crouch = !held && !carrying && !busy && keys.has("ControlLeft"),
         speed =
-          (activity?.approach ? 1.5 : busy ? 0 : carrying ? 2.25 : crouch
+          (activity?.approach ? 1.5 : busy ? 0 : carrying ? state.carrying.extra!==undefined ? 1.7 : (state.shift.upgrades.gloves ? 2.7 : 2.25) : crouch
             ? 1.7
             : held
               ? held.missionCargo ? 2.7 : 3.2
               : keys.has("ShiftLeft")
                 ? state.energy > 0
                   ? 10
-                  : 6.8
+                  : state.shift.upgrades.boots ? 7.5 : 6.8
                 : 2.8) * (state.health < 25 ? 0.65 : 1);
       let dx = -Math.sin(yaw) * forward + Math.cos(yaw) * side,
         dz = -Math.cos(yaw) * forward - Math.sin(yaw) * side;
@@ -818,22 +823,22 @@ try {
       if (held) {
         const turn = Math.atan2(Math.sin(yaw + Math.PI - held.pushHeading), Math.cos(yaw + Math.PI - held.pushHeading));
         const proposed = held.pushHeading + turn * (1 - Math.exp(-dt * 9));
-        const frontX = pos.x + Math.sin(proposed) * 1.32;
-        const frontZ = pos.z + Math.cos(proposed) * 1.32;
-        if (!world.blocked(frontX, frontZ, 0.88)) held.pushHeading = proposed;
+        const frontX = pos.x + Math.sin(proposed) * .98;
+        const frontZ = pos.z + Math.cos(proposed) * .98;
+        if (!world.blocked(frontX, frontZ, 0.65)) held.pushHeading = proposed;
         world.player.mesh.rotation.y = held.pushHeading;
       }
       else if (firstPerson && !busy) world.player.mesh.rotation.y = yaw + Math.PI;
       if (walkingVelocity.lengthSq() > 0) {
-        const aheadX = held ? Math.sin(held.pushHeading) * 1.32 : 0;
-        const aheadZ = held ? Math.cos(held.pushHeading) * 1.32 : 0;
+        const aheadX = held ? Math.sin(held.pushHeading) * .98 : 0;
+        const aheadZ = held ? Math.cos(held.pushHeading) * .98 : 0;
         const cp = held?.body.translation();
         const attached = !held || held.gripTime < 0.35 || Math.hypot(cp.x - pos.x - aheadX, cp.z - pos.z - aheadZ) < 0.65;
         if (attached && !world.blocked(pos.x + dx, pos.z) &&
-            (!held || !world.blocked(pos.x + dx + aheadX, pos.z + aheadZ, 0.88))) pos.x += dx;
+            (!held || !world.blocked(pos.x + dx + aheadX, pos.z + aheadZ, 0.65))) pos.x += dx;
         else walkingVelocity.x = 0;
         if (attached && !world.blocked(pos.x, pos.z + dz) &&
-            (!held || !world.blocked(pos.x + aheadX, pos.z + dz + aheadZ, 0.88))) pos.z += dz;
+            (!held || !world.blocked(pos.x + aheadX, pos.z + dz + aheadZ, 0.65))) pos.z += dz;
         else walkingVelocity.z = 0;
         if (!held && !firstPerson && !busy) {
           const target = Math.atan2(dx, dz);
@@ -856,8 +861,8 @@ try {
       world.player.mesh.scale.y = world.player.motion ? 1 : crouch ? 0.7 : 1;
       if (held) {
         const p = held.body.translation();
-        const tx = pos.x + Math.sin(held.pushHeading) * 1.32,
-          tz = pos.z + Math.cos(held.pushHeading) * 1.32;
+        const tx = pos.x + Math.sin(held.pushHeading) * .98,
+          tz = pos.z + Math.cos(held.pushHeading) * .98;
         held.gripTime += dt;
         const ex = tx - p.x, ez = tz - p.z;
         const gain = Math.min(1 / Math.max(dt, 0.001), 6 / Math.max(Math.hypot(ex, ez), 0.001));
@@ -937,6 +942,7 @@ try {
   function ai(dt) {
     const player = world.player.mesh.position;
     for (const n of world.people) {
+      if (n.seated) continue;
       if (n.stun > 0) {
         n.stun -= dt;
         n.mesh.rotation.z = 1.25;
@@ -1063,7 +1069,7 @@ try {
     for (const v of world.vehicles.filter((v) => v.traffic)) {
       if (v === vehicle || v.claimed) continue;
       if (v.rival) {
-        const stop = SHOPS[Math.floor(state.time / 80) % 8],
+        const stop = SHOPS[Math.floor(state.time / 80) % SHOPS.length],
           d = stop.x - v.mesh.position.x,
           z = stop.z + 16 - v.mesh.position.z;
         const step = new T.Vector3(d, 0, z);
@@ -1311,6 +1317,9 @@ try {
         beep(620);
       }
       if (jobEvents.length) snapshot();
+      if(state.time>(state.shift.eventTimes?.[0]??180)&&!state.shift.events.includes("rush")){state.shift.events.push("rush");state.shift.deadlines=state.shift.deadlines.map(t=>t+60);message("Задержка поставщика: все срочные окна продлены на минуту.");}
+      if(state.time>(state.shift.eventTimes?.[1]??420)&&!state.shift.events.includes("sale")){state.shift.events.push("sale");message("В городе вечерний наплыв. Можно отказаться от оставшихся точек и закончить смену через паузу.");}
+      world.boroughs.update(dt);
       ai(dt);
       systems(dt);
       ui.context(context());
@@ -1393,12 +1402,14 @@ try {
         obstacles: [ ...world.blockers.filter((b) => b.enabled !== false).map(({ x, z, w, d }) => ({ x, z, w, d, heading: 0 })),
           ...world.vehicles.filter((v) => v.mesh.visible && !(v.police && state.wanted < 3)).map((v) => vehicleBox(v)) ] };
     },
+    get city() {return JSON.parse(JSON.stringify(world.boroughs.diagnostics));},
     get jobs() { return JSON.parse(JSON.stringify(world.jobs.diagnostics)); },
     get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null })); },
   };
   // BFCache preserves the page and its GPU resources. Dispose only on a real exit.
   addEventListener("pagehide", (event) => {
     if (!event.persisted) {
+      world.boroughs.dispose();
       world.jobs.dispose();
       world.visuals?.dispose();
       mouseCapture.dispose();

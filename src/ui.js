@@ -1,3 +1,4 @@
+import { BOROUGHS, boroughFor, LOCAL_SHOPS } from './city/layout.js';
 import { SHOPS } from "./state.js";
 import { JOBS, EXPIRY_BATCHES, PRICE_ITEMS, jobDone, jobProgress, isShopUnlocked } from './jobs/catalog.js';
 import { PRODUCT_NAMES, planogramWon } from './jobs/match3.js';
@@ -33,6 +34,7 @@ export function createUI(state, actions) {
       ctx.lineTo(w, p(v));
       ctx.stroke();
     }
+    for (const s of LOCAL_SHOPS) { ctx.fillStyle="#68746e"; ctx.fillRect(p(s.x)-3,p(s.z)-3,6,6); }
     SHOPS.forEach((s) => {
       ctx.fillStyle = state.shops[s.id].done
         ? "#95b68c"
@@ -68,8 +70,9 @@ export function createUI(state, actions) {
       `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
     $("remaining").textContent =
       `${Math.max(0, Math.ceil((1500 - state.time) / 60))} МИН`;
-    $("routeCount").textContent = `${done} / 8`;
-    $("routeBar").style.width = `${(done / 8) * 100}%`;
+    $("routeCount").textContent = `${done} / ${SHOPS.length}`;
+    $("routeBar").style.width = `${(done / SHOPS.length) * 100}%`;
+    document.querySelector(".mapcaption span").textContent = BOROUGHS[state.position.x < -17.5 ? 0 : state.position.x < 57.5 ? 1 : 2].name;
     $("targetName").textContent =
       `${String(s.id + 1).padStart(2, "0")} / ${s.name}`;
     $("targetDesc").textContent = p.done ? 'Визит подтверждён. Выберите следующую точку в телефоне.'
@@ -118,7 +121,7 @@ export function createUI(state, actions) {
       shop.done || shop.carts > 0 || shop.badge || shop.shelf || shop.photo,
     );
     show(
-      `<div class="veil"><div class="intro"><div class="tag">ГОРОДСКАЯ ПЕСОЧНИЦА · ПЕРВАЯ СМЕНА</div><h1>ПЛОХОЙ ДЕНЬ<br><em>МЕРЧА.</em></h1><p class="subtitle">Восемь магазинов. Один мерчендайзер.<br>Ноль причин задерживаться на работе.</p><p>Паркуйся, разгружай товар, решай полочные головоломки и договаривайся с директорами. В каждой точке своя работа. Или посмотри, насколько плохим может стать этот день.</p><div class="actions"><button class="primary" id="begin">${hasProgress ? "ПРОДОЛЖИТЬ СМЕНУ" : "ВЫЙТИ НА МАРШРУТ"} ↗</button>${hasProgress ? '<button class="secondary" id="newShift" title="Сбросить текущий маршрут и начать с 08:00">НОВАЯ СМЕНА</button>' : ""}<button class="secondary" id="how">КАК ВЫЖИТЬ?</button></div><div class="introfooter"><div><b>08</b>ТОРГОВЫХ ТОЧЕК</div><div><b>25</b>МИНУТ ДО КОНЦА ДНЯ</div><div><b>∞</b>НЕУДАЧНЫХ РЕШЕНИЙ</div></div></div><div class="buildtag">СЕВЕРНЫЙ РАЙОН / У ДОМА</div></div>`,
+      `<div class="veil"><div class="intro"><div class="tag">ГОРОДСКАЯ ПЕСОЧНИЦА · ПЕРВАЯ СМЕНА</div><h1>ПЛОХОЙ ДЕНЬ<br><em>МЕРЧА.</em></h1><p class="subtitle">Девять магазинов. Один мерчендайзер.<br>Ноль причин задерживаться на работе.</p><p>Паркуйся, разгружай товар, решай полочные головоломки и договаривайся с директорами. В каждой точке своя работа. Или посмотри, насколько плохим может стать этот день.</p><div class="actions"><button class="primary" id="begin">${hasProgress ? "ПРОДОЛЖИТЬ СМЕНУ" : "ВЫЙТИ НА МАРШРУТ"} ↗</button>${hasProgress ? '<button class="secondary" id="newShift" title="Сбросить текущий маршрут и начать с 08:00">НОВАЯ СМЕНА</button>' : ""}<button class="secondary" id="how">КАК ВЫЖИТЬ?</button></div><div class="introfooter"><div><b>08</b>ТОРГОВЫХ ТОЧЕК</div><div><b>25</b>МИНУТ ДО КОНЦА ДНЯ</div><div><b>∞</b>НЕУДАЧНЫХ РЕШЕНИЙ</div></div></div><div class="buildtag">СЕВЕРНЫЙ РАЙОН / У ДОМА</div></div>`,
     );
     $("begin").onclick = actions.resume;
     $("how").onclick = () => pause(true);
@@ -143,9 +146,9 @@ export function createUI(state, actions) {
     const tabs = ["Маршрут", "Сообщения", "Карта", "Показатели", "Фото"];
     let body = "";
     if (tab === "Маршрут")
-      body = SHOPS.map(
+      body = [...SHOPS].sort((a,b)=>state.shift.order.indexOf(a.id)-state.shift.order.indexOf(b.id)).map(
         (s) =>
-          `<button class="shoprow" data-shop="${s.id}"><span class="n">${String(s.id + 1).padStart(2, "0")}</span><strong>${s.name} ${state.shops[s.id].done ? "✓" : state.selected === s.id ? "← ЦЕЛЬ" : ""}</strong><small>${JOBS[s.id].title} · ${jobProgress(state, s.id)}</small></button>`,
+          `<button class="shoprow" data-shop="${s.id}"><span class="n">${String(s.id + 1).padStart(2, "0")}</span><strong>${boroughFor(s.id).name} · ${s.name} ${state.shops[s.id].done ? "✓" : state.selected === s.id ? "← ЦЕЛЬ" : ""}</strong><small>${state.shift.urgent.includes(s.id) ? "СРОЧНО +80 ₽ ДО "+Math.floor(state.shift.deadlines[s.id]/60)+" МИН · " : ""}ДОВЕРИЕ ${state.career.loyalty[s.id]} · ${JOBS[s.id].title} · ${jobProgress(state, s.id)}</small></button>`,
       ).join("");
     if (tab === "Сообщения")
       body = state.messages
@@ -157,7 +160,7 @@ export function createUI(state, actions) {
       body =
         '<canvas id="bigmap" width="500" height="500"></canvas><p class="message">Жёлтый — цель · белый — вы · синий — полиция</p>';
     if (tab === "Показатели")
-      body = `<div class="message">Репутация: ${Math.round(state.reputation)} / 100<br>Стресс: ${Math.round(state.stress)} / 100<br>Деньги: ${state.money} ₽<br>Премия: ${state.bonus} ₽<br>Конфликты: ${state.conflicts}<br>Штрафы: ${state.fines} ₽<br>Закрыто: ${state.shops.filter((s) => s.done).length} / 8<br>Осталось: ${Math.ceil((1500 - state.time) / 60)} мин</div><div class="actions"><button id="energy" class="secondary">Энергетик · 70 ₽</button></div>`;
+      body = `<div class="message">Репутация: ${Math.round(state.reputation)} / 100<br>Стресс: ${Math.round(state.stress)} / 100<br>Деньги: ${state.money} ₽<br>Премия: ${state.bonus} ₽<br>Конфликты: ${state.conflicts}<br>Штрафы: ${state.fines} ₽<br>Закрыто: ${state.shops.filter((s) => s.done).length} / ${SHOPS.length}<br>Осталось: ${Math.ceil((1500 - state.time) / 60)} мин</div><div class="actions"><button id="energy" class="secondary">Энергетик · 70 ₽</button><button id="boots" class="secondary">Обувь для бега · 150 ₽ премии</button><button id="gloves" class="secondary">Перчатки для груза · 120 ₽ премии</button><button id="dimaDeal" class="secondary">Дима: договориться о сроках · 40 ₽</button></div>`;
     if (tab === "Фото")
       body = `<p class="message">Необязательный фотоотчёт: встаньте рядом с магазином. Фото сохраняет текущий вид камеры; задания у каждой точки свои.</p><button class="primary" id="takePhoto">СДЕЛАТЬ ФОТО</button><div id="photoResult"></div>`;
     show(
@@ -182,12 +185,15 @@ export function createUI(state, actions) {
             (el.textContent = state.messages[state.messages.length - 1 - i]),
         );
     if ($("takePhoto")) $("takePhoto").onclick = actions.photo;
+    if ($("boots")) $("boots").onclick=()=>{actions.equipment("boots");};
+    if ($("gloves")) $("gloves").onclick=()=>{actions.equipment("gloves");};
+    if ($("dimaDeal")) $("dimaDeal").onclick=actions.dima;
     if ($("energy")) $("energy").onclick = actions.energy;
   }
   function dialogue(shop) {
     const p = state.shops[shop.id];
     show(
-      `<div class="modal"><div class="window"><button class="close" id="close">×</button><div class="eyebrow">${shop.name.toUpperCase()} · ОТНОШЕНИЕ ${p.rep}</div><h2>${shop.npc}</h2><p id="speech"></p><div class="dialogueoptions"><button data-choice="polite">Я по рабочему маршруту. Подтвердите визит, пожалуйста.</button><button data-choice="badge">Показать бейдж и пообещать всё сделать.</button><button data-choice="job">Напомните, что нужно сделать и где искать.</button><button data-choice="rude">У меня восемь точек! Давайте быстрее.</button></div></div></div>`,
+      `<div class="modal"><div class="window"><button class="close" id="close">×</button><div class="eyebrow">${shop.name.toUpperCase()} · ОТНОШЕНИЕ ${p.rep}</div><h2>${shop.npc}</h2><p id="speech"></p><div class="dialogueoptions"><button data-choice="polite">Я по рабочему маршруту. Подтвердите визит, пожалуйста.</button><button data-choice="badge">Показать бейдж и пообещать всё сделать.</button><button data-choice="job">Напомните, что нужно сделать и где искать.</button><button data-choice="rude">У меня девять точек! Давайте быстрее.</button></div></div></div>`,
     );
     $("speech").textContent = p.done
       ? "Спасибо, визит уже закрыт. Удачной смены!"
@@ -287,7 +293,7 @@ export function createUI(state, actions) {
   function shelf(shop) { planogram(shop); }
   function ending() {
     show(
-      `<div class="modal"><div class="window"><div class="eyebrow">СМЕНА ОКОНЧЕНА · ВЫ ЭТО ПЕРЕЖИЛИ</div><h2>${state.ending}</h2><p>Точек закрыто: ${state.shops.filter((s) => s.done).length} / 8<br>Тележек собрано: ${state.shops.reduce((n, s) => n + s.carts, 0)}<br>Репутация: ${Math.round(state.reputation)} · Стресс: ${Math.round(state.stress)}<br>Конфликтов: ${state.conflicts} · Штрафов: ${state.fines} ₽<br>Время в пути: ${Math.floor(state.time / 60)} мин ${Math.floor(state.time % 60)} сек</p><h2>Премия: ${Math.max(0, state.bonus - state.conflicts * 50)} ₽</h2><p>Региональный: «Спасибо за отчёт. Завтра тот же маршрут».</p><button class="primary" id="restart">ЕЩЁ ОДИН ПЛОХОЙ ДЕНЬ ↗</button></div></div>`,
+      `<div class="modal"><div class="window"><div class="eyebrow">СМЕНА ОКОНЧЕНА · ВЫ ЭТО ПЕРЕЖИЛИ</div><h2>${state.ending}</h2><p>Точек закрыто: ${state.shops.filter((s) => s.done).length} / ${SHOPS.length}<br>Тележек собрано: ${state.shops.reduce((n, s) => n + s.carts, 0)}<br>Репутация: ${Math.round(state.reputation)} · Стресс: ${Math.round(state.stress)}<br>Конфликтов: ${state.conflicts} · Штрафов: ${state.fines} ₽<br>Время в пути: ${Math.floor(state.time / 60)} мин ${Math.floor(state.time % 60)} сек</p><h2>Премия: ${Math.max(0, state.bonus - state.conflicts * 50)} ₽</h2><p>Региональный: «Спасибо за отчёт. Завтра тот же маршрут».</p><button class="primary" id="restart">ЕЩЁ ОДИН ПЛОХОЙ ДЕНЬ ↗</button></div></div>`,
     );
     $("restart").onclick = actions.restart;
   }

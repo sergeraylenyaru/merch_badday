@@ -118,6 +118,10 @@ export function createJobWorld(scene, world, state) {
   const deliveryPickup = target(4, 'pickup', JOBS[4].point, 'Разгрузка · взять коробку');
   paint(groups[4], -3.8, -5.5, 3.4, 2.7, '#76c3d5');
   sign(groups[4], 'ПРИЁМКА ТОВАРА', -3.8, 2.65, -6.3, 4.2);
+  target(8, 'receipt', [-3.8,-4.8], 'Забрать накладную');
+  box(groups[8],-3.8,.72,-4.8,1.1,1.3,.7,'#526b61');
+  box(groups[8],-3.8,1.39,-4.8,.45,.025,.6,'#ede3c3');
+  sign(groups[8],'НАКЛАДНАЯ',-3.8,2.1,-4.8,2.8);
   target(5, 'expiry', JOBS[5].point, 'Проверка сроков годности');
   const expiryCrate = box(groups[5], -4.7, 0.35, -6.5, 1.2, 0.55, 0.8, '#a95046');
   sign(groups[5], 'КАРАНТИН ТОВАРА', -4.7, 1.0, -6.5, 2.4);
@@ -176,8 +180,9 @@ export function createJobWorld(scene, world, state) {
     }
     if (active && pending) {
       if (pending.elapsed >= pending.duration) {
+        if (pending.kind === 'extra') state.carrying.extra = pending.box;
         if (pending.kind === 'pickup') { state.carrying = { shop: 4, box: pending.box }; carryingAge = 0; }
-        if (pending.kind === 'drop') { state.shops[4].job.delivered.push(pending.box); state.carrying = null; }
+        if (pending.kind === 'drop') { state.shops[4].job.delivered.push(pending.box); if(state.carrying.extra!==undefined) state.shops[4].job.delivered.push(state.carrying.extra); state.carrying = null; }
         if (pending.kind === 'repair') state.shops[3].job.repaired = true;
         if (pending.kind === 'search') {
           const job = state.shops[7].job;
@@ -190,10 +195,12 @@ export function createJobWorld(scene, world, state) {
     if (active && state.carrying) carryingAge += dt;
     for (let index = 0; index < boxes.length; index++) {
       const object = boxes[index];
-      object.visible = groups[4].visible || state.carrying?.box === index || pending?.box === index;
+      object.visible = groups[4].visible || state.carrying?.box === index || state.carrying?.extra === index || pending?.box === index;
       if (state.shops[4].job.delivered.includes(index)) {
         object.position.set(SHOPS[4].x - 4.4 + (index % 2) * 0.85, 0.35 + Math.floor(index / 2) * 0.52, SHOPS[4].z - 6.3);
         object.quaternion.identity();
+      } else if (state.carrying?.extra === index) {
+        player.updateWorldMatrix(true,false);v.set(0,1.80,.5);player.localToWorld(v);player.getWorldQuaternion(q);object.position.copy(v);object.quaternion.copy(q);
       } else if (state.carrying?.box === index || (pending?.kind === 'drop' && pending.box === index)) {
         player.updateWorldMatrix(true, false);
         v.set(0, 1.28, 0.5); player.localToWorld(v); player.getWorldQuaternion(q);
@@ -225,7 +232,7 @@ export function createJobWorld(scene, world, state) {
   return {
     update,
     get parkingCar() { return world.vehicles.find((car) => fitsParkingBay(car, SHOPS[0])) ?? null; },
-    get activity() { return pending ? { id: pending.id * 2 + (pending.approach ? 0 : 1), clip: pending.approach ? 'Walk' : { pickup: 'PickUp', drop: 'Interact', repair: 'Fixing', search: 'Interact' }[pending.kind],
+    get activity() { return pending ? { id: pending.id * 2 + (pending.approach ? 0 : 1), clip: pending.approach ? 'Walk' : { extra: 'PickUp', pickup: 'PickUp', drop: 'Interact', repair: 'Fixing', search: 'Interact' }[pending.kind],
       approach: pending.approach, duration: pending.duration, remaining: pending.duration - pending.elapsed } : null; },
     get handObject() { return state.carrying ? boxes[state.carrying.box] : pending?.kind === 'pickup' && !pending.approach ? boxes[pending.box] : null; },
     startPickup() {
@@ -240,6 +247,12 @@ export function createJobWorld(scene, world, state) {
       if (world.blocked(approach.x, approach.z)) return false;
       world.player.actionFacing = Math.atan2(position.x - approach.x, position.z - approach.z);
       return start('pickup', { box: index, approach });
+    },
+    addSecond() {
+      if(!state.carrying || state.carrying.extra!==undefined || pending) return false;
+      const index=DELIVERY_ORDER.find(i=>i!==state.carrying.box&&!state.shops[4].job.delivered.includes(i));
+      if(index===undefined||Math.hypot(world.player.mesh.position.x-boxes[index].position.x,world.player.mesh.position.z-boxes[index].position.z)>1.9) return false;
+      return start('extra',{box:index});
     },
     startDrop() { return !!state.carrying && start('drop', { box: state.carrying.box }); },
     startRepair() { return start('repair'); },

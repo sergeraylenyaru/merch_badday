@@ -1,3 +1,4 @@
+import {createBoroughs} from './city/boroughs.js';
 import * as T from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
 import { SHOPS } from "./state.js";
@@ -285,6 +286,7 @@ export async function createWorld(scene, state) {
   vehicles.push(car(-21, 35, 2, vehicles.length));
   for (let i = 0; i < 6; i++) {
     const v = car(-21, -90 + i * 36, i % 4, vehicles.length, true);
+    if(i===0){v.visualModel="suv";v.displayName="Кроссовер";}
     vehicles.push(v);
   }
   for (let i = 0; i < 24; i++) {
@@ -297,19 +299,6 @@ export async function createWorld(scene, state) {
   for (let i = 0; i < 3; i++) {
     const p = human(-110 + i * 15, -95, "#577d9a", "police");
     people.push(p);
-  }
-  for (let i = 0; i < 16; i++) {
-    const x = -105 + (i % 4) * 75,
-      z = -105 + Math.floor(i / 4) * 75;
-    if (SHOPS.some((s) => Math.hypot(s.x - x, s.z - z) < 30)) continue;
-    const plot = buildingPlot(x, z);
-    if (!plot) continue;
-    const width = plot.w * 2, depth = plot.d * 2;
-    const h = 10 + (i % 4) * 4;
-    box(x, h / 2, z, width, h, depth, ["#a1a79b", "#baa993", "#84968a"][i % 3], true);
-    for (let y = 3; y < h; y += 3)
-      for (const j of [-width / 3, 0, width / 3])
-        box(x + j, y, z + depth / 2 + 0.06, Math.min(2, width / 4), 1.5, 0.1, "#d9cf9d");
   }
   for (let i = 0; i < 34; i++) {
     const x = -116 + (i % 7) * 40,
@@ -410,8 +399,10 @@ export async function createWorld(scene, state) {
   };
   // Rendering supplies measured vehicle extents. Entity IDs, transforms,
   // interaction targets and physical bodies remain owned by the world.
+  world.boroughs = createBoroughs(scene,world,{human,car,label});
   world.visuals = await createVisuals(scene, world, shopDecor);
   world.jobs = createJobWorld(scene, world, state);
+  for(const cart of carts) cart.mesh.scale.set(.74,.84,.74);
   world.streetObstructions = blockers.filter((blocker) => AVENUES.some((road) =>
     boxesIntersect(blocker, { x: road, z: 20, w: 7.5, d: 135 }) || boxesIntersect(blocker, { x: 20, z: road, w: 135, d: 7.5 })));
   return world;

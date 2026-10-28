@@ -134,9 +134,9 @@ try {
   assert.equal(visual.assets.failed, 0);
   assert.equal(visual.assets.cacheCount, 17);
   assert.equal(visual.districts.length, SHOPS.length);
-  assert.equal(new Set(visual.districts.map((entry) => entry.feature)).size, 8);
+  assert.equal(new Set(visual.districts.map((entry) => entry.feature)).size, 9);
   assert.ok(visual.districts.every((entry) => entry.generatedMeshes > 0 && entry.modelPlacements > 0));
-  assert.equal(visual.replacements.filter((entry) => entry.kind === 'staff').length, 8);
+  assert.equal(visual.replacements.filter((entry) => entry.kind === 'staff').length, 9);
   assert.equal(visual.replacements.filter((entry) => entry.kind === 'player').length, 1);
   assert.equal(visual.replacements.filter((entry) => entry.kind === 'cart').length, SHOPS.reduce((n, shop) => n + shop.required, 0));
   assert.equal(visual.replacements.filter((entry) => entry.kind === 'vehicle').length, 27);

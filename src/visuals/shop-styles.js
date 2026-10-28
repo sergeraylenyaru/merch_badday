@@ -9,3 +9,5 @@ export const SHOP_STYLES = [
   { primary: '#456e40', accent: '#ecdfb0', feature: 'fresh', subtitle: 'ОВОЩИ • ФРУКТЫ • ФЕРМЕРСКОЕ', slogan: 'СВЕЖЕЕ С УТРА', rear: 'ОТ ФЕРМЫ ДО ПОЛКИ', categories: ['НАТУРАЛЬНОЕ', 'УРОЖАЙ СЕЗОНА'] },
   { primary: '#293e4d', accent: '#e57b51', feature: 'hyper', subtitle: 'ГИПЕРМАРКЕТ • 08–24', slogan: 'МАКСИМУМ ВЫБОРА', rear: 'ВСЁ В ОДНОМ МЕСТЕ', categories: ['ПРОДУКТЫ', 'ДОМ И ОТДЫХ'] },
 ];
+
+SHOP_STYLES.push({...SHOP_STYLES[6],feature:'park',subtitle:'У ПАРКА • 08–22',slogan:'ПРОГУЛКА СО ВКУСОМ'});

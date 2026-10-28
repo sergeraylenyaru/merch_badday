@@ -20,6 +20,7 @@ export function finishPrimary(state, id) {
     case 4: job.delivered = [0, 1, 2]; break;
     case 5: job.removed = [0, 2, 4]; break;
     case 6: job.labels = PRICE_ITEMS.map((item) => item.price); break;
+    case 8: job.collected = true; break;
     case 7: job.scannerFound = job.scannerReturned = true; break;
   }
 }

@@ -1,3 +1,4 @@
+import {makeShift,urgentReward,career,remember} from './city/shift.js';
 import { JOBS, newJob, jobDone, isShopUnlocked } from './jobs/catalog.js';
 import { newPlanogram } from './jobs/match3.js';
 export const SHOPS = [
@@ -81,6 +82,7 @@ export const SHOPS = [
     4,
     "photo",
   ],
+  ["Парк Маркет", "Марина · управляющая", "Документы поставки", 20, 20, "#659783", 2],
 ].map(([name, npc, description, x, z, color, required], i) => ({
   id: i,
   name,
@@ -94,6 +96,8 @@ export const SHOPS = [
 }));
 export const freshState = () => ({
   version: 1,
+  shift: {...makeShift(),upgrades:{...career().upgrades}},
+  career: career(),
   missionVersion: 2,
   carrying: null,
   gateNotified: false,
@@ -120,7 +124,7 @@ export const freshState = () => ({
     job: newJob(shop.id),
   })),
   messages: [
-    "Региональный: Восемь точек — восемь разных задач. Задания и адреса — в телефоне. Тележки теперь за отдельный бонус.",
+    "Региональный: Девять точек — девять разных задач. Задания и адреса — в телефоне. Тележки теперь за отдельный бонус.",
     "ГиперМакс откроется после пяти подтверждённых визитов. Начать можно с любого другого магазина.",
   ],
   carts: [],
@@ -140,12 +144,14 @@ export function canComplete(s, id) {
 }
 export function complete(s, id) {
   if (!canComplete(s, id)) return false;
+  s.bonus += Math.min(3,s.career.loyalty[id])*20;
+  s.career.loyalty[id]++; remember(s);
   s.shops[id].done = true;
   s.shops[id].rep += 10;
   s.reputation += 5;
   s.stress -= 8;
   s.money += 200;
-  s.bonus += 100;
+  s.bonus += 100 + urgentReward(s,id);
   normalize(s);
   if (s.shops.every((x) => x.done)) finish(s);
   return true;
@@ -175,7 +181,7 @@ export function load(storage = localStorage) {
     const s = JSON.parse(storage.getItem("merch-badday-v1"));
     if (
       s?.version === 1 &&
-      s.shops?.length === 8 &&
+      [8, 9].includes(s.shops?.length) &&
       s.shops.every((p) => typeof p.done === "boolean") &&
       Number.isFinite(s.time) &&
       s.position &&
@@ -183,9 +189,14 @@ export function load(storage = localStorage) {
       Number.isFinite(s.position.z)
     ) {
       const v = { ...freshState(), ...s };
+      if(s.shops.length===8&&Array.isArray(v.vehicles)){v.vehicles=[...v.vehicles];v.vehicles.splice(8,0,null);}
       const migrating = s.missionVersion !== 2;
       v.missionVersion = 2;
-      v.shops = s.shops.map((old, id) => {
+      if (!v.shift?.order || v.shift.order.length !== 9) v.shift = makeShift();
+      if (!v.career?.loyalty || v.career.loyalty.length !== 9) v.career=career();
+      v.shift.upgrades={...v.shift.upgrades,...v.career.upgrades};
+      v.shops = freshState().shops.map((base, id) => {
+        const old = s.shops[id] ?? base;
         const job = { ...newJob(id), ...(!migrating && old.job && typeof old.job === 'object' ? old.job : {}) };
         if (id === 1) {
           const game = job.match;
@@ -213,6 +224,7 @@ export function load(storage = localStorage) {
         if (!v.shops[4].done && Array.isArray(v.vehicles)) v.vehicles[4] = null;
       }
       if (v.carrying && (v.carrying.shop !== 4 || ![0, 1, 2].includes(v.carrying.box) || v.shops[4].job.delivered.includes(v.carrying.box))) v.carrying = null;
+      if(v.carrying?.extra!==undefined&&(![0,1,2].includes(v.carrying.extra)||v.carrying.extra===v.carrying.box||v.shops[4].job.delivered.includes(v.carrying.extra))) delete v.carrying.extra;
       normalize(v);
       return v;
     }

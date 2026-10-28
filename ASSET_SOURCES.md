@@ -57,3 +57,7 @@
 В игре используются настоящие skinned meshes **Casual2** из [Ultimate Modular Men](https://quaternius.com/packs/ultimatemodularcharacters.html) и **Casual** из [Ultimate Modular Women](https://quaternius.com/packs/ultimatemodularwomen.html), оба набора CC0. Мужская модель получила синюю футболку, чёрные брюки и структурированный портфель за спиной. Женская модель отличается геометрией и пропорциями, это отдельный исходный персонаж.
 
 Клипы взяты из [Universal Animation Library Standard](https://quaternius.com/packs/universalanimationlibrary.html), CC0. Сохраняются и проигрываются настоящие ключевые треки скелета; ходьба/бег не выдаются за извлечённые из GTA анимации. Пинованные зеркала, SHA, лицензии и способ воспроизведения — в [art/quaternius/README.md](art/quaternius/README.md). Результат адаптации — `public/models/characters/`, исходные мужская и женская GLB — `art/quaternius/`.
+
+## Новый город
+
+Пятиэтажные дома, игровая площадка, парк, колесо обозрения, карусель, кафе, банк, ратуша и фонтан созданы для проекта в `src/city/boroughs.js`. Это оригинальная процедурная геометрия; внешние модели для этих объектов не скачивались. Персонажи и машины используют указанные выше лицензированные источники.

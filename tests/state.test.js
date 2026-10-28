@@ -4,9 +4,9 @@ import { SHOPS, freshState, canComplete, complete, finish, save, load } from '..
 import { JOBS, jobDone, isShopUnlocked } from '../src/jobs/catalog.js';
 import { finishPrimary } from './job-fixtures.js';
 
-test('eight different primary jobs can close the route with zero ordinary carts', () => {
+test('nine different primary jobs can close the route with zero ordinary carts', () => {
   const state = freshState();
-  assert.equal(new Set(SHOPS.map((s) => s.task)).size, 8);
+  assert.equal(new Set(SHOPS.map((s) => s.task)).size, 9);
   for (const shop of SHOPS) {
     assert.equal(canComplete(state, shop.id), false);
     state.shops[shop.id].badge = state.shops[shop.id].photo = state.shops[shop.id].shelf = true;
@@ -20,8 +20,8 @@ test('eight different primary jobs can close the route with zero ordinary carts'
     assert.equal(state.money, money, 'no repeated visit reward');
   }
   assert.ok(state.ending);
-  assert.equal(state.money, 1860); // 8 × 200, minus the real parking fee.
-  assert.equal(state.bonus, 800);
+  assert.equal(state.money, 2060); // 9 × 200, minus the real parking fee.
+  assert.equal(state.bonus, 1140);
 });
 test('ordinary carts alone cannot complete any primary job', () => {
   const state = freshState();

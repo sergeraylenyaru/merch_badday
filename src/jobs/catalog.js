@@ -11,6 +11,7 @@ export const JOBS = [
   { type: 'prices', title: 'Цена на полке', description: 'Сверьте накладную с фруктовым прилавком и замените три неверных ценника.', action: 'Сверить и заменить ценники', point: [10.9, 5.7] },
   { type: 'scanner', title: 'Потерянный ТСД', description: 'Найдите терминал сбора данных: проверьте тару у кассы, коробки у полки и правого холодильника. Верните его управляющему.', action: 'Поиск терминала', point: [-11, 1.6], unlockAfter: 5 },
 ];
+JOBS.push({type:'courier',title:'Документы поставки',description:'Заберите накладную в приёмке слева от стеллажей и передайте управляющей.',point:[-3.8,-4.8]});
 export const EXPIRY_BATCHES = [
   { name: 'Йогурт', date: '24.10', expired: true },
   { name: 'Крупа', date: '30.12', expired: false },
@@ -36,6 +37,7 @@ export function newJob(id) {
     () => ({ removed: [] }),
     () => ({ labels: [null, null, null] }),
     () => ({ searched: [], scannerFound: false, scannerReturned: false, scannerLocation: 2 }),
+    () => ({collected:false}),
   ][id]();
 }
 export function isShopUnlocked(state, id) {
@@ -45,6 +47,7 @@ export function jobDone(state, id) {
   const p = state.shops[id].job;
   if (!p) return false;
   switch (JOBS[id].type) {
+    case 'courier': return p.collected === true;
     case 'parking': return p.paid === true && Number.isInteger(p.parkedCarId) && p.parkedCarId >= 0;
     case 'planogram': return !!p.match && planogramWon(p.match);
     case 'warehouse': return [5, 6].every((cart) => p.delivered.includes(cart));
@@ -62,6 +65,7 @@ export function jobProgress(state, id) {
   if (state.shops[id].done) return 'ВИЗИТ ПОДТВЕРЖДЁН';
   if (jobDone(state, id)) return 'ГОТОВО · НАЙДИТЕ ДИРЕКТОРА';
   switch (JOBS[id].type) {
+    case 'courier': return 'НАКЛАДНАЯ · ЗАБЕРИТЕ В ПРИЁМКЕ';
     case 'parking': return p.parkedCarId === null ? 'ПАРКОВКА · НАЙДИТЕ МЕСТО' : 'ПАРКОВКА · ОПЛАТИТЕ 40 ₽';
     case 'planogram': return `ПЛАНОГРАММА · ${p.match.collected.slice(0, 3).map((n) => Math.min(6, n)).join(' / ')} ИЗ 6`;
     case 'warehouse': return `ПОСТАВКА · ${p.delivered.length}/2 ТЕЛЕЖКИ`;
