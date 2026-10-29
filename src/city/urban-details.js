@@ -35,7 +35,7 @@ const ARCHETYPE_RULES = [
   [/^(traffic-light|pedestrian-signal|road-sign|direction-sign|parking-meter|barrier|bollards|guardrail|speed-bump|parking-stop|traffic-cone|temporary-barrier)$/, 'traffic'],
   [/^(bridge-|bridge-pier|bridge-abutment|bridge-railing|approach-fence|seawall|water-stairs|pier$|shoreline-stones|drainage-pipe|life-ring)$/, 'bridge'],
   [/^(birch|poplar|linden|maple|spruce|young-tree|mature-tree)$/, 'tree'],
-  [/^(shrub-|hedge|flowerbed|flower-planter|grass-clump|reeds|stump|fallen-branch)$/, 'plant'],
+  [/^(shrub-(round|tall)|hedge|flowerbed|flower-planter|grass-clump|reeds|stump|fallen-branch)$/, 'plant'],
   [/^(bench-|trash-bin|recycling-bin|waste-containers|fenced-bin-area|information-board|bike-rack|clothesline|gazebo|game-table|garden-fence)$/, 'furniture'],
   [/^(slide|swing|carousel|spring-rider|sandbox|play-complex|pull-up-bars|dip-bars|outdoor-fitness|football-goal|basketball-hoop|playground-fence)$/, 'playground'],
   [/^(storefront|vitrine|automatic-door|swing-door|vestibule|storefront-canopy|signboard|a-board|promo-stand|atm$|cart-shelter|bike-parking|loading-zone-fence)$/, 'shopfront'],
