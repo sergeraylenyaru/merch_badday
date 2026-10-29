@@ -59,6 +59,12 @@ export function createJobWorld(scene, world, state) {
   box(parking, 11, 0.9, 15.075, 0.27, 0.08, 0.03, '#162c34');
   const meterLabel = sign(parking, 'ПАРКОВКА · 40 ₽', 11, 2.25, 14.8, 3.5);
   target(0, 'parking', JOBS[0].point, 'Паркомат · 40 ₽');
+  const stockingProps=[];
+  for(const [section,[x,z,name]] of [[-8,-1,'ЧАЙ'],[-5.8,-1,'СОК'],[8,-1,'КРУПА']].entries()) {
+    target(0,'stocking',[x,z],`Восстановить выкладку · ${name}`,{section,range:1.5});
+    const prop=box(parking,x,.85,z-.7,1.15,.65,.55,['#bd996b','#bd825d','#c4b278'][section]);stockingProps.push(prop);
+    sign(parking,name,x,2.3,z-.7,1.3);
+  }
   target(1, 'planogram', JOBS[1].point, 'Планограмма · три в ряд');
 
   // Open-front side warehouse, on a surface matching its visible floor.
@@ -153,6 +159,8 @@ export function createJobWorld(scene, world, state) {
   function enabled(target) {
     if (target.type === 'locked') return !isShopUnlocked(state, 7);
     if (!isShopUnlocked(state, target.shop) || state.shops[target.shop].done || jobDone(state, target.shop)) return false;
+    if(target.type==='parking')return !state.shops[0].job.paid;
+    if(target.type==='stocking')return state.shops[0].job.assigned && !state.shops[0].job.stocked.includes(target.section);
     if (target.type === 'drop') return state.carrying?.shop === 4;
     if (target.type === 'pickup') return !state.carrying && !pending;
     if (target.type === 'search') return !state.shops[7].job.scannerFound && !state.shops[7].job.searched.includes(target.spot);
@@ -180,6 +188,7 @@ export function createJobWorld(scene, world, state) {
     }
     if (active && pending) {
       if (pending.elapsed >= pending.duration) {
+        if (pending.kind === 'stocking' && !state.shops[0].job.stocked.includes(pending.section)) state.shops[0].job.stocked.push(pending.section);
         if (pending.kind === 'extra') state.carrying.extra = pending.box;
         if (pending.kind === 'pickup') { state.carrying = { shop: 4, box: pending.box }; carryingAge = 0; }
         if (pending.kind === 'drop') { state.shops[4].job.delivered.push(pending.box); if(state.carrying.extra!==undefined) state.shops[4].job.delivered.push(state.carrying.extra); state.carrying = null; }
@@ -215,6 +224,7 @@ export function createJobWorld(scene, world, state) {
       }
     }
     for (let i = 0; i < priceLabels.length; i++) priceLabels[i].set(`${state.shops[6].job.labels[i] ?? PRICE_ITEMS[i].old} ₽`);
+    stockingProps.forEach((prop,i)=>{prop.material=material(state.shops[0].job.stocked.includes(i)?'#82b477':'#bd996b');});
     expiryCrate.scale.y = 1 + state.shops[5].job.removed.length * 0.15;
     expiryCrate.position.y = 0.08 + 0.275 * expiryCrate.scale.y;
     for (const [i, object] of searchObjects.entries()) object.visible = i === state.shops[7].job.scannerLocation && !state.shops[7].job.scannerFound;
@@ -232,7 +242,7 @@ export function createJobWorld(scene, world, state) {
   return {
     update,
     get parkingCar() { return world.vehicles.find((car) => fitsParkingBay(car, SHOPS[0])) ?? null; },
-    get activity() { return pending ? { id: pending.id * 2 + (pending.approach ? 0 : 1), clip: pending.approach ? 'Walk' : { extra: 'PickUp', pickup: 'PickUp', drop: 'Interact', repair: 'Fixing', search: 'Interact' }[pending.kind],
+    get activity() { return pending ? { id: pending.id * 2 + (pending.approach ? 0 : 1), clip: pending.approach ? 'Walk' : { stocking: 'Interact', extra: 'PickUp', pickup: 'PickUp', drop: 'Interact', repair: 'Fixing', search: 'Interact' }[pending.kind],
       approach: pending.approach, duration: pending.duration, remaining: pending.duration - pending.elapsed } : null; },
     get handObject() { return state.carrying ? boxes[state.carrying.box] : pending?.kind === 'pickup' && !pending.approach ? boxes[pending.box] : null; },
     startPickup() {
@@ -255,6 +265,7 @@ export function createJobWorld(scene, world, state) {
       return start('extra',{box:index});
     },
     startDrop() { return !!state.carrying && start('drop', { box: state.carrying.box }); },
+    startStocking(section) {return state.shops[0].job.assigned && [0,1,2].includes(section) && !state.shops[0].job.stocked.includes(section) && start('stocking',{section});},
     startRepair() { return start('repair'); },
     startSearch(spot) { return start('search', { spot }); },
     takeEvents() { return events.splice(0); },
@@ -272,6 +283,7 @@ export function createJobWorld(scene, world, state) {
         const person = world.people.find((n) => n.kind === 'staff' && n.shop === id);
         return { x: person.mesh.position.x, z: person.mesh.position.z, label: SHOPS[id].npc };
       }
+      if(id===0 && state.shops[0].job.paid && !state.shops[0].job.assigned){const n=world.people.find(n=>n.kind==='staff'&&n.shop===0);return {x:n.mesh.position.x,z:n.mesh.position.z,label:'Нина · получить задание в зале'};}
       if (id === 2) {
         const cart = world.carts.find((c) => c.missionCargo && c.gripped);
         if (cart) return { x: SHOPS[2].x + receiving.x, z: SHOPS[2].z + receiving.z, label: 'Голубая приёмка' };

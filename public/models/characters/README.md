@@ -7,3 +7,7 @@ Derived from Quaternius Casual2 (male) and Casual (female), CC0-1.0. Complete so
 Eighteen recorded CC0 UAL clips are embedded: Idle, Walk, Run (jog), Sprint, Crouch, CrouchWalk, Push, Jump, Fall, Land, Punch, StrongPunch, Drive, Talk, Interact, PickUp, Fixing and WalkFormal. The runtime blends clips, adjusts playback speed to actual movement and applies ground-contact correction. Two-hand IK follows cart handles and the sides of carried cartons while recorded walking continues; PalmGrip and CartHandle anchors use real world transforms. AnimationMixer instances are independent per character and are stopped/uncached when the visual layer is disposed.
 
 These are independent CC0 characters and animation clips. No GTA game models or animation files are included.
+
+`police-officer.glb`: Quaternius Swat (CC0-1.0), a separate skinned police
+uniform model with 18 recorded animations. Pinned source and rebuild command:
+`art/quaternius/README.md`, `scripts/import-police.py`. The included CC0 license applies.

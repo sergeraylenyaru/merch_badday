@@ -33,6 +33,7 @@ export async function startBrowser(port = 5204) {
       page.on('pageerror', (e) => errors.push(e.message));
       page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
       await page.goto(url); await page.locator('#begin').waitFor(); await page.click('#begin');
+      if(await page.locator('#answerCall').count())await page.locator('#answerCall').click();
       await page.waitForFunction(() => __MERCH__.view.pointerLocked);
       return { context, page };
     },

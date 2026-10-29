@@ -1,6 +1,7 @@
 import {createTerrainMaterials,tileBoxUV} from './city/terrain-materials.js';
 import {createReferenceCity, buildReferenceTerrain, isReferenceWater} from './city/reference-city.js';
-import {MAP, point, pixel, START, ROADS} from './city/reference-layout.js';
+import {roadHeight} from './city/terrain.js';
+import {MAP, point, pixel, START, HOME_CAR, ROADS} from './city/reference-layout.js';
 import * as T from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
 import { SHOPS } from "./state.js";
@@ -69,23 +70,22 @@ export async function createWorld(scene, state) {
     visualBucket?.push(p);
     return p;
   }
-  const ground = box(0, -0.5, 0, 710, 1, 430, "#708666");
-  const gb = physics.createRigidBody(
-    RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.5, 0),
-  );
-  physics.createCollider(RAPIER.ColliderDesc.cuboid(355, 0.5, 215), gb);
+  function terrainCollider(geometry) {
+    const body=physics.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+    physics.createCollider(RAPIER.ColliderDesc.trimesh(new Float32Array(geometry.attributes.position.array),new Uint32Array(geometry.index.array)),body);
+  }
   function surface(x, z, width, depth, height) {
     surfaces.push({ x, z, w: width / 2, d: depth / 2, height });
     const body = physics.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x, height / 2, z));
     physics.createCollider(RAPIER.ColliderDesc.cuboid(width / 2, height / 2, depth / 2), body);
   }
   function groundHeight(x, z) {
-    let height = 0;
+    let height = roadHeight(x,z);
     for (const surface of surfaces) if (Math.abs(x - surface.x) <= surface.w && Math.abs(z - surface.z) <= surface.d)
       height = Math.max(height, surface.height);
     return height;
   }
-  buildReferenceTerrain({box,terrainMaterials},scene);
+  buildReferenceTerrain({box,terrainMaterials,terrainCollider},scene);
   function human(x, z, color, kind = "civilian", shop = -1) {
     const g = new T.Group();
     const torso = new T.Mesh(new T.BoxGeometry(0.75, 1, 0.45), mat(color));
@@ -219,7 +219,14 @@ export async function createWorld(scene, state) {
     const shelf = box(x + 8, 2.5, z - 4, 2, 0.2, 3, "#e8b34d");
     shelves.push({ mesh: shelf, shop: id, x: x + 8, z: z - 1 });
     const npc = human(x, z - 2, color, "staff", id);
+    npc.role='director';
     people.push(npc);
+    for(const [index,offset] of [[0,-4.8],[1,4.8]]) {
+      const employee=human(x+offset,z-.8,color,'employee',id);
+      employee.role=index?'Продавец-консультант':'Работник зала';
+      employee.patrol={index:index?7:1,wait:0,inspection:0,duration:1};
+      people.push(employee);
+    }
     label(shop.npc.split(" · ")[0], x, 3.1, z - 2, "#fff0c7", 1.3);
     const zone = box(x - 9, 0.06, z + 11, 9, 0.05, 7, "#b8c16d");
     zones.push({ mesh: zone, x: x - 9, z: z + 11, shop: id });
@@ -380,7 +387,14 @@ export async function createWorld(scene, state) {
   // Rendering supplies measured vehicle extents. Entity IDs, transforms,
   // interaction targets and physical bodies remain owned by the world.
   world.boroughs = await createReferenceCity(scene,world,{human,car,label});
+  const homeCar=car(HOME_CAR.x,HOME_CAR.z,0,vehicles.length);
+  homeCar.claimed=true;homeCar.homeVehicle=true;vehicles.push(homeCar);
+  label('ВАШ ДОМ',START.x,4,START.z-4,'#ffe5ab',1.7);
+  const savedHomeCar=state.vehicles[homeCar.id];
+  if(savedHomeCar){homeCar.mesh.position.set(savedHomeCar.x,groundHeight(savedHomeCar.x,savedHomeCar.z),savedHomeCar.z);homeCar.heading=savedHomeCar.heading;homeCar.mesh.rotation.y=savedHomeCar.heading;}
   world.visuals = await createVisuals(scene, world, shopDecor);
+  const carLabel=label('ВАША МАШИНА · E',0,0,0,'#ffe5ab',1.2);homeCar.mesh.add(carLabel);carLabel.position.set(0,3,0);
+  for(const employee of people.filter(n=>n.kind==='employee')){const badge=label(employee.role,0,0,0,'#dae9de',.9);employee.mesh.add(badge);badge.position.set(0,3,0);}
   world.jobs = createJobWorld(scene, world, state);
   for(const cart of carts) cart.mesh.scale.set(.74,.84,.74);
   world.streetObstructions = blockers.filter(blocker=>ROADS.some(([a,b,c,d,width])=>{

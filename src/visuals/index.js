@@ -18,6 +18,7 @@ const original = (file) => `${base}models/original/${file}.glb?rig=2`;
 export const MODEL_MANIFEST = {
   hero: { url: `${base}models/characters/merch-male.glb?rig=4`, size: [1.3, 2.1, 0.9] },
   staff: { url: `${base}models/characters/civilian-female.glb?rig=4`, size: [1.3, 2.1, 0.9] },
+  officer: {url: `${base}models/characters/police-officer.glb?rig=1`,size:[1.3,2.1,.9]},
   cart: { url: original("shopping-cart"), size: [1.2, 1.62, 1.75] },
   hatchback: { url: vendor("car_hatchback"), size: [2.5, 2.2, 4.6] },
   sedan: { url: vendor("car_sedan"), size: [2.5, 2.2, 4.6] },
@@ -124,7 +125,7 @@ export async function createVisuals(scene, world, shopDecor) {
   replace(world.player, "hero", true);
   world.people.forEach((person, index) => {
     const female = person.role === 'elder' || (person.kind === 'staff' ? [0, 2, 6, 8].includes(person.shop) : person.kind !== 'police' && index % 2 === 0);
-    replace(person, female ? 'staff' : 'hero', true);
+    replace(person, person.kind==='police' ? 'officer' : female ? 'staff' : 'hero', true);
   });
   for (const vehicle of world.vehicles) replace(vehicle, vehicle.police ? 'police' : vehicle.visualModel);
   // The existing cart collider bottom is local Y=0.05; match that resting

@@ -61,7 +61,7 @@ export function createUI(state, actions) {
         : jobDone(state, s.id) ? 'Работа выполнена. Найдите директора в торговом зале и подтвердите визит.'
           : s.id === 7 && p.job.scannerFound ? 'ТСД найден. Отнесите его управляющему, который обходит торговый зал.'
             : s.id === 4 && state.carrying ? 'Коробка в руках. Отнесите её в голубую приёмку внутри магазина и нажмите E.'
-              : JOBS[s.id].description;
+              : s.id===0 ? !p.job.paid ? 'Возьмите свою машину у дома и припаркуйтесь в голубом месте у первого магазина. Паркомат — рядом с разметкой.' : !p.job.assigned ? 'Парковка оплачена. Зайдите к Нине в зал и получите следующее задание.' : 'Восстановите выкладку чая, сока и крупы: подойдите к каждой отмеченной секции в зале и нажмите E. Затем найдите Нину.' : JOBS[s.id].description;
     $("cartCount").textContent = jobProgress(state, s.id);
     const goal = world?.jobs?.targetFor(s.id) ?? s;
     $("distance").textContent =
@@ -108,7 +108,7 @@ export function createUI(state, actions) {
       shop.done || shop.carts > 0 || shop.badge || shop.shelf || shop.photo,
     );
     show(
-      `<div class="veil"><div class="intro"><div class="tag">ГОРОДСКАЯ ПЕСОЧНИЦА · ПЕРВАЯ СМЕНА</div><h1>ПЛОХОЙ ДЕНЬ<br><em>МЕРЧА.</em></h1><p class="subtitle">Девять магазинов. Один мерчендайзер.<br>Ноль причин задерживаться на работе.</p><p>Паркуйся, разгружай товар, решай полочные головоломки и договаривайся с директорами. В каждой точке своя работа. Или посмотри, насколько плохим может стать этот день.</p><div class="actions"><button class="primary" id="begin">${hasProgress ? "ПРОДОЛЖИТЬ СМЕНУ" : "ВЫЙТИ НА МАРШРУТ"} ↗</button>${hasProgress ? '<button class="secondary" id="newShift" title="Сбросить текущий маршрут и начать с 08:00">НОВАЯ СМЕНА</button>' : ""}<button class="secondary" id="how">КАК ВЫЖИТЬ?</button></div><div class="introfooter"><div><b>09</b>ТОРГОВЫХ ТОЧЕК</div><div><b>25</b>МИНУТ ДО КОНЦА ДНЯ</div><div><b>∞</b>НЕУДАЧНЫХ РЕШЕНИЙ</div></div></div><div class="buildtag">СЕВЕРНЫЙ РАЙОН / У ДОМА</div></div>`,
+      `<div class="veil"><div class="intro"><div class="tag">ГОРОДСКАЯ ПЕСОЧНИЦА · ОТКРЫТАЯ БЕТА</div><h1>ПЛОХОЙ ДЕНЬ<br><em>МЕРЧА.</em></h1><p class="subtitle">Девять магазинов. Один мерчендайзер.<br>Ноль причин задерживаться на работе.</p><p>Начни утро у дома, ответь на звонок и отправляйся к первому магазину. Паркуйся, помогай сотрудникам и договаривайся с директорами. В каждой точке своя работа. Или посмотри, насколько плохим может стать этот день.</p><div class="actions"><button class="primary" id="begin">${hasProgress ? "ПРОДОЛЖИТЬ СМЕНУ" : "ВЫЙТИ НА МАРШРУТ"} ↗</button>${hasProgress ? '<button class="secondary" id="newShift" title="Сбросить текущий маршрут и начать с 08:00">НОВАЯ СМЕНА</button>' : ""}<button class="secondary" id="how">КАК ВЫЖИТЬ?</button></div><div class="introfooter"><div><b>09</b>ТОРГОВЫХ ТОЧЕК</div><div><b>25</b>МИНУТ ДО КОНЦА ДНЯ</div><div><b>∞</b>НЕУДАЧНЫХ РЕШЕНИЙ</div></div></div><div class="buildtag">ОТКРЫТАЯ БЕТА / УТРО У ДОМА</div></div>`,
     );
     $("begin").onclick = actions.resume;
     $("how").onclick = () => pause(true);
@@ -183,6 +183,15 @@ export function createUI(state, actions) {
     if ($("dimaDeal")) $("dimaDeal").onclick=actions.dima;
     if ($("energy")) $("energy").onclick = actions.energy;
   }
+  function incomingCall() {
+    show(`<div class="modal"><div class="window"><div class="eyebrow">08:00 · ВХОДЯЩИЙ ЗВОНОК</div><h2>Региональный менеджер</h2><p>Вы у своего дома. Рабочая машина ждёт рядом. Менеджер звонит с первым заданием на сегодня.</p><button class="primary" id="answerCall">ОТВЕТИТЬ НА ЗВОНОК</button></div></div>`);
+    $('answerCall').onclick=actions.answerCall;
+  }
+  function employee(person,shop) {
+    show(`<div class="modal"><div class="window"><div class="eyebrow">${shop.name} · СОТРУДНИК МАГАЗИНА</div><h2>${person.role}</h2><p id="employeeSpeech"></p><button class="primary" id="employeeClose">СПАСИБО</button></div></div>`);
+    $('employeeSpeech').textContent=shop.id===0 ? !state.shops[0].job.paid ? 'Голубое парковочное место перед входом. Паркомат рядом с ним. После оплаты зайдите к Нине.' : !state.shops[0].job.assigned ? 'Нина ждёт в проходе между стеллажами. Она выдаст вам задание на выкладку.' : 'Чай и сок на левой полке, крупа на правой. Подойдите к каждой отмеченной секции и нажмите E. Визит подтверждает только Нина.' : `${JOBS[shop.id].description} После работы обратитесь к управляющему: он подтверждает визиты.`;
+    $('employeeClose').onclick=actions.resume;
+  }
   function dialogue(shop) {
     const p = state.shops[shop.id];
     show(
@@ -190,7 +199,7 @@ export function createUI(state, actions) {
     );
     $("speech").textContent = p.done
       ? "Спасибо, визит уже закрыт. Удачной смены!"
-      : !isShopUnlocked(state, shop.id) ? "Мы ещё закрыты. Возвращайтесь после пяти подтверждённых визитов." : jobDone(state, shop.id) ? "Всё сделано? Отлично, можно подтверждать визит." : shop.description;
+      : !isShopUnlocked(state, shop.id) ? "Мы ещё закрыты. Возвращайтесь после пяти подтверждённых визитов." : jobDone(state, shop.id) ? "Всё сделано? Отлично, можно подтверждать визит." : shop.id===0 && p.job.paid && !p.job.assigned ? 'Спасибо за парковку! Нужна помощь в зале: восстановите выкладку чая, сока и крупы. Нажмите «Напомните, что нужно сделать», чтобы взять задание.' : shop.description;
     $("close").onclick = actions.resume;
     document
       .querySelectorAll("[data-choice]")
@@ -203,7 +212,7 @@ export function createUI(state, actions) {
   }
   function parking(shop, car) {
     const paid = state.shops[shop.id].job.paid;
-    jobWindow(shop, `<h2>Парковочный терминал</h2><div class="parking-ticket"><span>${paid ? 'ЧЕК · ОПЛАЧЕНО' : 'ТАРИФ НА СМЕНУ'}</span><strong>40 ₽</strong><p>${paid ? 'Парковка оплачена. Чек сохранён в маршруте.' : car ? `${car.displayName} стоит в голубом месте.` : 'Найдите свободное голубое место перед магазином. Машина должна полностью помещаться в разметке и стоять неподвижно.'}</p></div><p>После оплаты найдите Нину в зале и подтвердите визит.</p><button class="primary" id="payParking" ${paid || !car || state.money < 40 ? 'disabled' : ''}>${paid ? 'ПАРКОВКА ОПЛАЧЕНА' : 'ОПЛАТИТЬ 40 ₽'}</button>${!paid && state.money < 40 ? '<p>Не хватает денег. Выполните бесплатное задание в другой точке или верните обычные тележки за бонус.</p>' : ''}`);
+    jobWindow(shop, `<h2>Парковочный терминал</h2><div class="parking-ticket"><span>${paid ? 'ЧЕК · ОПЛАЧЕНО' : 'ТАРИФ НА СМЕНУ'}</span><strong>40 ₽</strong><p>${paid ? 'Парковка оплачена. Чек сохранён в маршруте.' : car ? `${car.displayName} стоит в голубом месте.` : 'Найдите свободное голубое место перед магазином. Машина должна полностью помещаться в разметке и стоять неподвижно.'}</p></div><p>После оплаты зайдите к Нине в зал: она выдаст новое задание на выкладку. Одной парковки для подтверждения визита недостаточно.</p><button class="primary" id="payParking" ${paid || !car || state.money < 40 ? 'disabled' : ''}>${paid ? 'ПАРКОВКА ОПЛАЧЕНА' : 'ОПЛАТИТЬ 40 ₽'}</button>${!paid && state.money < 40 ? '<p>Не хватает денег. Выполните бесплатное задание в другой точке или верните обычные тележки за бонус.</p>' : ''}`);
     $('payParking').onclick = () => actions.payParking(shop);
   }
   function planogram(shop) {
@@ -302,6 +311,8 @@ export function createUI(state, actions) {
     pause,
     phone,
     dialogue,
+    incomingCall,
+    employee,
     shelf,
     parking,
     planogram,

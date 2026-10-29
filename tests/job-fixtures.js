@@ -11,7 +11,7 @@ export function bestVisibleSwap(game) {
 export function finishPrimary(state, id) {
   const job = state.shops[id].job;
   switch (id) {
-    case 0: payParking(state, 0); break;
+    case 0: payParking(state, 0); job.assigned=true;job.stocked=[0,1,2];break;
     case 1:
       while (!planogramWon(job.match) && job.match.moves > 0) swapProducts(job.match, ...bestVisibleSwap(job.match));
       break;

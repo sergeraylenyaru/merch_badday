@@ -23,3 +23,18 @@ blender --background --threads 2 --python-exit-code 1 --python scripts/import-hu
 The script recolors real mesh materials, adds a structured backpack, maps the skeleton to the game's visual joint names, retargets selected recorded UAL animation tracks, removes horizontal root motion, and exports self-contained GLBs into `public/models/characters/`. It does not execute code from the model files. No textures or external URLs are requested during gameplay.
 
 Runtime rig version 4 embeds 18 selected clips. New work clips use `Idle_Talking_Loop`, `Interact`, `PickUp_Table`, `Fixing_Kneeling`, and `Walk_Formal_Loop`. The existing source and license are unchanged. Directional walking and hand contacts are adjusted at runtime; separate GTA or other proprietary animation data is not used.
+
+## Police officer (open beta)
+
+`police-swat.glb` is **Swat**, Quaternius Ultimate Modular Men Pack, CC0-1.0.
+Source: `trebeljahr/quaternius-showcase`, commit
+`722c39e964360beff2728a8ee4d103e2d11d457c`,
+`public/glb/modular_men/Swat.glb`. The mirror's `LICENSES.md` maps
+`modular_men/` to the artist's CC0 pack listed above. The included CC0 license
+also covers this model. No third-party executable code is used.
+
+`blender --background --threads 2 --python-exit-code 1 --python scripts/import-police.py`
+normalizes the bone names and reuses the 18 recorded CC0 clips from the existing
+male character to produce `public/models/characters/police-officer.glb`.
+The police character has its own skinned uniform/equipment model; it is no longer
+a civilian with a recolored shirt. All assets remain local at runtime.

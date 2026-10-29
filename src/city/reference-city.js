@@ -1,9 +1,10 @@
+import {gridTerrain,ROAD_PROFILES,WATER_LEVEL} from './terrain.js';
 import {createCityMaterialPool} from './shared-materials.js';
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {prepareCityAsset} from './city-assets.js';
 import {MAP_BUILDINGS} from './map-buildings.js';
-import { MAP, point, WORK_STOPS, ROADS, nearRoad, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT } from './reference-layout.js';
+import { MAP, point, WORK_STOPS, ROADS, nearRoad, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT, COAST } from './reference-layout.js';
 export {isReferenceWater} from './reference-layout.js';
 import { BOROUGHS, LOCAL_SHOPS } from './layout.js';
 
@@ -100,22 +101,38 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
 }
 
 export function buildReferenceTerrain(world,scene){
- for(const [a,b,c,d,width] of ROADS){
-  const start=point(a,b),end=point(c,d),length=Math.hypot(end.x-start.x,end.z-start.z),angle=Math.atan2(end.x-start.x,end.z-start.z);
-  const road=world.box((start.x+end.x)/2,.001,(start.z+end.z)/2,width*MAP.scale,.002,length,'#414f59');road.rotation.y=angle;
-  for(let t=3;t<length;t+=7){const paint=world.box(start.x+Math.sin(angle)*t,.003,start.z+Math.cos(angle)*t,.15,.001,2.4,'#dfdfbf');paint.rotation.y=angle;}
+ const data=gridTerrain(),geometry=new T.BufferGeometry();
+ geometry.setAttribute('position',new T.Float32BufferAttribute(data.positions,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(data.uv,2));geometry.setIndex(data.indices);geometry.computeVertexNormals();
+ const ground=new T.Mesh(geometry,world.terrainMaterials.byColor.get('#708666'));ground.receiveShadow=true;ground.name='continuous-terrain';scene.add(ground);world.terrainCollider(geometry);
+ const water=new T.Mesh(new T.PlaneGeometry(MAP.width*MAP.scale,MAP.height*MAP.scale),world.terrainMaterials.water);
+ water.rotation.x=-Math.PI/2;water.position.set(MAP.x+MAP.width*MAP.scale/2,WATER_LEVEL,MAP.z+MAP.height*MAP.scale/2);water.name='continuous-water';scene.add(water);
+ for(const road of ROAD_PROFILES){
+  const vertices=[],uv=[],indices=[];
+  for(let i=0;i<=road.steps;i++){const d=road.length*i/road.steps,y=road.heightAt(d);for(const side of [-1,1]){vertices.push(road.start.x+road.dx*d+road.dz*road.width/2*side,y,road.start.z+road.dz*d-road.dx*road.width/2*side);uv.push((side+1)*road.width/8,d/4);}}
+  for(let i=0;i<road.steps;i++){const a=i*2;indices.push(a,a+2,a+1,a+1,a+2,a+3);}
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();
+  const mesh=new T.Mesh(g,world.terrainMaterials.byColor.get('#414f59'));mesh.receiveShadow=true;mesh.name=road.crossings.length?'bridge-road':'city-road';scene.add(mesh);world.terrainCollider(g);
+  const angle=Math.atan2(road.dx,road.dz);
+  for(let d=3;d<road.length-2;d+=7){const paint=world.box(road.start.x+road.dx*d,road.heightAt(d)+.012,road.start.z+road.dz*d,.15,.012,2.4,'#dfdfbf');paint.rotation.y=angle;}
+  // Rails and posts mark the raised span; gentle ramps stay open at both ends.
+  for(let d=1;d<road.length-1;d+=2){if(road.heightAt(d)<.5)continue;
+    for(const side of [-1,1]){const x=road.start.x+road.dx*d+road.dz*(road.width/2+.12)*side,z=road.start.z+road.dz*d-road.dx*(road.width/2+.12)*side,y=road.heightAt(d);
+      world.box(x,y+.43,z,.10,.86,.10,'#7b888c');const rail=world.box(x,y+.86,z,.1,.1,2.12,'#b3bdbe');rail.rotation.y=angle;}
+  }
  }
- // Narrow surface tiles follow the rivers rather than the preview's grid.
- const water=[];
- for(let v=0;v<941;v+=8)for(let u=0;u<1672;u+=8)if(rawWater(u+4,v+4))water.push(point(u+4,v+4));
- const tiles=new T.InstancedMesh(new T.BoxGeometry(8*MAP.scale,.0006,8*MAP.scale),world.terrainMaterials?.water ?? new T.MeshStandardMaterial({color:'#287f9d',roughness:.25,metalness:.2}),water.length),matrix=new T.Matrix4();
- water.forEach((p,i)=>tiles.setMatrixAt(i,matrix.makeTranslation(p.x,.0005,p.z)));scene.add(tiles);
  // A flat pedestrian pier and the roundabout match the original map.
- const pier=point(PIER[0],(PIER[1]+PIER[3])/2);world.box(pier.x,.002,pier.z,PIER[4]*MAP.scale,.002,(PIER[3]-PIER[1])*MAP.scale,'#c4b395');
- const dock=point(865,876);world.box(dock.x,.002,dock.z,55*MAP.scale,.002,12*MAP.scale,'#c4b395');
+ const pier=point(PIER[0],(PIER[1]+PIER[3])/2);world.box(pier.x,.06,pier.z,PIER[4]*MAP.scale,.12,(PIER[3]-PIER[1])*MAP.scale,'#c4b395');
+ const dock=point(865,876);world.box(dock.x,.06,dock.z,55*MAP.scale,.12,12*MAP.scale,'#c4b395');
  const round=point(ROUNDABOUT.u,ROUNDABOUT.v),island=new T.Mesh(new T.CylinderGeometry(23*MAP.scale,23*MAP.scale,.01,48),new T.MeshStandardMaterial({color:'#688754'}));island.position.set(round.x,-.002,round.z);scene.add(island);
  // Beach and promenade under the park, as shown on the supplied map.
- for(const [u,v,w,d,color] of [[875,800,450,26,'#d7bf88'],[875,778,450,12,'#bdb7a4']]){const p=point(u,v);world.box(p.x,.002,p.z,w*MAP.scale,.002,d*MAP.scale,color);}
+ const coastAt=u=>{for(let i=1;i<COAST.length;i++){const a=COAST[i-1],b=COAST[i];if(u<=b[0])return a[1]+(b[1]-a[1])*(u-a[0])/(b[0]-a[0]);}return COAST.at(-1)[1];};
+ for(const [inner,outer,color] of [[22,6,'#d7bf88'],[30,22,'#bdb7a4']]){
+  const positions=[],uv=[],indices=[];
+  for(let u=650;u<=1100;u+=5){for(const offset of [inner,outer]){const p=point(u,coastAt(u)-offset);positions.push(p.x,.012,p.z);uv.push(u*.1,offset*.1);}}
+  for(let i=0;i<90;i++){const a=i*2;indices.push(a,a+1,a+2,a+1,a+3,a+2);}
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();
+  const mesh=new T.Mesh(g,world.terrainMaterials.byColor.get(color));mesh.receiveShadow=true;scene.add(mesh);
+ }
  // Footpaths connect the park entrances to the fountain and promenade.
  for(const [u,v,w,d] of [[850,560,14,360],[850,400,340,14],[850,748,420,14],[775,110,14,80]]){const p=point(u,v);world.box(p.x,.002,p.z,w*MAP.scale,.002,d*MAP.scale,'#bcad8e');}
 }

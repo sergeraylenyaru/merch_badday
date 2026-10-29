@@ -75,7 +75,7 @@ test('old saves keep confirmed visits and receive fresh unfinished jobs', () => 
   old.carts = Array.from({ length: 24 }, () => ({ x: 0, z: 0 }));
   const state = load({ getItem: () => JSON.stringify(old) });
   assert.equal(state.shops[0].done, true); assert.equal(state.money, 712);
-  assert.equal(state.missionVersion, 2);
+  assert.equal(state.missionVersion, 3);
   assert.equal(jobDone(state, 1), false);
   assert.equal(state.shops[1].job.match.moves, 18);
   assert.equal(state.carts[5].x, SHOPS[2].x - 23.3);

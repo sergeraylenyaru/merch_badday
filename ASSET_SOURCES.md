@@ -71,3 +71,12 @@
 ## Обновлённый PBR-пак пользователя, 28 октября 2026
 
 Все 49 моделей обновлены из четырёх архивов models.zip/models2.zip/models3.zip/models4.zip. Дополнительно получены textures.zip, previews.zip, README_RU.txt, models_manifest.json, markers.json, terrain.glb и city_reference_quality_demo.glb. Встроенные изображения сопоставлены с PNG по RGBA-пикселям и вынесены в общие локальные файлы; геометрия, UV, вывески и параметры PBR сохранены. Исходное описание и манифест находятся в public/models/city-pack, демонстрация и её маркеры — в reference/. Отдельная лицензия не указана, CC0 набору не приписывается; использование поручено пользователем. Детали и проверки: PBR_UPDATE.md.
+
+## Полицейские открытой беты
+
+Quaternius **Swat**, Ultimate Modular Men Pack, CC0-1.0.
+Источник GLB: `trebeljahr/quaternius-showcase`, commit
+`722c39e964360beff2728a8ee4d103e2d11d457c`, `public/glb/modular_men/Swat.glb`.
+Локальный оригинал: `art/quaternius/police-swat.glb`.
+Адаптация с существующими CC0-анимациями: `scripts/import-police.py`.
+Лицензия и полный источник: `art/quaternius/README.md`.

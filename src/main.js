@@ -137,6 +137,9 @@ function resume() {
     ui.ending();
     return;
   }
+  if (!state.onboarding.callReceived) {
+    open('call');ui.incomingCall();initAudio();beep(740,.25);return;
+  }
   hasStarted = true;
   mode = "play";
   ui.clear();
@@ -213,6 +216,9 @@ function talk(shop, choice) {
     resume();
     return;
   }
+  if (shop.id === 0 && p.job.paid && !p.job.assigned && ['job','polite'].includes(choice)) {
+    p.job.assigned=true;message('Нина: Парковка оплачена, спасибо. Теперь восстановите выкладку трёх секций в зале: чай, сок и крупа. У каждой секции нажмите E. Затем вернитесь ко мне.');snapshot();resume();return;
+  }
   if (choice === "badge" && !p.badge) {
     p.badge = true;
     p.rep += 2;
@@ -272,7 +278,7 @@ function resetPlanogram(shop) {
 function payParking(shop) {
   const car = world.jobs.parkingCar;
   if (shop.id !== 0 || !car || !chargeParking(state, car.id)) { notify('Нужна неподвижная машина в голубой разметке и 40 ₽.'); return; }
-  notify('Парковка оплачена. Чек сохранён. Найдите Нину в торговом зале.');
+  message('Парковка оплачена. Первое задание выполнено! Зайдите к Нине в торговый зал: она даст новое задание.');
   beep(650); snapshot(); resume();
 }
 function rotateCircuit(shop, index) {
@@ -364,6 +370,7 @@ try {
   ui = createUI(state, {
     settings,
     resume,
+    answerCall(){state.onboarding.callReceived=true;state.selected=0;message('Региональный: Доброе утро! Ваша машина у дома. Первое задание — доехать до «У дома», занять голубое место и оплатить парковку. Затем зайдите к Нине за заданием в зале.');snapshot();resume();},
     configure,
     finish: () => end(),
     quit: () => end(true),
@@ -454,6 +461,8 @@ try {
     if (state.carrying) return task?.type === 'drop' ? 'E · Поставить коробку в приёмку' : 'Коробка в руках · R у грузовика — взять вторую; отнесите в голубую приёмку магазина «СуперЦена»';
     if (held) return held.missionCargo ? 'R · Оставить грузовую тележку в голубой приёмке' : 'R · Вернуть в жёлтую зону за бонус';
     if (task) return `E · ${task.label}`;
+    const employee=nearest(world.people.filter(n=>n.kind==='employee'),2.5);
+    if(employee)return `E · ${employee.role}`;
     const npc = nearest(
       world.people.filter((n) => n.kind === "staff" && isShopUnlocked(state, n.shop)),
       3.5,
@@ -502,6 +511,7 @@ try {
     if (task) {
       state.selected = task.shop;
       const shop = SHOPS[task.shop];
+      if (task.type === 'stocking') { world.jobs.startStocking(task.section); return; }
       if (task.type === 'receipt') { state.shops[8].job.collected=true; snapshot(); notify('Накладная у вас. Передайте её управляющей.'); return; }
       if (task.type === 'locked') { notify(`Магазин откроется после пяти визитов. Сейчас ${state.shops.filter((s) => s.done).length}/5.`); return; }
       if (held) { notify('Сначала отпустите ручку тележки: R.'); return; }
@@ -532,6 +542,8 @@ try {
       ui.dialogue(SHOPS[npc.shop]);
       return;
     }
+    const employee=nearest(world.people.filter(n=>n.kind==='employee'),2.5);
+    if(employee){open('employee');ui.employee(employee,SHOPS[employee.shop]);return;}
     const coffee = SHOPS.find(
       (s) => Math.hypot(pos.x - s.x - 17, pos.z - s.z - 4) < 3,
     );
@@ -1003,7 +1015,7 @@ try {
             .add(n.home.clone().sub(player).normalize().multiplyScalar(8));
           speed = 5;
         }
-      } else if (n.kind === 'staff') {
+      } else if (n.kind === 'staff' || n.kind === 'employee') {
         const intent = staffPatrol(n, SHOPS[n.shop], player, dt);
         target = intent.target ? new T.Vector3(intent.target.x, n.mesh.position.y, intent.target.z) : null;
         speed = intent.speed; n.lookAt = intent.lookAt; n.social = intent.social; n.activity = intent.activity;
@@ -1059,6 +1071,7 @@ try {
         v.heading = Math.atan2(delta.x, delta.z);
         v.mesh.rotation.y = v.heading;
       }
+      p.y=world.groundHeight(p.x,p.z);
       const officer = world.people.filter((n) => n.kind === "police")[i];
       if (officer.mesh.position.distanceTo(p) > 12)
         officer.mesh.position.set(p.x + 3, 0, p.z);
@@ -1301,6 +1314,7 @@ try {
       for (const event of jobEvents) {
         if (event.kind === 'pickup') notify('Коробка в руках. Отнесите её в голубую приёмку и нажмите E.');
         if (event.kind === 'drop') notify(`Товар принят · ${state.shops[4].job.delivered.length}/3 коробки`);
+        if (event.kind === 'stocking') notify(`Выкладка восстановлена · ${state.shops[0].job.stocked.length}/3. ${jobDone(state,0)?'Вернитесь к Нине за подтверждением.':'Следующая секция отмечена на карте.'}`);
         if (event.kind === 'repair') notify('Подсветка работает! Найдите сотрудника и подтвердите визит.');
         if (event.kind === 'warehouse') notify(`Акцизный товар принят · ${event.count}/2 тележки`);
         if (event.kind === 'search') notify(event.found ? 'ТСД найден! Верните терминал управляющему.' : 'Здесь только упаковка. Проверьте остальные места.');

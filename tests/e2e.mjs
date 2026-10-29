@@ -1,204 +1,56 @@
-import { chromium } from "playwright";
-import { freshState, SHOPS } from "../src/state.js";
-import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { navigate } from './job-browser.mjs';
-const service = spawn(
-  process.execPath,
-  [
-    "node_modules/vite/bin/vite.js",
-    "--host",
-    "127.0.0.1",
-    "--port",
-    "5188",
-    "--strictPort",
-  ],
-  { stdio: "ignore" },
-);
-const url = "http://127.0.0.1:5188";
-let browser;
-try {
-  for (let i = 0; i < 100; i++) {
-    try {
-      if ((await fetch(url)).ok) break;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  browser = await chromium.launch({
-    executablePath:
-      process.env.BROWSER_PATH ||
-      (existsSync("/usr/bin/chromium") ? "/usr/bin/chromium" : undefined),
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--enable-unsafe-swiftshader",
-      "--use-angle=swiftshader",
-    ],
-  });
-  const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
-  const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto(url);
-  const fixture = freshState();
-  fixture.position = { x: -52, z: 30 };
-  fixture.carts = [
-    { x: -52, z: 28 },
-    { x: -65, z: 31 },
-  ];
-  await page.addInitScript((s) => {
-    if (!sessionStorage.getItem("fixture-seeded")) {
-      localStorage.setItem("merch-badday-v1", JSON.stringify(s));
-      localStorage.setItem(
-        "merch-settings",
-        JSON.stringify({ quality: "low", volume: 0, sensitivity: 1 }),
-      );
-      sessionStorage.setItem("fixture-seeded", "1");
-    }
-  }, fixture);
-  await page.reload();
-  await page.waitForSelector("#begin");
-  await page.click("#begin");
-  await page.keyboard.press("KeyR");
-  await page.waitForTimeout(500);
-  assert.match(await page.locator("#context").innerText(), /жёлтую зону/);
-  assert.equal(await page.evaluate(() => __MERCH__.motion.heldCartId), 0);
-  async function walk(x, z, tolerance = 1.3) {
-    for (let i = 0; i < 90; i++) {
-      const p = await page.evaluate(() => __MERCH__.state.position);
-      const dx = x - p.x,
-        dz = z - p.z;
-      if (Math.hypot(dx, dz) < tolerance) return;
-      const f = -Math.sin(0.25) * dx - Math.cos(0.25) * dz,
-        s = Math.cos(0.25) * dx - Math.sin(0.25) * dz;
-      const list = [];
-      if (Math.abs(f) > 0.5) list.push(f > 0 ? "KeyW" : "KeyS");
-      if (Math.abs(s) > 0.5) list.push(s > 0 ? "KeyD" : "KeyA");
-      for (const k of list) await page.keyboard.down(k);
-      const start = await page.evaluate(() => __MERCH__.state.time);
-      await page.waitForFunction((time) => __MERCH__.state.time > time + 0.12, start, { timeout: 60000 });
-      for (const k of list) await page.keyboard.up(k);
-    }
-    throw Error(
-      "Walk failed " +
-        JSON.stringify(await page.evaluate(() => __MERCH__.state.position)),
-    );
-  }
-  await walk(-63, 32);
-  await page.keyboard.press("KeyR");
-  await page.waitForTimeout(600);
-  console.log("CARTS", await page.evaluate(() => __MERCH__.state.shops[0]));
-  assert.equal(await page.evaluate(() => __MERCH__.state.shops[0].carts), 2);
-  await walk(-54, 34);
-  for (let n = 0; n < 12; n++) {
-    const { director, position } = await page.evaluate(() => ({ director: __MERCH__.people.find((n) => n.kind === 'staff' && n.shop === 0).position, position: __MERCH__.state.position }));
-    if (Math.hypot(director[0] - position.x, director[2] - position.z) < 2.7) break;
-    await navigate(page, director[0], director[2], 1.5);
-  }
-  await page.keyboard.press("KeyE");
-  await page.waitForSelector('[data-choice="badge"]');
-  await page.click('[data-choice="badge"]');
-  await page.keyboard.press("KeyE");
-  await page.waitForSelector('[data-choice="polite"]');
-  await page.click('[data-choice="polite"]');
-  console.log(
-    "DIALOGUE RESULT",
-    await page.evaluate(() => __MERCH__.state.shops[0]),
-    await page.locator("#toast").innerText(),
-  );
-  assert.equal(await page.evaluate(() => __MERCH__.state.shops[0].done), false);
-  console.log("OPTIONAL CARTS AND BADGE DO NOT BYPASS PRIMARY JOB");
-  await navigate(page, -42, 32, 0.4);
-  await page.keyboard.press("KeyE");
-  await page.waitForFunction(() => __MERCH__.vehicles.some((vehicle) => vehicle.controlled));
-  await page.waitForFunction(() => document.querySelector('#speed').textContent.includes('км'));
-  assert.match(await page.locator("#speed").innerText(), /км/);
-  const before = await page.evaluate(() => __MERCH__.state.position);
-  const driveStart = await page.evaluate(() => __MERCH__.state.time);
-  await page.keyboard.down("KeyW");
-  await page.waitForFunction((time) => __MERCH__.state.time > time + 0.65, driveStart, { timeout: 60000 });
-  await page.keyboard.up("KeyW");
-  const after = await page.evaluate(() => __MERCH__.state.position);
-  assert.ok(Math.hypot(after.x - before.x, after.z - before.z) > 0.5);
-  await page.keyboard.press("KeyE");
-  await page.waitForFunction(() => document.querySelector('#speed').textContent === '');
-  assert.equal(await page.locator("#speed").innerText(), "");
-  console.log("VEHICLE", before, after);
-  await page.keyboard.press("KeyM");
-  await page.waitForSelector(".phone");
-  await page.click('[data-tab="Маршрут"]');
-  assert.match(
-    await page.locator('[data-shop="0"]').innerText(),
-    /Свободное место/,
-  );
-  await page.reload();
-  await page.waitForSelector("#begin");
-  assert.equal(await page.evaluate(() => __MERCH__.state.shops[0].done), false);
-  assert.equal(await page.evaluate(() => __MERCH__.state.shops[0].badge), true);
-  assert.equal(await page.evaluate(() => __MERCH__.state.shops[0].carts), 2);
-  console.log("PERSISTENCE PASS", errors);
-  await page.close();
-  async function scenario(s) {
-    const p = await browser.newPage({ viewport: { width: 800, height: 650 } });
-    p.on("pageerror", (e) => errors.push(e.message));
-    await p.addInitScript((s) => {
-      localStorage.setItem("merch-badday-v1", JSON.stringify(s));
-      localStorage.setItem(
-        "merch-settings",
-        JSON.stringify({ quality: "low", volume: 0, sensitivity: 1 }),
-      );
-    }, s);
-    await p.goto(url);
-    await p.waitForSelector("#begin");
-    await p.click("#begin");
-    await p.waitForTimeout(300);
-    return p;
-  }
-
-  let s = freshState();
-  s.position = { x: -47, z: -56 };
-  let p = await scenario(s);
-  await p.keyboard.press("KeyE");
-  await p.waitForSelector("#matchGrid");
-  assert.equal(await p.locator('[data-cell]').count(), 36);
-  assert.equal(await p.evaluate(() => __MERCH__.state.shops[1].job.match.moves), 18);
-  assert.equal(await p.evaluate(() => __MERCH__.state.shops[1].done), false);
-  console.log("MATCH-THREE ENTRY PASS (FULL GAME IN jobs.e2e.mjs)");
-  await p.close();
-  s = freshState();
-  s.position = { x: 11, z: -44 };
-  s.carts = SHOPS.flatMap((shop) =>
-    Array.from({ length: shop.required }, (_, i) => ({
-      x: shop.x - 11 + (i % 3) * 2,
-      z: shop.z + 10 + Math.floor(i / 3) * 2,
-    })),
-  );
-  p = await scenario(s);
-  await p.keyboard.press("KeyM");
-  await p.waitForSelector(".phone");
-  await p.click('[data-tab="Фото"]');
-  await p.click("#takePhoto");
-  await p.waitForSelector("#photoResult img");
-  assert.equal(await p.evaluate(() => __MERCH__.state.shops[2].photo), true);
-  console.log("PHOTO PASS");
-  await p.close();
-  s = freshState();
-  s.position = { x: -55, z: 20 };
-  p = await scenario(s);
-  await p.keyboard.press("KeyF");
-  await p.waitForTimeout(500);
-  assert.ok(await p.evaluate(() => __MERCH__.state.wanted >= 1));
-  assert.equal(await p.evaluate(() => __MERCH__.state.conflicts), 1);
-  await p.keyboard.press("Escape");
-  await p.waitForSelector("#finish");
-  await p.click("#finish");
-  assert.equal(await p.evaluate(() => __MERCH__.mode), "end");
-  assert.ok(await p.locator("#restart").count());
-  console.log("COMBAT/WANTED/ENDING PASS");
-  await p.close();
-
-  assert.deepEqual(errors, []);
-} finally {
-  await browser?.close();
-  service.kill();
-}
+import assert from 'node:assert/strict';
+import {startBrowser,advance,hold,navigate} from './job-browser.mjs';
+import {freshState,SHOPS} from '../src/state.js';
+import {HOME_CAR,START,point} from '../src/city/reference-layout.js';
+import {PARKING_BAY} from '../src/jobs/parking.js';
+import {roadHeight} from '../src/city/terrain.js';
+const app=await startBrowser(5188);
+const s0=SHOPS[0];
+try{
+ // Test first-launch call through real buttons, without a seeded save.
+ const {chromium}=await import('playwright');
+ const browser=await chromium.launch({executablePath:process.env.BROWSER_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
+ try{
+  const page=await browser.newPage({viewport:{width:1000,height:700}});page.setDefaultTimeout(60000);
+  page.on('pageerror',e=>app.errors.push(e.message));
+  await page.addInitScript(()=>localStorage.setItem('merch-settings',JSON.stringify({quality:'low',volume:0,sensitivity:1})));
+  await page.goto('http://127.0.0.1:5188');await page.locator('#begin').click();await page.locator('#answerCall').waitFor();
+  assert.equal(await page.evaluate(()=>__MERCH__.state.onboarding.callReceived),false);
+  assert.equal(await page.evaluate(()=>document.pointerLockElement),null);
+  await page.locator('#answerCall').click();await page.waitForFunction(()=>__MERCH__.view.pointerLocked);
+  assert.deepEqual(await page.evaluate(()=>__MERCH__.state.position),START);
+  await advance(page,.2);
+  const actors=await page.evaluate(()=>({people:__MERCH__.people,replacements:__MERCH__.visuals.replacements,assets:__MERCH__.visuals.assets}));
+  for(const shop of SHOPS){assert.equal(actors.people.filter(n=>n.kind==='staff'&&n.shop===shop.id).length,1);assert.equal(actors.people.filter(n=>n.kind==='employee'&&n.shop===shop.id).length,2);}
+  assert.equal(actors.replacements.filter(n=>n.entity==='officer'&&n.kind==='police').length,3);assert.equal(actors.assets.failed,0);
+  console.log('CHECK home path to personal car');
+  await navigate(page,HOME_CAR.x-1.8,HOME_CAR.z, .5);await page.keyboard.press('KeyE');
+  await page.waitForFunction(()=>__MERCH__.vehicles.some(v=>v.controlled));assert.equal(await page.evaluate(()=>__MERCH__.state.wanted),0);
+  const before=await page.evaluate(()=>__MERCH__.state.position);await hold(page,['KeyW'],.4);const after=await page.evaluate(()=>__MERCH__.state.position);assert.ok(Math.hypot(after.x-before.x,after.z-before.z)>.05);
+  await page.keyboard.press('KeyE');await page.waitForFunction(()=>!__MERCH__.vehicles.some(v=>v.controlled));
+  await page.keyboard.press('KeyM');await page.locator('#bigmap').waitFor();await page.reload();await page.locator('#begin').click();await page.waitForFunction(()=>__MERCH__.view.pointerLocked);assert.equal(await page.locator('#answerCall').count(),0);
+  console.log('PASS home, call, personal car, driving, 18 employees, 3 police models, save/reload');
+ }finally{await browser.close();}
+ // A vehicle already aligned in the bay is a starting fixture; payment and
+ // the entire in-store assignment run through player controls and collisions.
+ const state=freshState();state.onboarding.callReceived=true;state.position={x:s0.x+11,z:s0.z+16.4};
+ state.vehicles[0]={x:s0.x+PARKING_BAY.x,z:s0.z+PARKING_BAY.z,heading:0,claimed:true};
+ const {page,context}=await app.scenario(state,'first-visit');
+ await page.keyboard.press('KeyE');await page.locator('#payParking').waitFor();assert.equal(await page.locator('#payParking').isEnabled(),true);await page.locator('#payParking').click();
+ assert.equal(await page.evaluate(()=>__MERCH__.state.money),260);assert.equal(await page.evaluate(()=>__MERCH__.state.shops[0].done),false);
+ async function director(){for(let i=0;i<10;i++){const p=await page.evaluate(()=>__MERCH__.people.find(n=>n.kind==='staff'&&n.shop===0).position);await navigate(page,p[0],p[2],1.1);await page.keyboard.press('KeyE');if(await page.locator('[data-choice="job"]').count())return;}throw Error('Director dialogue unreachable');}
+ console.log('CHECK first director assignment');
+ await director();await page.locator('[data-choice="job"]').click();assert.equal(await page.evaluate(()=>__MERCH__.state.shops[0].job.assigned),true);
+ for(const [section,x] of [[0,-8],[1,-5.8],[2,8]]){console.log('CHECK stocking',section);await navigate(page,s0.x+x,s0.z-.3,.3);await page.keyboard.press('KeyE');await page.waitForFunction(i=>__MERCH__.state.shops[0].job.stocked.includes(i),section,{timeout:60000});}
+ await director();await page.locator('[data-choice="polite"]').click();assert.equal(await page.evaluate(()=>__MERCH__.state.shops[0].done),true);
+ await page.keyboard.press('KeyM');await page.locator('#bigmap').waitFor();await page.reload();await page.locator('#begin').click();await page.waitForFunction(()=>__MERCH__.view.pointerLocked);assert.equal(await page.evaluate(()=>__MERCH__.state.shops[0].done),true);
+ await context.close();console.log('PASS parking payment, director assignment, three physical shelf sections, confirmed visit and persistence');
+ // Real walking over each bridge checks collision heights and continuity.
+ for(const [name,u,v,keys] of [['west-bridge',615,337,['KeyD']],['east-bridge',1100,337,['KeyD']]]){
+  const state=freshState();state.onboarding.callReceived=true;state.position=point(u,v);const {page,context}=await app.scenario(state,name);
+  await advance(page,.1);const before=await page.evaluate(()=>__MERCH__.state.position);await hold(page,keys,2);const after=await page.evaluate(()=>({p:__MERCH__.state.position,y:__MERCH__.view.groundHeight}));
+  assert.ok(Math.hypot(after.p.x-before.x,after.p.z-before.z)>10);assert.ok(Math.abs(after.y-roadHeight(after.p.x,after.p.z))<.01);await page.screenshot({path:`.playwright/${name}.png`});await context.close();
+ }
+ assert.deepEqual(app.errors,[]);console.log('PASS both main bridges: movement, shared visual/physics elevations, no browser errors');
+}finally{await app.close();}
+await import('./beta-actions.e2e.mjs');

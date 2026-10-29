@@ -2,7 +2,7 @@ import { newPlanogram, planogramWon } from './match3.js';
 import { newCircuit, circuitConnected } from './circuit.js';
 
 export const JOBS = [
-  { type: 'parking', title: 'Свободное место', description: 'Найдите голубое парковочное место, припаркуйте легковую машину и оплатите 40 ₽ в паркомате.', action: 'Оплатить парковку', point: [11, 14.8] },
+  { type: 'parking', title: 'Первый визит', description: 'По звонку припаркуйте машину у «У дома» и оплатите 40 ₽. Затем зайдите к Нине: в зале нужно восстановить выкладку трёх секций.', action: 'Оплатить парковку', point: [11, 14.8] },
   { type: 'planogram', title: 'Полочная головоломка', description: 'Выполните планограмму: соберите по 6 упаковок чая, сока и крупы в игре «три в ряд».', action: 'Планограмма: три в ряд', point: [8, -1] },
   { type: 'warehouse', title: 'Акцизная поставка', description: 'Зайдите на склад слева от магазина и вывезите две загруженные табачными коробками тележки в голубую приёмку.', action: 'Склад: две тележки', point: [-22, 2] },
   { type: 'repair', title: 'Снова светло', description: 'В правом холодильном шкафу погасла подсветка. Соедините контакты на панели, затем включите лампу.', action: 'Починить подсветку', point: [11, -4.7] },
@@ -29,7 +29,7 @@ export const WAREHOUSE_RECEIVING = Object.freeze({ x: -1, z: 7.4, w: 6.5, d: 4 }
 export const DELIVERY_ORDER = Object.freeze([2, 0, 1]); // top carton before its supporting carton
 export function newJob(id) {
   return [
-    () => ({ paid: false, parkedCarId: null }),
+    () => ({ paid: false, parkedCarId: null, assigned: false, stocked: [] }),
     () => ({ match: newPlanogram() }),
     () => ({ delivered: [] }),
     () => ({ circuit: newCircuit(), repaired: false, rotations: 0 }),
@@ -48,7 +48,7 @@ export function jobDone(state, id) {
   if (!p) return false;
   switch (JOBS[id].type) {
     case 'courier': return p.collected === true;
-    case 'parking': return p.paid === true && Number.isInteger(p.parkedCarId) && p.parkedCarId >= 0;
+    case 'parking': return p.paid === true && Number.isInteger(p.parkedCarId) && p.parkedCarId >= 0 && p.assigned === true && [0,1,2].every(i=>p.stocked.includes(i));
     case 'planogram': return !!p.match && planogramWon(p.match);
     case 'warehouse': return [5, 6].every((cart) => p.delivered.includes(cart));
     case 'repair': return p.repaired === true && circuitConnected(p.circuit);
@@ -66,7 +66,7 @@ export function jobProgress(state, id) {
   if (jobDone(state, id)) return 'ГОТОВО · НАЙДИТЕ ДИРЕКТОРА';
   switch (JOBS[id].type) {
     case 'courier': return 'НАКЛАДНАЯ · ЗАБЕРИТЕ В ПРИЁМКЕ';
-    case 'parking': return p.parkedCarId === null ? 'ПАРКОВКА · НАЙДИТЕ МЕСТО' : 'ПАРКОВКА · ОПЛАТИТЕ 40 ₽';
+    case 'parking': return !p.paid ? (p.parkedCarId === null ? 'ПО ЗВОНКУ · ПРИПАРКУЙТЕСЬ У ПЕРВОГО МАГАЗИНА' : 'ПАРКОВКА · ОПЛАТИТЕ 40 ₽') : !p.assigned ? 'ПАРКОВКА ГОТОВА · ПОЛУЧИТЕ ЗАДАНИЕ У НИНЫ' : `ВЫКЛАДКА В ЗАЛЕ · ${p.stocked.length}/3 СЕКЦИИ`;
     case 'planogram': return `ПЛАНОГРАММА · ${p.match.collected.slice(0, 3).map((n) => Math.min(6, n)).join(' / ')} ИЗ 6`;
     case 'warehouse': return `ПОСТАВКА · ${p.delivered.length}/2 ТЕЛЕЖКИ`;
     case 'repair': return 'ПОДСВЕТКА · СОЕДИНИТЕ КОНТАКТЫ';

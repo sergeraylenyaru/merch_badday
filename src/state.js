@@ -103,7 +103,8 @@ export const freshState = () => ({
   wantedElapsed: 0,
   shift: {...makeShift(),upgrades:{...career().upgrades}},
   career: career(),
-  missionVersion: 2,
+  missionVersion: 3,
+  onboarding: {callReceived: false},
   carrying: null,
   gateNotified: false,
   time: 0,
@@ -130,7 +131,7 @@ export const freshState = () => ({
   })),
   messages: [
     "Региональный: Девять точек — девять разных задач. Задания и адреса — в телефоне. Тележки теперь за отдельный бонус.",
-    "ГиперМакс откроется после пяти подтверждённых визитов. Начать можно с любого другого магазина.",
+    "Утро у дома. Ответьте на звонок регионального, возьмите свою машину и отправляйтесь к магазину «У дома». После парковки Нина даст работу в зале. ГиперМакс откроется после пяти визитов.",
   ],
   carts: [],
   vehicles: [],
@@ -195,8 +196,9 @@ export function load(storage = localStorage) {
     ) {
       const v = { ...freshState(), ...s };
       if(s.shops.length===8&&Array.isArray(v.vehicles)){v.vehicles=[...v.vehicles];v.vehicles.splice(8,0,null);}
-      const migrating = s.missionVersion !== 2;
-      v.missionVersion = 2;
+      const migrating = ![2,3].includes(s.missionVersion);
+      v.missionVersion = 3;
+      v.onboarding = {callReceived: s.onboarding ? s.onboarding.callReceived === true : true};
       if (s.cityVersion !== 3) {
         v.cityVersion = 3; v.position = {...START}; v.carts=[]; v.vehicles=[]; v.carrying=null;
       }
@@ -215,7 +217,7 @@ export function load(storage = localStorage) {
           job.match.seed = Number.isInteger(job.match.seed) ? job.match.seed >>> 0 : 19071;
           job.match.score = Number.isFinite(job.match.score) ? Math.max(0, job.match.score) : 0;
         }
-        if (id === 0) { job.paid = job.paid === true; if (!Number.isInteger(job.parkedCarId) || job.parkedCarId < 0) { job.parkedCarId = null; job.paid = false; } }
+        if (id === 0) { job.assigned = job.assigned === true || old.done; job.stocked = old.done ? [0,1,2] : [...new Set(Array.isArray(job.stocked) ? job.stocked : [])].filter(i=>[0,1,2].includes(i)); job.paid = job.paid === true; if (!Number.isInteger(job.parkedCarId) || job.parkedCarId < 0) { job.parkedCarId = null; job.paid = false; } }
         if (id === 2 || id === 4) job.delivered = [...new Set(Array.isArray(job.delivered) ? job.delivered : [])].filter((n) => (id === 2 ? [5, 6] : [0, 1, 2]).includes(n));
         if (id === 3 && (!Array.isArray(job.circuit) || job.circuit.length !== 9 || !job.circuit.every((n) => Number.isInteger(n) && n >= 1 && n < 16))) job.circuit = newJob(3).circuit;
         if (id === 5) job.removed = [...new Set(Array.isArray(job.removed) ? job.removed : [])].filter((n) => [0, 2, 4].includes(n));
