@@ -4,7 +4,7 @@ import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {prepareCityAsset} from './city-assets.js';
 import {MAP_BUILDINGS} from './map-buildings.js';
-import { MAP, point, WORK_STOPS, ROADS, nearRoad, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT, COAST } from './reference-layout.js';
+import { MAP, point, WORK_STOPS, ROADS, nearRoad, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT, COAST, PARK_PATHS } from './reference-layout.js';
 export {isReferenceWater} from './reference-layout.js';
 import { BOROUGHS, LOCAL_SHOPS } from './layout.js';
 import { createUrbanDetails } from './urban-details.js';
@@ -136,5 +136,5 @@ export function buildReferenceTerrain(world,scene){
   const mesh=new T.Mesh(g,world.terrainMaterials.byColor.get(color));mesh.receiveShadow=true;scene.add(mesh);
  }
  // Footpaths connect the park entrances to the fountain and promenade.
- for(const [u,v,w,d] of [[850,560,14,360],[850,400,340,14],[850,748,420,14],[775,110,14,80]]){const p=point(u,v);world.box(p.x,.002,p.z,w*MAP.scale,.002,d*MAP.scale,'#bcad8e');}
+ for(const [u,v,w,d] of PARK_PATHS){const p=point(u,v);world.box(p.x,.002,p.z,w*MAP.scale,.002,d*MAP.scale,'#bcad8e');}
 }

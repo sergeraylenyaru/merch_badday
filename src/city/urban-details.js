@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { MAP_BUILDINGS } from './map-buildings.js';
-import { WORK_STOPS, LOCAL_POINTS, nearRoad, isReferenceWater } from './reference-layout.js';
+import { MAP, HOME, HOME_CAR, ROAD_BOXES, PARK_PATHS, WORK_STOPS, LOCAL_POINTS, isReferenceWater } from './reference-layout.js';
+import { boxesIntersect, vehicleBox } from '../spatial.js';
 
 /**
  * Runtime procedural asset library for the final city pass.
@@ -33,7 +34,7 @@ const ARCHETYPE_RULES = [
   [/^(entry-door|intercom|entrance-canopy|entrance-steps|wheelchair-ramp|handrail|basement-window|balcony|drainpipe|ac-unit|roof-vent|antenna|address-plate)$/, 'building-detail'],
   [/^(sidewalk-(straight|corner)|curb|lowered-curb|driveway|pedestrian-island|retaining-wall|lawn-fence)$/, 'pavement'],
   [/^(traffic-light|pedestrian-signal|road-sign|direction-sign|parking-meter|barrier|bollards|guardrail|speed-bump|parking-stop|traffic-cone|temporary-barrier)$/, 'traffic'],
-  [/^(bridge-|bridge-pier|bridge-abutment|bridge-railing|approach-fence|seawall|water-stairs|pier$|shoreline-stones|drainage-pipe|life-ring)$/, 'bridge'],
+  [/^(bridge-|bridge-pier|bridge-abutment|bridge-railing|approach-fence|seawall(-turn)?|water-stairs|pier$|shoreline-stones|drainage-pipe|life-ring)$/, 'bridge'],
   [/^(birch|poplar|linden|maple|spruce|young-tree|mature-tree)$/, 'tree'],
   [/^(shrub-(round|tall)|hedge|flowerbed|flower-planter|grass-clump|reeds|stump|fallen-branch)$/, 'plant'],
   [/^(bench-|trash-bin|recycling-bin|waste-containers|fenced-bin-area|information-board|bike-rack|clothesline|gazebo|game-table|garden-fence)$/, 'furniture'],
@@ -154,6 +155,7 @@ function buildAsset(id, variant, c) {
   const v = Math.max(0, variant | 0);
   const palette = ['blue', 'brick', 'green', 'yellow', 'plaster', 'orange'];
   const accent = palette[v % palette.length];
+  const shirt = id === 'police-patrol' || id === 'security-guard' ? 'navy' : ['loader','municipal-worker'].includes(id) ? 'orange' : ['seller','cashier','director'].includes(id) ? 'blue' : id === 'delivery-driver' ? 'green' : ['blue', 'green', 'brick', 'fabric', 'orange'][v % 5];
   const sign = (label, w, h, x, y, z, bg) => textSign(g, label, w, h, x, y, z, bg || PALETTE.navy, PALETTE.cream);
   const post = (x, h, z, color = 'metal', r = 0.045) => cy(g, r, r, h, x, h / 2, z, color, 8);
   const rail = (x1, y1, z1, x2, y2, z2, thickness = 0.055, color = 'metal') => {
@@ -256,12 +258,12 @@ function buildAsset(id, variant, c) {
     if (id === 'traffic-light' || id === 'pedestrian-signal') {
       post(0, 3.0, 0, 'darkMetal', 0.075); box(g, 0.48, id === 'pedestrian-signal' ? 0.8 : 1.35, 0.38, 0, id === 'pedestrian-signal' ? 2.25 : 2.1, 0, 'black');
       const ys = id === 'pedestrian-signal' ? [2.25] : [2.52, 2.12, 1.72];
-      ys.forEach((y, i) => sphere(g, id === 'pedestrian-signal' ? 0.18 : 0.14, 0, y, 0.21, id === 'pedestrian-signal' ? 'green' : ['red', 'yellow', 'green'][i], 2));
+      ys.forEach((y, i) => sp(g, id === 'pedestrian-signal' ? 0.18 : 0.14, 0, y, 0.21, id === 'pedestrian-signal' ? 'green' : ['red', 'yellow', 'green'][i], 2));
       box(g, 0.8, 0.1, 0.6, 0, 0.05, 0, 'darkMetal');
     } else if (id === 'road-sign' || id === 'direction-sign') {
       post(0, 2.5, 0, 'metal', 0.04); box(g, id === 'direction-sign' ? 1.25 : 0.8, 0.8, 0.08, 0, 2.05, 0, id === 'road-sign' ? 'red' : 'blue');
       if (id === 'direction-sign') sign('ЦЕНТР', 1.1, 0.34, 0, 2.05, 0.05, PALETTE.blue);
-      else sphere(g, 0.21, 0, 2.05, 0.055, 'white', 2);
+      else sp(g, 0.21, 0, 2.05, 0.055, 'white', 2);
     } else if (id === 'parking-meter') {
       post(0, 1.5, 0, 'darkMetal', 0.055); box(g, 0.42, 0.56, 0.25, 0, 1.18, 0, 'blue'); box(g, 0.25, 0.14, 0.035, 0, 1.28, 0.14, 'yellow');
     } else if (id === 'barrier') {
@@ -374,7 +376,7 @@ function buildAsset(id, variant, c) {
       cy(g, 0.12, 0.18, 1.1, 0, 0.55, 0, 'yellow', 10); cy(g, 1.0, 1.0, 0.12, 0, 1.12, 0, 'blue', 16);
       for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; box(g, 0.35, 0.18, 0.55, Math.sin(a) * 0.7, 1.25, Math.cos(a) * 0.7, i % 2 ? 'orange' : 'red', a); }
     } else if (id === 'spring-rider') {
-      cy(g, 0.06, 0.06, 0.62, 0, 0.32, 0, 'metal', 8, 0, 0.12); box(g, 0.9, 0.25, 0.42, 0, 0.85, 0, 'orange'); sphere(g, 0.24, 0, 1.08, 0, 'yellow', 2); rail(-0.38, 1.0, 0, 0.38, 1.0, 0, 0.045, 'darkMetal');
+      cy(g, 0.06, 0.06, 0.62, 0, 0.32, 0, 'metal', 8, 0, 0.12); box(g, 0.9, 0.25, 0.42, 0, 0.85, 0, 'orange'); sp(g, 0.24, 0, 1.08, 0, 'yellow', 2); rail(-0.38, 1.0, 0, 0.38, 1.0, 0, 0.045, 'darkMetal');
     } else if (id === 'sandbox') {
       box(g, 2.6, 0.28, 2.2, 0, 0.14, 0, 'wood'); box(g, 2.35, 0.07, 1.95, 0, 0.19, 0, 'yellow');
     } else if (id === 'play-complex') {
@@ -606,7 +608,6 @@ function buildAsset(id, variant, c) {
     }
   } else if (record.archetype === 'character') {
     const skin = ['#c58f6c', '#a96f50', '#e0b18b'][v % 3];
-    const shirt = id === 'police-patrol' || id === 'security-guard' ? 'navy' : ['loader','municipal-worker'].includes(id) ? 'orange' : ['seller','cashier','director'].includes(id) ? 'blue' : id === 'delivery-driver' ? 'green' : ['blue', 'green', 'brick', 'fabric', 'orange'][v % 5];
     cy(g, 0.19, 0.21, 0.65, 0, 1.42, 0, shirt, 10);
     sp(g, 0.18, 0, 1.95, 0, skin, 2); cy(g, 0.1, 0.1, 0.1, 0, 2.13, 0, 'wood', 8);
     for (const x of [-0.13, 0.13]) { cy(g, 0.075, 0.09, 0.65, x, 0.58, 0, 'navy', 8); box(g, 0.18, 0.12, 0.32, x, 0.08, 0.05, 'black'); }
@@ -685,7 +686,7 @@ function buildAsset(id, variant, c) {
         for (const floor of balconyFloors) {
           const wy = 0.65 + floor * step, x = (floor % 2 ? -1 : 1) * w * 0.22;
           box(g, 1.42, 0.1, 0.62, x, wy - 0.48, d / 2 + 0.32, 'concrete');
-          for (const bx of [x - 0.62, x - 0.3, x, x + 0.3, x + 0.62]) post(bx, 0.68, d / 2 + 0.59, 'metal', 0.022);
+          for (const bx of [x - 0.62, x - 0.3, x, x + 0.3, x + 0.62]) { const support=post(bx, 0.68, d / 2 + 0.59, 'metal', 0.022); support.position.y+=wy-0.48; }
           rail(x - 0.68, 0.68 + wy - 0.48, d / 2 + 0.59, x + 0.68, 0.68 + wy - 0.48, d / 2 + 0.59, 0.035, 'white');
         }
         // Small roof access, ventilation and drainage make repeated blocks less generic.
@@ -776,53 +777,69 @@ export function createUrbanDetails(sceneRoot, world, point) {
   detailRoot.name = 'complete-urban-details'; sceneRoot.add(detailRoot);
   const placed = [], sourceGroups = [], colliders = [];
   const byId = new Map(URBAN_ASSET_CATALOG.map((item) => [item.id, item]));
-  function stopClear(u, v, radius = 0) {
-    return WORK_STOPS.every((s) => Math.abs(u - s.u) > 50 + radius || Math.abs(v - s.v) > 42 + radius);
-  }
-  function occupied(u, v, radius = 0) {
-    if (u < 22 || u > 1650 || v < 24 || v > 780) return true;
-    if (isReferenceWater(u, v) || nearRoad(u, v, 2 + radius * 0.12) || !stopClear(u, v, radius)) return true;
-    if (MAP_BUILDINGS.some((b) => Math.hypot(u - b[1], v - b[2]) < Math.max(b[3], b[4]) * 0.5 + radius + 7)) return true;
-    if (placed.some((p) => Math.hypot(u - p.u, v - p.v) < p.radius + radius + 3)) return true;
-    if (LOCAL_POINTS.some(([x, z]) => Math.hypot(u - x, v - z) < 20 + radius)) return true;
-    if (u < 220 && [48, 90, 710, 744].some((row) => Math.abs(v - row) < 16 + radius)) return true;
+  const pathBoxes=PARK_PATHS.map(([u,v,w,d])=>{const p=point(u,v);return {x:p.x,z:p.z,w:w*MAP.scale/2,d:d*MAP.scale/2};});
+  const buildingBoxes=MAP_BUILDINGS.map(([,u,v,w,d])=>{const p=point(u,v);return {x:p.x,z:p.z,w:w*MAP.scale/2,d:d*MAP.scale/2};});
+  const homeApproach={x:(HOME.x+HOME_CAR.x)/2,z:(HOME.z+HOME_CAR.z)/2,w:Math.abs(HOME.x-HOME_CAR.x)/2+3,d:Math.abs(HOME.z-HOME_CAR.z)/2+3};
+  function occupied(footprint, options={}) {
+    const u=(footprint.x-MAP.x)/MAP.scale,v=(footprint.z-MAP.z)/MAP.scale;
+    const w=footprint.w/MAP.scale,d=footprint.d/MAP.scale;
+    if(u-w<22||u+w>1650||v-d<24||v+d>780)return true;
+    // Test the full visible footprint, including corners, overhangs and signs.
+    for(const dx of [-w,0,w])for(const dz of [-d,0,d])if(isReferenceWater(u+dx,v+dz))return true;
+    if(!options.roadSurface && ROAD_BOXES.some(road=>boxesIntersect(footprint,road)))return true;
+    if(pathBoxes.some(path=>boxesIntersect(footprint,path)))return true;
+    if(buildingBoxes.some(building=>boxesIntersect(footprint,building)))return true;
+    if((world?.blockers??[]).some(b=>b.enabled!==false&&boxesIntersect(footprint,b)))return true;
+    if((world?.vehicles??[]).some(v=>!v.police&&boxesIntersect(footprint,vehicleBox(v))))return true;
+    if(boxesIntersect(footprint,homeApproach))return true;
+    if(placed.some(p=>boxesIntersect(footprint,p.footprint)))return true;
+    if(WORK_STOPS.some(s=>{const p=point(s.u,s.v);return boxesIntersect(footprint,{x:p.x,z:p.z,w:50*MAP.scale,d:42*MAP.scale});}))return true;
+    // An owned shop apron permits its own furnishings; the shop's actual
+    // building collider and a pedestrian approach remain protected.
+    if(LOCAL_POINTS.some(([su,sv],index)=>{
+      const p=point(su,sv);
+      return index===options.shopIndex
+        ? boxesIntersect(footprint,{x:p.x,z:p.z+4,w:1.5,d:5})
+        : boxesIntersect(footprint,{x:p.x,z:p.z,w:20*MAP.scale,d:20*MAP.scale});
+    }))return true;
+    if(u-w<220&&[48,90,710,744].some(row=>Math.abs(v-row)<16+d))return true;
     return false;
   }
-  function add(id, u, v, variant = 0, rotation = 0, options = {}) {
-    if (!byId.has(id)) return false;
-    const radius = options.radius ?? 5;
-    if (!options.force && occupied(u, v, radius)) return false;
-    const model = buildAsset(id, variant, context), p = point(u, v);
-    model.position.set(p.x, options.y ?? 0.015, p.z); model.rotation.y = rotation;
-    model.updateMatrixWorld(true); detailRoot.add(model); sourceGroups.push(model);
-    placed.push({ id, u, v, radius, category: byId.get(id).category });
-    if (options.solid && world?.box) {
-      const width = options.width ?? 7.2, height = options.height ?? 4.3, depth = options.depth ?? 5.2;
-      const collider = world.box(p.x, height / 2, p.z, width, height, depth, '#6c7770', true);
-      collider.visible = false; colliders.push(collider);
+  function add(id, u, v, variant=0, rotation=0, options={}) {
+    if(!byId.has(id))return false;
+    const model=buildAsset(id,variant,context),bounds=new T.Box3(),size=new T.Vector3(),center=new T.Vector3();
+    const candidates=[[u,v]];
+    for(let r=4;r<=(options.search??0);r+=4)for(let i=0;i<16;i++)candidates.push([u+Math.cos(i*Math.PI/8)*r,v+Math.sin(i*Math.PI/8)*r]);
+    for(const [cu,cv] of candidates){
+      const p=point(cu,cv);model.position.set(p.x,options.y??((world?.groundHeight?.(p.x,p.z)??0)+.015),p.z);model.rotation.y=rotation;
+      model.updateMatrixWorld(true);bounds.setFromObject(model);bounds.getSize(size);bounds.getCenter(center);
+      const footprint={x:center.x,z:center.z,w:size.x/2+.12,d:size.z/2+.12};
+      if(occupied(footprint,options))continue;
+      detailRoot.add(model);sourceGroups.push(model);
+      placed.push({id,u:cu,v:cv,category:byId.get(id).category,footprint,shopIndex:options.shopIndex??null,roadSurface:options.roadSurface===true});
+      if(options.solid&&world?.box){
+        const collider=world.box(center.x,center.y,center.z,size.x,size.y,size.z,'#6c7770',true);
+        collider.visible=false;colliders.push(collider);
+      }
+      return true;
     }
-    return true;
+    return false;
   }
 
-  // Residential yards and entrance details; variants share geometry and PBR materials.
-  add('entry-door', 112, 247, 0, 0, { force: true, radius: 2 });
-  add('intercom', 115, 248, 1, 0, { force: true, radius: 1 });
-  add('address-plate', 119, 248, 2, 0, { force: true, radius: 1 });
-  add('basement-window', 130, 247, 0, 0, { force: true, radius: 2 });
-  add('ac-unit', 141, 247, 1, 0, { force: true, radius: 2 });
+  // Additional residential structures only fit into genuinely empty lots.
   add('private-house', 95, 155, 0, 0, { radius: 17, solid: true, width: 5.8, height: 3.4, depth: 4.8 });
   add('garage', 215, 135, 1, 0, { radius: 14, solid: true, width: 4.2, height: 2.5, depth: 3.8 });
   add('garage-row', 214, 164, 2, 0, { radius: 18, solid: true, width: 8.4, height: 2.5, depth: 3.8 });
 
   // Four signalised junctions, placed on their sidewalk corners rather than in lanes.
   for (const [u, v, r] of [[225, 316, 0], [253, 316, 1], [225, 356, 2], [253, 356, 0], [486, 319, 1], [514, 319, 0], [1152, 300, 2], [1183, 300, 1], [1374, 316, 0], [1407, 357, 1]]) {
-    add(r % 2 ? 'pedestrian-signal' : 'traffic-light', u, v, r, 0, { force: true, radius: 1 });
+    add(r % 2 ? 'pedestrian-signal' : 'traffic-light', u, v, r, 0, { search: 28 });
   }
   for (const [u, v, id, variant] of [
     [214, 305, 'road-sign', 0], [260, 360, 'direction-sign', 1], [477, 303, 'parking-meter', 0],
     [525, 356, 'bollards', 1], [1144, 315, 'road-sign', 2], [1190, 356, 'traffic-cone', 0],
     [1368, 300, 'direction-sign', 0], [1415, 360, 'barrier', 1],
-  ]) add(id, u, v, variant, 0, { force: true, radius: 1 });
+  ]) add(id, u, v, variant, 0, { search: 28 });
 
   // Park furniture, playground equipment, and several silhouettes for each plant family.
   for (const [u, v, variant] of [[150, 215, 0], [320, 210, 1], [370, 540, 0], [720, 455, 1], [910, 420, 0], [1430, 290, 1]]) {
@@ -845,8 +862,8 @@ export function createUrbanDetails(sceneRoot, world, point) {
   // Shop exteriors: a-board, ATM, bicycle stands, trolley canopy, and delivery barriers.
   for (const [i, shop] of LOCAL_POINTS.entries()) {
     const offsets = [[-13, 10, 'a-board'], [13, 9, 'atm'], [-10, -12, 'bike-parking'], [14, -12, 'cart-shelter']];
-    for (const [dx, dz, id] of offsets) add(id, shop[0] + dx, shop[1] + dz, i % 3, 0, { radius: 3 });
-    add('loading-zone-fence', shop[0] + 18, shop[1] + 5, i % 2, 0, { radius: 3 });
+    for (const [dx, dz, id] of offsets) add(id, shop[0] + dx, shop[1] + dz, i % 3, 0, { shopIndex:i, search:24 });
+    add('loading-zone-fence', shop[0] + 18, shop[1] + 5, i % 2, 0, { shopIndex:i, search:24 });
   }
 
   // Loading-yard props and complete staff-room / merchandiser equipment.
@@ -856,24 +873,16 @@ export function createUrbanDetails(sceneRoot, world, point) {
     add('cage-trolley', u + 4, v + 7, variant, 0, { radius: 2 }); add('hand-truck', u + 7, v + 8, variant, 0, { radius: 2 });
     add('shipping-box', u + 2, v + 10, variant, 0, { radius: 2 }); add('stretch-wrap', u + 6, v + 11, variant, 0, { radius: 2 });
   }
-  for (const [u, v, id, variant] of [
-    [125, 264, 'director-desk', 0], [129, 264, 'office-chair', 1], [133, 264, 'computer', 0],
-    [137, 264, 'filing-cabinet', 1], [141, 264, 'staff-lockers', 2], [145, 264, 'microwave', 0],
-    [149, 264, 'kettle', 1], [153, 264, 'water-cooler', 0], [157, 264, 'wall-clock', 1],
-    [161, 264, 'fire-extinguisher', 0], [165, 264, 'first-aid-kit', 1], [169, 264, 'cctv-camera', 0],
-    [173, 264, 'tablet', 1], [177, 264, 'handheld-terminal', 0], [181, 264, 'barcode-scanner', 2],
-    [185, 264, 'badge', 0], [189, 264, 'invoice', 1], [193, 264, 'work-bag', 0], [197, 264, 'box-cutter', 2],
-  ]) add(id, u, v, variant, 0, { force: true, radius: 1 });
 
   // Small public-service buildings are fitted only into clear lots away from the road and mission doors.
   const services = ['pharmacy', 'clinic', 'police-station', 'fire-station', 'school', 'kindergarten', 'post-office', 'pickup-point', 'tire-shop', 'car-wash', 'gas-station'];
   const candidates = [];
   for (let v = 80; v <= 755; v += 21) for (let u = 45; u <= 1620; u += 21) {
-    if (!occupied(u, v, 20)) candidates.push({ u, v, score: Math.abs(v - 400) + Math.abs(u - 840) * 0.08 });
+    if (!occupied({x:point(u,v).x,z:point(u,v).z,w:3.8,d:2.9})) candidates.push({ u, v, score: Math.abs(v - 400) + Math.abs(u - 840) * 0.08 });
   }
   candidates.sort((a, b) => a.score - b.score);
   for (const id of services) {
-    const index = candidates.findIndex((p) => !occupied(p.u, p.v, 20));
+    const index = candidates.findIndex((p) => !occupied({x:point(p.u,p.v).x,z:point(p.u,p.v).z,w:3.8,d:2.9}));
     if (index < 0) break;
     const p = candidates.splice(index, 1)[0];
     add(id, p.u, p.v, services.indexOf(id) % 3, 0, { radius: 20, solid: true, width: 7.2, height: 4.3, depth: 5.2 });
@@ -891,7 +900,7 @@ export function createUrbanDetails(sceneRoot, world, point) {
     [248, 275, 'drain-grate', 0], [254, 275, 'fire-hydrant', 1], [260, 275, 'gas-pipe', 2],
     [266, 275, 'power-pole', 0], [272, 275, 'ventilation-grille', 1], [278, 275, 'construction-fence', 2],
     [284, 275, 'rubble-pile', 0], [290, 275, 'waste-skip', 1],
-  ]) add(id, u, v, variant, 0, { force: true, radius: 1 });
+  ]) add(id, u, v, variant, 0, { search: 32, roadSurface: id==='manhole'||id==='drain-grate', solid:id==='transformer-hut'||id==='electrical-cabinet' });
 
   // Final instancing pass: preserve model detail while keeping repeated props draw-call efficient.
   const batches = new Map();
@@ -916,7 +925,15 @@ export function createUrbanDetails(sceneRoot, world, point) {
 
   return {
     root: detailRoot,
-    diagnostics: { categories: CATEGORY_DATA.length, catalogModels: URBAN_ASSET_CATALOG.length, placedModels: placed.length, instances: instanceCount, uniqueBatches: batches.size, publicServices: services.length, colliders: colliders.length },
-    dispose() { detailRoot.removeFromParent(); context.dispose(); for (const collider of colliders) collider.removeFromParent?.(); },
+    diagnostics: { categories: CATEGORY_DATA.length, catalogModels: URBAN_ASSET_CATALOG.length, placedModels: placed.length, instances: instanceCount, uniqueBatches: batches.size, publicServices: placed.filter(p=>p.category==='public-buildings').length, colliders: colliders.length, placements:placed.map(p=>({...p,footprint:{...p.footprint}})) },
+    dispose() {
+      detailRoot.removeFromParent();context.dispose();
+      for(const mesh of colliders){
+        const collider=world?.physics?.getCollider(mesh.userData.colliderHandle);
+        const body=collider?.parent();if(body)world.physics.removeRigidBody(body);
+        const index=world?.blockers?.indexOf(mesh.userData.blocker)??-1;if(index>=0)world.blockers.splice(index,1);
+        mesh.geometry?.dispose();mesh.removeFromParent();
+      }
+    },
   };
 }
