@@ -59,6 +59,13 @@ export const URBAN_ASSET_CATALOG = Object.freeze(CATEGORY_DATA.flatMap(([categor
   ids.split(' ').map((id) => Object.freeze({ id, category, categoryLabel, archetype: archetypeFor(id) })),
 ));
 
+const RU_LABELS = {
+  pharmacy: 'АПТЕКА', clinic: 'ПОЛИКЛИНИКА', 'police-station': 'ПОЛИЦИЯ', 'fire-station': 'ПОЖАРНАЯ ЧАСТЬ',
+  school: 'ШКОЛА', kindergarten: 'ДЕТСКИЙ САД', 'post-office': 'ПОЧТА', 'pickup-point': 'ПУНКТ ВЫДАЧИ',
+  'tire-shop': 'ШИНОМОНТАЖ', 'car-wash': 'АВТОМОЙКА', 'gas-station': 'АЗС', 'private-house': 'ДОМ',
+  garage: 'ГАРАЖ', 'garage-row': 'ГАРАЖИ', 'apartment-5': 'ЖИЛОЙ ДОМ', 'apartment-9': 'ЖИЛОЙ ДОМ',
+};
+
 const PALETTE = {
   plaster: '#d8d0bf', cream: '#f1e7d2', concrete: '#9a9d98', asphalt: '#454d52',
   brick: '#a85e4c', brickDark: '#70473f', roof: '#59646a', metal: '#89979b',
@@ -157,18 +164,22 @@ function buildAsset(id, variant, c) {
 
   if (record.archetype === 'building') {
     const isHouse = id === 'private-house', isGarage = id.startsWith('garage'), isApartment = id.startsWith('apartment-');
-    const w = isGarage ? 4.2 : isHouse ? 5.8 : isApartment ? (id === 'apartment-9' ? 9 : 7.6) : 7.2;
+    const w = isGarage ? (id === 'garage-row' ? 8.4 : 4.2) : isHouse ? 5.8 : isApartment ? (id === 'apartment-9' ? 9 : 7.6) : 7.2;
     const h = isGarage ? 2.5 : isHouse ? 3.4 : isApartment ? (id === 'apartment-9' ? 13.5 : 7.7) : 4.3;
     const d = isGarage ? 3.8 : isHouse ? 4.8 : isApartment ? 5.3 : 5.2;
-    box(g, w, h, d, 0, h / 2, 0, isHouse ? 'cream' : isGarage ? 'concrete' : 'plaster');
+    const serviceColor = ({pharmacy:'green',clinic:'cream','police-station':'navy','fire-station':'red',school:'yellow',kindergarten:'orange','post-office':'blue','pickup-point':'green','tire-shop':'darkMetal','car-wash':'blue','gas-station':'yellow'})[id] || 'plaster';
+    box(g, w, h, d, 0, h / 2, 0, isHouse ? 'cream' : isGarage ? 'concrete' : isApartment ? (v % 3 === 0 ? 'plaster' : v % 3 === 1 ? 'cream' : 'brick') : serviceColor);
     box(g, w + 0.18, 0.22, d + 0.18, 0, h + 0.08, 0, isHouse ? 'brick' : 'roof');
     if (isHouse) cone(g, w * 0.78, 1.45, 0, h + 0.75, 0, 'brick', 4, Math.PI / 4);
     const floors = isApartment ? (id === 'apartment-9' ? 9 : 5) : isHouse ? 1 : 2;
     const cols = isApartment ? 5 : isHouse ? 2 : 3;
     for (let floor = 0; floor < floors; floor++) for (let col = 0; col < cols; col++) {
       const wx = -w / 2 + (col + 0.5) * w / cols, wy = 0.65 + floor * ((h - 0.8) / floors);
-      box(g, Math.max(0.45, w / cols * 0.52), Math.min(1.25, h / floors * 0.55), 0.07, wx, wy, d / 2 + 0.045, floor % 3 === 0 ? 'glass' : 'blue');
-      box(g, Math.max(0.5, w / cols * 0.6), 0.06, 0.1, wx, wy - 0.34, d / 2 + 0.09, 'white');
+      const ww = Math.max(0.45, w / cols * 0.52), wh = Math.min(1.25, h / floors * 0.55);
+      box(g, ww + 0.13, wh + 0.13, 0.055, wx, wy, d / 2 + 0.035, 'white');
+      box(g, ww, wh, 0.07, wx, wy, d / 2 + 0.085, floor % 3 === 0 ? 'glass' : 'blue');
+      box(g, ww * 0.86, 0.035, 0.025, wx, wy, d / 2 + 0.13, 'metal');
+      box(g, ww + 0.2, 0.07, 0.13, wx, wy - wh * 0.56, d / 2 + 0.11, 'white');
     }
     if (isGarage) {
       box(g, 2.7, 1.65, 0.09, 0, 0.9, d / 2 + 0.07, 'darkMetal');
@@ -184,7 +195,7 @@ function buildAsset(id, variant, c) {
     if (id === 'retail-ground-floor') {
       box(g, w * 0.72, 1.5, 0.08, 0, 1.25, d / 2 + 0.08, 'glass');
       sign('МАГАЗИН', 3.6, 0.65, 0, 2.35, d / 2 + 0.13, PALETTE.navy);
-    } else sign(id.replaceAll('-', ' '), Math.min(w - 0.8, 5.4), 0.45, 0, h - 0.42, d / 2 + 0.11, PALETTE.navy);
+    } else sign(RU_LABELS[id] || id.replaceAll('-', ' '), Math.min(w - 0.8, 5.4), 0.45, 0, h - 0.42, d / 2 + 0.11, PALETTE.navy);
   } else if (record.archetype === 'building-detail') {
     if (id === 'entry-door') {
       box(g, 1.25, 2.35, 0.16, 0, 1.18, 0, 'darkMetal'); box(g, 1.05, 2.15, 0.06, 0, 1.18, 0.12, 'blue');
@@ -397,10 +408,37 @@ function buildAsset(id, variant, c) {
       for (let x = -1.0; x <= 1.0; x += 0.5) { cy(g, 0.035, 0.035, 0.85, x, 0.42, 0, 'metal', 8); torus(g, 0.22, 0.035, x, 0.68, 0, 'metal', 0); }
     } else if (id === 'loading-zone-fence') {
       for (let x = -1.5; x <= 1.5; x += 0.5) post(x, 1.0, 0, 'yellow', 0.04); rail(-1.5, 0.8, 0, 1.5, 0.8, 0, 0.06, 'yellow');
+    } else if (id === 'storefront' || id === 'vitrine') {
+      box(g, 6.5, 3.4, 0.42, 0, 1.7, 0, 'plaster');
+      box(g, 5.75, 1.95, 0.08, 0, 1.58, 0.24, 'glass');
+      for (const x of [-2.82, -1.42, 0, 1.42, 2.82]) box(g, 0.07, 1.95, 0.12, x, 1.58, 0.27, 'white');
+      box(g, 6.7, 0.16, 1.15, 0, 3.22, 0.28, 'roof');
+      sign('МАГАЗИН 24', 3.6, 0.55, 0, 2.72, 0.35, PALETTE.navy);
+      if (id === 'vitrine') { box(g, 1.15, 0.1, 0.08, -1.75, 1.0, 0.34, 'wood'); box(g, 1.15, 0.1, 0.08, 1.75, 1.0, 0.34, 'wood'); }
+    } else if (id === 'automatic-door' || id === 'swing-door') {
+      box(g, 2.25, 2.65, 0.18, 0, 1.32, 0, 'darkMetal');
+      box(g, 0.98, 2.42, 0.08, id === 'swing-door' ? -0.51 : -0.51, 1.32, 0.13, 'glass');
+      box(g, 0.98, 2.42, 0.08, 0.51, 1.32, 0.13, 'glass');
+      box(g, 0.055, 2.3, 0.06, 0, 1.32, 0.18, 'metal');
+      for (const x of [-0.82, 0.82]) box(g, 0.05, 0.22, 0.07, x, 1.25, 0.2, 'yellow');
+      if (id === 'automatic-door') { box(g, 0.48, 0.08, 0.06, 0, 2.73, 0.17, 'yellow'); box(g, 0.08, 0.1, 0.06, 0, 2.73, 0.2, 'darkMetal'); }
+    } else if (id === 'vestibule') {
+      box(g, 3.2, 3.0, 2.2, 0, 1.5, 0, 'glass');
+      for (const x of [-1.5, -0.5, 0.5, 1.5]) box(g, 0.07, 3.0, 2.25, x, 1.5, 0, 'metal');
+      box(g, 3.3, 0.16, 2.35, 0, 3.0, 0, 'roof');
+      box(g, 1.15, 2.5, 0.08, 0, 1.25, 1.12, 'blue');
+    } else if (id === 'storefront-canopy') {
+      box(g, 6.3, 0.14, 1.6, 0, 2.8, 0.55, accent);
+      for (const x of [-2.6, -1.3, 0, 1.3, 2.6]) box(g, 0.045, 0.38, 1.52, x, 2.56, 0.55, x % 2 ? 'white' : accent);
+      for (const x of [-2.4, 2.4]) rail(x, 2.7, 0.5, x, 2.2, 0.85, 0.045, 'metal');
+    } else if (id === 'signboard') {
+      box(g, 3.8, 0.82, 0.16, 0, 2.7, 0, 'navy');
+      sign('МАГАЗИН 24', 3.55, 0.56, 0, 2.7, 0.1, PALETTE.navy);
+      for (const x of [-1.5, 1.5]) box(g, 0.12, 0.3, 0.18, x, 2.15, 0, 'metal');
     } else {
       box(g, 6.5, 3.4, 0.45, 0, 1.7, 0, 'plaster'); box(g, 5.7, 1.8, 0.1, 0, 1.7, 0.27, 'glass');
       box(g, 1.0, 2.1, 0.12, -2.3, 1.05, 0.34, 'blue'); box(g, 6.8, 0.16, 1.4, 0, 3.25, 0.3, 'roof');
-      sign(id === 'signboard' ? 'МАГАЗИН' : '24 / 7', 3.5, 0.62, 0, 2.75, 0.37, PALETTE.navy);
+      sign('24 / 7', 3.5, 0.62, 0, 2.75, 0.37, PALETTE.navy);
     }
   } else if (record.archetype === 'retail') {
     if (id.includes('shelving') || id === 'endcap' || id === 'bread-rack' || id === 'produce-counter') {
@@ -553,11 +591,22 @@ function buildAsset(id, variant, c) {
       box(g, w * 0.82, h * 0.45, length * 0.48, 0, h * 1.0, -length * 0.03, 'glass');
       if (id === 'ambulance') box(g, 0.12, 0.48, length * 0.35, w * 0.51, h * 0.65, 0, 'red');
       if (id === 'garbage-truck') box(g, w * 0.9, h * 0.7, length * 0.42, 0, h * 1.25, -length * 0.24, 'green');
-      for (const x of [-w * 0.42, w * 0.42]) for (const z of [-length * 0.34, length * 0.34]) cy(g, 0.32, 0.32, 0.16, x, 0.32, z, 'black', 12, Math.PI / 2);
+      for (const x of [-w * 0.42, w * 0.42]) for (const z of [-length * 0.34, length * 0.34]) {
+        cy(g, 0.32, 0.32, 0.18, x, 0.32, z, 'black', 12, 0, Math.PI / 2);
+        cy(g, 0.17, 0.17, 0.19, x + Math.sign(x) * 0.018, 0.32, z, 'metal', 12, 0, Math.PI / 2);
+      }
       box(g, w * 0.35, 0.12, 0.08, 0, h * 0.42, length * 0.51, 'white');
+      box(g, w * 0.78, 0.14, 0.18, 0, 0.25, length * 0.51, 'darkMetal');
+      for (const x of [-w * 0.34, w * 0.34]) {
+        box(g, 0.25, 0.22, 0.08, x, h * 0.62, length * 0.51, 'yellow');
+        box(g, 0.22, 0.2, 0.08, x, h * 0.62, -length * 0.51, 'red');
+        box(g, 0.12, 0.22, 0.28, x * 1.12, h * 0.9, 0, 'darkMetal');
+      }
+      for (let z = -length * 0.25; z <= length * 0.25; z += length * 0.25) box(g, w * 0.012, h * 0.38, 0.04, w * 0.505, h * 0.98, z, 'metal');
     }
   } else if (record.archetype === 'character') {
-    const skin = ['#c58f6c', '#a96f50', '#e0b18b'][v % 3], shirt = ['blue', 'green', 'brick', 'fabric', 'orange'][v % 5];
+    const skin = ['#c58f6c', '#a96f50', '#e0b18b'][v % 3];
+    const shirt = id === 'police-patrol' || id === 'security-guard' ? 'navy' : ['loader','municipal-worker'].includes(id) ? 'orange' : ['seller','cashier','director'].includes(id) ? 'blue' : id === 'delivery-driver' ? 'green' : ['blue', 'green', 'brick', 'fabric', 'orange'][v % 5];
     cy(g, 0.19, 0.21, 0.65, 0, 1.42, 0, shirt, 10);
     sp(g, 0.18, 0, 1.95, 0, skin, 2); cy(g, 0.1, 0.1, 0.1, 0, 2.13, 0, 'wood', 8);
     for (const x of [-0.13, 0.13]) { cy(g, 0.075, 0.09, 0.65, x, 0.58, 0, 'navy', 8); box(g, 0.18, 0.12, 0.32, x, 0.08, 0.05, 'black'); }
@@ -620,7 +669,98 @@ function buildAsset(id, variant, c) {
       box(g, 1.2, 1.6, 0.7, 0, 0.8, 0, 'green'); box(g, 1.3, 0.12, 0.75, 0, 1.62, 0, 'darkMetal');
     }
   }
-  g.userData.assetId = id; g.userData.variant = v; g.userData.archetype = record.archetype;
+  // Final stylized-realism pass: architectural rhythm, readable silhouettes, and role-specific details.
+  if (record.archetype === 'building') {
+    const isHouse = id === 'private-house', isGarage = id.startsWith('garage'), isApartment = id.startsWith('apartment-');
+    const w = isGarage ? (id === 'garage-row' ? 8.4 : 4.2) : isHouse ? 5.8 : isApartment ? (id === 'apartment-9' ? 9 : 7.6) : 7.2;
+    const h = isGarage ? 2.5 : isHouse ? 3.4 : isApartment ? (id === 'apartment-9' ? 13.5 : 7.7) : 4.3;
+    const d = isGarage ? 3.8 : isHouse ? 4.8 : isApartment ? 5.3 : 5.2;
+    if (!isGarage) {
+      for (const x of [-w / 2 + 0.08, w / 2 - 0.08]) box(g, 0.12, h - 0.2, 0.12, x, h / 2, d / 2 + 0.075, 'cream');
+      box(g, w + 0.08, 0.09, 0.13, 0, 0.18, d / 2 + 0.07, 'white');
+      if (isApartment) {
+        const floors = id === 'apartment-9' ? 9 : 5, step = (h - 0.8) / floors;
+        for (let floor = 1; floor < floors; floor++) box(g, w + 0.04, 0.055, 0.1, 0, 0.65 + (floor - 0.5) * step, d / 2 + 0.075, 'cream');
+        const balconyFloors = v % 3 === 0 ? [1, 3] : v % 3 === 1 ? [1, 2, 4] : [2, 4];
+        for (const floor of balconyFloors) {
+          const wy = 0.65 + floor * step, x = (floor % 2 ? -1 : 1) * w * 0.22;
+          box(g, 1.42, 0.1, 0.62, x, wy - 0.48, d / 2 + 0.32, 'concrete');
+          for (const bx of [x - 0.62, x - 0.3, x, x + 0.3, x + 0.62]) post(bx, 0.68, d / 2 + 0.59, 'metal', 0.022);
+          rail(x - 0.68, 0.68 + wy - 0.48, d / 2 + 0.59, x + 0.68, 0.68 + wy - 0.48, d / 2 + 0.59, 0.035, 'white');
+        }
+        // Small roof access, ventilation and drainage make repeated blocks less generic.
+        box(g, 0.9, 0.52, 0.75, v % 2 ? -w * 0.25 : w * 0.25, h + 0.34, 0, 'roof');
+        box(g, 0.98, 0.08, 0.82, v % 2 ? -w * 0.25 : w * 0.25, h + 0.64, 0, 'darkMetal');
+      }
+      for (const x of [-w / 2 + 0.14, w / 2 - 0.14]) {
+        cy(g, 0.045, 0.055, h - 0.15, x, h / 2, d / 2 + 0.11, 'darkMetal', 8);
+        for (let floor = 1; floor < (isApartment ? (id === 'apartment-9' ? 9 : 5) : 2); floor++) box(g, 0.12, 0.04, 0.16, x, floor * 1.5, d / 2 + 0.12, 'metal');
+      }
+      if (!isApartment && !isHouse) {
+        box(g, w * 0.7, 0.16, 0.32, 0, 2.7, d / 2 + 0.22, id === 'fire-station' ? 'red' : id === 'pharmacy' ? 'green' : 'yellow');
+        for (const x of [-w * 0.28, w * 0.28]) box(g, 0.12, 0.12, 0.08, x, 2.42, d / 2 + 0.23, 'darkMetal');
+      }
+    }
+  }
+  if (record.archetype === 'shopfront') {
+    if (id === 'storefront' || id === 'vitrine') {
+      for (const x of [-2.82, 2.82]) box(g, 0.1, 2.05, 0.13, x, 1.58, 0.32, 'cream');
+      box(g, 6.6, 0.1, 0.18, 0, 0.52, 0.32, 'white');
+    }
+    if (id === 'atm') {
+      box(g, 0.54, 0.08, 0.05, 0, 1.47, 0.27, 'yellow');
+      box(g, 0.22, 0.05, 0.035, 0, 0.62, 0.26, 'white');
+    }
+  }
+  if (record.archetype === 'retail') {
+    if (id.includes('shelving') || id === 'endcap' || id === 'bread-rack' || id === 'produce-counter') {
+      const width = id === 'endcap' ? 1.1 : 2.3;
+      box(g, width, 0.12, 0.07, 0, 0.14, 0.41, 'darkMetal');
+      for (let i = 0; i < 4; i++) box(g, width * 0.92, 0.035, 0.025, 0, 0.33 + i * 0.43, 0.42, 'yellow');
+    }
+    if (id === 'checkout' || id === 'self-checkout') {
+      for (let i = 0; i < 5; i++) box(g, 0.035, 0.018, 0.52, -0.78 + i * 0.18, 1.005, 0.02, 'metal');
+      box(g, 0.36, 0.055, 0.08, 0.75, 1.63, 0.22, 'yellow');
+    }
+  }
+  if (record.archetype === 'product') {
+    if (id.includes('box') || id.includes('pack') || id.includes('carton') || id === 'household-chemistry' || id === 'tobacco-carton') {
+      const width = id.includes('carton') ? 0.42 : id.includes('pack') ? 0.48 : id.includes('box') ? 0.55 : 0.55;
+      box(g, width * 0.72, 0.045, 0.028, 0, id.includes('box') ? 0.57 : 0.48, 0.205, 'white');
+      box(g, width * 0.42, 0.035, 0.03, 0, id.includes('box') ? 0.2 : 0.15, 0.207, v % 2 ? 'yellow' : 'red');
+      if (id.includes('carton')) box(g, width * 0.9, 0.08, 0.08, 0, 0.64, 0, 'white');
+    }
+    if (id === 'apple' || id === 'tomato') {
+      for (let i = 0; i < 3; i++) cy(g, 0.018, 0.018, 0.06, (i - 1) * 0.045, 0.44, 0.025, 'green', 5, 0, (i - 1) * 0.25);
+    }
+  }
+  if (record.archetype === 'character') {
+    // Face, hair, collar, pocket, belt and shoes keep the common rig-like base readable at gameplay distance.
+    sp(g, 0.16, 0, 2.055, -0.015, v % 2 ? 'black' : 'wood', 2);
+    sp(g, 0.035, -0.065, 1.99, 0.16, 'black', 1); sp(g, 0.035, 0.065, 1.99, 0.16, 'black', 1);
+    box(g, 0.07, 0.025, 0.025, 0, 1.91, 0.17, 'brick');
+    box(g, 0.24, 0.09, 0.06, 0, 1.73, 0.14, 'white');
+    box(g, 0.25, 0.26, 0.035, -0.095, 1.48, 0.205, id === 'seller' || id === 'cashier' ? 'green' : shirt);
+    box(g, 0.36, 0.08, 0.36, 0, 0.92, 0, 'black');
+    for (const x of [-0.13, 0.13]) box(g, 0.19, 0.12, 0.34, x, 0.08, 0.09, 'black');
+    if (id === 'seller' || id === 'cashier') box(g, 0.44, 0.55, 0.045, 0, 1.38, 0.22, 'green');
+    if (id === 'police-patrol') {
+      box(g, 0.34, 0.08, 0.3, 0, 2.16, 0, 'navy');
+      box(g, 0.12, 0.1, 0.035, 0.08, 1.48, 0.23, 'yellow');
+    }
+  }
+  if (record.archetype === 'tree') {
+    if (id === 'birch') for (const y of [0.45, 0.85, 1.25, 1.65, 2.05]) box(g, 0.19, 0.045, 0.035, 0, y, 0.16, 'darkMetal');
+    if (['linden','maple','birch','young-tree','mature-tree'].includes(id)) {
+      for (const [x,y,z,r,col] of [[-0.8,2.9,0.1,0.8,'leafDark'],[0.75,3.1,-0.1,0.85,'leafLight'],[0,3.45,0.1,0.9,'leaf'],[-0.25,2.55,-0.3,0.68,'leaf']]) sp(g, r, x, y, z, col, 2);
+    }
+  }
+  g.traverse((node) => {
+    if (!node.isMesh) return;
+    node.castShadow = ['building','tree','vehicle','character'].includes(record.archetype);
+    node.receiveShadow = true;
+  });
+  g.userData.assetId = id; g.userData.variant = v; g.userData.archetype = record.archetype; g.userData.quality = 'stylized-high';
   return g;
 }
 
@@ -759,8 +899,8 @@ export function createUrbanDetails(sceneRoot, world, point) {
     model.updateMatrixWorld(true);
     model.traverse((node) => {
       if (!node.isMesh) return;
-      const key = node.geometry.uuid + '/' + (Array.isArray(node.material) ? node.material.map((m) => m.uuid).join(',') : node.material.uuid);
-      if (!batches.has(key)) batches.set(key, { geometry: node.geometry, material: node.material, matrices: [] });
+      const key = node.geometry.uuid + '/' + (Array.isArray(node.material) ? node.material.map((m) => m.uuid).join(',') : node.material.uuid) + '/' + Number(node.castShadow) + '/' + Number(node.receiveShadow);
+      if (!batches.has(key)) batches.set(key, { geometry: node.geometry, material: node.material, castShadow: node.castShadow, receiveShadow: node.receiveShadow, matrices: [] });
       batches.get(key).matrices.push(node.matrixWorld.clone());
     });
     detailRoot.remove(model);
@@ -770,7 +910,7 @@ export function createUrbanDetails(sceneRoot, world, point) {
     const mesh = new T.InstancedMesh(batch.geometry, batch.material, batch.matrices.length);
     mesh.name = 'urban-prop-batch-' + instanceCount;
     batch.matrices.forEach((matrix, i) => mesh.setMatrixAt(i, matrix));
-    mesh.instanceMatrix.needsUpdate = true; mesh.castShadow = true; mesh.receiveShadow = true;
+    mesh.instanceMatrix.needsUpdate = true; mesh.castShadow = batch.castShadow; mesh.receiveShadow = batch.receiveShadow;
     detailRoot.add(mesh); instanceCount += batch.matrices.length;
   }
 
