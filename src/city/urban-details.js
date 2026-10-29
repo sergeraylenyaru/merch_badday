@@ -29,9 +29,9 @@ const CATEGORY_DATA = [
 ];
 
 const ARCHETYPE_RULES = [
-  [/^(apartment-|corner-section|arched-building|retail-ground-floor|private-house|garage|garage-row|pharmacy|clinic|police-station|fire-station|school|kindergarten|post-office|pickup-point|tire-shop|car-wash|gas-station)$/, 'building'],
+  [/^(apartment-(5|9)|corner-section|arched-building|retail-ground-floor|private-house|garage|garage-row|pharmacy|clinic|police-station|fire-station|school|kindergarten|post-office|pickup-point|tire-shop|car-wash|gas-station)$/, 'building'],
   [/^(entry-door|intercom|entrance-canopy|entrance-steps|wheelchair-ramp|handrail|basement-window|balcony|drainpipe|ac-unit|roof-vent|antenna|address-plate)$/, 'building-detail'],
-  [/^(sidewalk-|curb|lowered-curb|driveway|pedestrian-island|retaining-wall|lawn-fence)$/, 'pavement'],
+  [/^(sidewalk-(straight|corner)|curb|lowered-curb|driveway|pedestrian-island|retaining-wall|lawn-fence)$/, 'pavement'],
   [/^(traffic-light|pedestrian-signal|road-sign|direction-sign|parking-meter|barrier|bollards|guardrail|speed-bump|parking-stop|traffic-cone|temporary-barrier)$/, 'traffic'],
   [/^(bridge-|bridge-pier|bridge-abutment|bridge-railing|approach-fence|seawall|water-stairs|pier$|shoreline-stones|drainage-pipe|life-ring)$/, 'bridge'],
   [/^(birch|poplar|linden|maple|spruce|young-tree|mature-tree)$/, 'tree'],
