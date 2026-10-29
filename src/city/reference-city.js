@@ -7,6 +7,7 @@ import {MAP_BUILDINGS} from './map-buildings.js';
 import { MAP, point, WORK_STOPS, ROADS, nearRoad, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT, COAST } from './reference-layout.js';
 export {isReferenceWater} from './reference-layout.js';
 import { BOROUGHS, LOCAL_SHOPS } from './layout.js';
+import { createUrbanDetails } from './urban-details.js';
 
 // Hand-placed against map_reference.png, rather than the approximate preview GLB.
 export async function createReferenceCity(scene,world,{human,car,label}) {
@@ -97,7 +98,8 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
   for(const key of Object.keys(T.Cache.files))if(!previousKeys.has(key)&&key.includes("models/city-pack/"))T.Cache.remove(key);
  }
  materialPool.finishLoading();
- return {diagnostics:{assetRevision:"pbr-1",resources:materialPool.diagnostics,boroughs:BOROUGHS,localShops:LOCAL_SHOPS,source:'user-map',modelTypes:placements.size,placements:placedCount,tracedBuildings:traced},update(dt){hub.rotation.z+=dt*.09;for(const cabin of animated)cabin.rotation.z=-hub.rotation.z;},dispose(){preparedAssets.forEach(a=>a.dispose());materialPool.dispose();root.traverse(n=>{if(n.isMesh&&!n.isInstancedMesh){n.geometry?.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}});root.removeFromParent();}};
+ const urbanDetails=createUrbanDetails(scene,world,point);
+ return {diagnostics:{assetRevision:"pbr-1",resources:materialPool.diagnostics,boroughs:BOROUGHS,localShops:LOCAL_SHOPS,source:'user-map',modelTypes:placements.size,placements:placedCount,tracedBuildings:traced,urbanDetails:urbanDetails.diagnostics},update(dt){hub.rotation.z+=dt*.09;for(const cabin of animated)cabin.rotation.z=-hub.rotation.z;},dispose(){urbanDetails.dispose();preparedAssets.forEach(a=>a.dispose());materialPool.dispose();root.traverse(n=>{if(n.isMesh&&!n.isInstancedMesh){n.geometry?.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}});root.removeFromParent();}};
 }
 
 export function buildReferenceTerrain(world,scene){
