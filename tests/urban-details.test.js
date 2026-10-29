@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { URBAN_ASSET_CATALOG, createUrbanAsset } from '../src/city/urban-details.js';
 
 const catalogUrl = new URL('../src/city/urban-details.js', import.meta.url);
 const cityUrl = new URL('../src/city/reference-city.js', import.meta.url);
@@ -29,4 +30,24 @@ test('reference city mounts and releases the expanded urban asset layer', async 
   assert.match(source, /createUrbanDetails\(scene,world,point\)/);
   assert.match(source, /urbanDetails:urbanDetails\.diagnostics/);
   assert.match(source, /urbanDetails\.dispose\(\)/);
+});
+
+test('every catalog model builds, has finite geometry, and releases resources', () => {
+  assert.ok(URBAN_ASSET_CATALOG.length >= 180);
+  for (const asset of URBAN_ASSET_CATALOG) {
+    const model = createUrbanAsset(asset.id, 1);
+    assert.equal(model.userData.assetId, asset.id);
+    let meshes = 0;
+    model.traverse((node) => {
+      if (!node.isMesh) return;
+      meshes++;
+      const position = node.geometry.getAttribute('position');
+      assert.ok(position && position.count > 0, asset.id + ' must have geometry');
+      for (let i = 0; i < position.count; i += Math.max(1, Math.floor(position.count / 12))) {
+        assert.ok(Number.isFinite(position.getX(i)) && Number.isFinite(position.getY(i)) && Number.isFinite(position.getZ(i)), asset.id + ' has invalid vertices');
+      }
+    });
+    assert.ok(meshes > 0, asset.id + ' must contain at least one mesh');
+    model.userData.dispose();
+  }
 });
