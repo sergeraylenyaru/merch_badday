@@ -9,13 +9,13 @@ try {
   const {page,context}=await app.scenario(state,'urban-details');
   await advance(page,.1);
   const details=await page.evaluate(()=>__MERCH__.city.urbanDetails);
-  assert.equal(details.categories,19);assert.equal(details.catalogModels,238);assert.ok(details.placedModels>30);
+  assert.equal(details.categories,19);assert.equal(details.catalogModels,239);assert.ok(details.placedModels>30);
   for(const p of details.placements)if(!p.roadSurface)assert.equal(ROAD_BOXES.some(road=>boxesIntersect(p.footprint,road)),false,p.id+' on road');
   for(let i=0;i<LOCAL_POINTS.length;i++)assert.ok(details.placements.some(p=>p.category==='store-exterior'&&p.shopIndex===i),'no details near local shop '+i);
   for(const id of ['transformer-hut','electrical-cabinet'])assert.ok(details.placements.some(p=>p.id===id),id+' missing');
   assert.equal(details.publicServices,details.placements.filter(p=>p.category==='public-buildings').length);
   assert.equal(details.neighborhoods.length,17);
-  for(const block of details.neighborhoods)assert.ok(block.placed>=8,block.id+' empty with real city blockers');
+  for(const block of details.neighborhoods)assert.ok(block.placed>=1&&block.placed<=3,block.id+' needs sparse furniture');
   assert.ok(details.entrances>=20,'missing facade entrances');
   for(const yard of details.loadingYards)assert.ok(yard.placed>=2,'missing delivery yard '+yard.shopIndex);
   for(const entrance of details.placements.filter(p=>p.approach)){

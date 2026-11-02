@@ -8,9 +8,9 @@ import { MAP_BUILDINGS } from '../src/city/map-buildings.js';
 import { boxesIntersect } from '../src/spatial.js';
 import { NEIGHBORHOODS } from '../src/city/neighborhood-details.js';
 
-test('all 238 catalog assets and their variants construct finite renderable geometry', () => {
+test('all 239 catalog assets and their variants construct finite renderable geometry', () => {
   assert.equal(new Set(URBAN_ASSET_CATALOG.map(a=>a.category)).size,19);
-  assert.equal(new Set(URBAN_ASSET_CATALOG.map(a=>a.id)).size,238);
+  assert.equal(new Set(URBAN_ASSET_CATALOG.map(a=>a.id)).size,239);
   for(const entry of URBAN_ASSET_CATALOG)for(const variant of [0,3]){
     const model=createUrbanAsset(entry.id,variant);
     try {
@@ -71,7 +71,8 @@ test('every street block receives district furniture, clear entrance approaches 
     assert.equal(d.neighborhoods.length,NEIGHBORHOODS.length);
     for(const block of NEIGHBORHOODS){
       const props=placements.filter(p=>p.neighborhood===block.id);
-      assert.ok(props.length>=10,block.id+' is empty');
+      assert.ok(props.length>=1&&props.length<=3,block.id+' must have a small rest area');
+      assert.ok(placements.length<350,'decorative clutter regression');
       assert.ok(props.some(p=>p.cluster!==null),block.id+' has only pavement');
       for(const p of props){
         assert.ok(p.footprint.x-p.footprint.w>=point(block.left,0).x);

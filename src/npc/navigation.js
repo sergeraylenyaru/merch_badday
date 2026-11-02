@@ -33,7 +33,7 @@ class Queue {
   pop(){const a=this.items,first=a[0],last=a.pop();if(a.length){let i=0;while(i*2+1<a.length){let c=i*2+1;if(c+1<a.length&&a[c+1].score<a[c].score)c++;if(a[c].score>=last.score)break;a[i]=a[c];i=c;}a[i]=last;}return first;}
 }
 
-export function findWalkingPath(start,goal,blocked,{step=1,maxVisited=3000,cost=()=>1}={}){
+function* walkingSearch(start,goal,blocked,{step=1,maxVisited=900,cost=()=>1}={}){
   if(clearSegment(start,goal,blocked))return [{...goal}];
   const origin={x:start.x,z:start.z},queue=new Queue(),known=new Map(),closed=new Set(),free=new Map();
   const key=(x,z)=>x+','+z,position=(x,z)=>({x:origin.x+x*step,z:origin.z+z*step});
@@ -42,6 +42,7 @@ export function findWalkingPath(start,goal,blocked,{step=1,maxVisited=3000,cost=
   queue.push(first);known.set('0,0',0);let best=first,found=null;
   while(queue.items.length&&closed.size<maxVisited){
     const current=queue.pop(),k=key(current.x,current.z);if(closed.has(k))continue;closed.add(k);
+    yield;
     const p=position(current.x,current.z),remaining=distance(p,goal);
     if(remaining<distance(position(best.x,best.z),goal))best=current;
     if(remaining<step*1.5&&clearSegment(p,goal,blocked)){found=current;break;}
@@ -64,20 +65,37 @@ export function findWalkingPath(start,goal,blocked,{step=1,maxVisited=3000,cost=
   return route;
 }
 
+export function findWalkingPath(start,goal,blocked,options){
+  const iterator=walkingSearch(start,goal,blocked,options);let result;
+  do{result=iterator.next();}while(!result.done);
+  return result.value;
+}
+
 export function createPedestrianNavigator(blocked){
-  let budget=1;
+  let pending=null;
+  const diagnostics={nodesLastFrame:0,searchMs:0};
   return {
-    beginFrame(){budget=1;},
+    diagnostics,
+    beginFrame(now=0){
+      diagnostics.nodesLastFrame=0;const start=performance.now();
+      if(pending&&pending.person.mesh.visible===false)pending=null;
+      while(pending&&diagnostics.nodesLastFrame<64&&performance.now()-start<1.5){
+        const result=pending.iterator.next();diagnostics.nodesLastFrame++;
+        if(result.done){pending.nav.path=result.value;pending.nav.goal=pending.goal;pending.nav.replan=now+1.5;pending=null;}
+      }
+      diagnostics.searchMs=performance.now()-start;
+    },
     step(person,target,speed,dt,now){
       const position=person.mesh.position;
       const nav=person.navigation??={path:[],goal:null,replan:0,stuck:0};
       if(distance(position,target)<.25){nav.path=[];return {x:0,z:0};}
       if(now>=(nav.directCheck??0)||!nav.goal||distance(nav.goal,target)>2){
         nav.directCheck=now+.6;
-        if(clearSegment(position,target,blocked)){nav.path=[{x:target.x,z:target.z}];nav.goal={x:target.x,z:target.z};}
+        if(clearSegment(position,target,blocked)){nav.path=[{x:target.x,z:target.z}];nav.goal={x:target.x,z:target.z};if(pending?.person===person)pending=null;}
       }
-      if(budget&&now>=nav.replan&&(!nav.path.length||!nav.goal||distance(nav.goal,target)>3||nav.stuck>.4)){
-        budget--;nav.path=findWalkingPath(position,target,blocked);nav.goal={x:target.x,z:target.z};nav.replan=now+1.5;nav.stuck=0;
+      if(!pending&&now>=nav.replan&&(!nav.path.length||!nav.goal||distance(nav.goal,target)>3||nav.stuck>.4)){
+        pending={person,nav,goal:{x:target.x,z:target.z},iterator:walkingSearch({x:position.x,z:position.z},{x:target.x,z:target.z},blocked)};
+        nav.replan=now+1.5;nav.stuck=0;
       }
       while(nav.path.length&&distance(position,nav.path[0])<.15)nav.path.shift();
       const next=nav.path[0];if(!next)return {x:0,z:0};

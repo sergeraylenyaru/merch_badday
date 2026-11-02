@@ -32,6 +32,8 @@ import { policeCombat } from './npc/police-combat.js';
 import { createWalkingBlocker, createPedestrianNavigator, clearSegment } from './npc/navigation.js';
 import { createCityLife } from './npc/city-life.js';
 import { createCrossingMarkings } from './npc/crossings.js';
+import {createLocalCrowd} from './npc/local-crowd.js';
+import {collisionInjury,pedestrianContact} from './physics/vehicle-impact.js';
 const state = load();
 let settings = { sensitivity: 1, volume: 0.25, quality: "high" };
 try {
@@ -60,6 +62,7 @@ let world,
   attackKind = "quick",
   policeHitCooldown = 0,
   policeDefeatLevel = 0,
+  knockdownTime = 0,
   accumulator = 0,
   lastSave = 0,
   lastMessage = 0,
@@ -398,6 +401,8 @@ try {
   const walkingBlocked=createWalkingBlocker(world);
   const pedestrianNavigator=createPedestrianNavigator(walkingBlocked);
   const cityLife=createCityLife(world);
+  const localCrowd=createLocalCrowd(world,cityLife,walkingBlocked);
+  localCrowd.update(world.player.mesh.position,state.time,yaw);
   const crossingMarkings=createCrossingMarkings(scene,world.groundHeight);
   world.visuals?.setQuality?.(settings.quality);
   world.player.mesh.rotation.y = yaw + Math.PI;
@@ -451,6 +456,7 @@ try {
     let best = null,
       bd = max;
     for (const n of list) {
+      if(n.mesh?.visible===false)continue;
       const d = dist(n);
       if (d < bd) {
         best = n;
@@ -658,6 +664,7 @@ try {
     }
   }
   function hit(strong = false) {
+    if(knockdownTime>.5)return;
     if (state.carrying || world.jobs.activity) { notify('Руки заняты работой.'); return; }
     if (held) {
       notify("Сначала отпустите ручку тележки: R.");
@@ -673,7 +680,7 @@ try {
       target.anger = 8;
       state.conflicts++;
       if (target.shop >= 0) state.shops[target.shop].rep--;
-      const witness = world.people.some((n) => n !== target && dist(n) < 22);
+      const witness = world.people.some((n) => n.mesh.visible&&n !== target && dist(n) < 22);
       crime(witness ? 2 : 1);
       state.reputation -= 4;
       notify(
@@ -682,6 +689,7 @@ try {
           : "Конфликт испортил репутацию.",
       );
     } else {
+      if(world.props.hit(world.player.mesh.position,2.5,strong?2:1,{x:-Math.sin(yaw),z:-Math.cos(yaw)})){beep(160);return;}
       const cart = nearest(world.carts, 3);
       if (cart)
         cart.body.applyImpulse(
@@ -750,11 +758,13 @@ try {
   window.addEventListener("pagehide", snapshot);
   function move(dt) {
     const pos = world.player.mesh.position;
+    knockdownTime=Math.max(0,knockdownTime-dt);
     const forward = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0),
       side = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
     if (keys.has("ArrowLeft")) yaw += dt * 1.7;
     if (keys.has("ArrowRight")) yaw -= dt * 1.7;
     if (vehicle) {
+      vehicle.impactCooldown=Math.max(0,(vehicle.impactCooldown??0)-dt);
       walkingVelocity.set(0, 0, 0);
       const old = vehicle.mesh.position.clone(),
         oldHeading = vehicle.heading,
@@ -780,10 +790,10 @@ try {
       const p = vehicle.mesh.position;
       const nx = p.x + dx,
         nz = p.z + dz;
+      world.props.vehicle(vehicleBox(vehicle,nx,nz),vehicle.speed,{x:Math.sin(vehicle.heading),z:Math.cos(vehicle.heading)});
       if (world.vehicleBlocked(vehicle, nx, nz)) {
-        if (Math.abs(vehicle.speed) > 7) {
-          state.health -= Math.abs(vehicle.speed) * 0.5;
-          state.stress += 4;
+        if (Math.abs(vehicle.speed) > 7&&vehicle.impactCooldown===0) {
+          collisionInjury(state,vehicle.speed);vehicle.impactCooldown=1;
           beep(80, 0.2);
         }
         vehicle.speed *= -0.25;
@@ -792,6 +802,7 @@ try {
       vehicle.mesh.rotation.y = vehicle.heading;
       pos.copy(p);
       for (const n of world.people) {
+        if(!n.mesh.visible)continue;
         if (n.kind === "police" && state.wanted === 0) continue;
         const d = n.mesh.position.distanceTo(p);
         if (d < 3.2 && Math.abs(vehicle.speed) > 4) {
@@ -827,7 +838,7 @@ try {
             ? 1.7
             : held
               ? held.missionCargo ? 2.7 : 3.2
-              : runningSpeed(state,keys.has("ShiftLeft")||keys.has("ShiftRight"))) * (state.health < 25 ? 0.65 : 1);
+              : runningSpeed(state,keys.has("ShiftLeft")||keys.has("ShiftRight"))) * (state.health < 25 ? 0.65 : 1) * (knockdownTime>.45?0:1);
       let dx = -Math.sin(yaw) * forward + Math.cos(yaw) * side,
         dz = -Math.cos(yaw) * forward - Math.sin(yaw) * side;
       if (activity?.approach) { dx = activity.approach.x - pos.x; dz = activity.approach.z - pos.z; }
@@ -917,6 +928,7 @@ try {
       world.player.mesh.rotation.z =
         Math.sin(attack * (attackKind === "strong" ? 7 : 14)) * 0.15;
     } else world.player.mesh.rotation.z = 0;
+    if(knockdownTime>0)world.player.mesh.rotation.z=Math.sin(Math.PI*Math.min(1,knockdownTime/1.2))*.9;
     world.player.arms.forEach(
       (a, i) =>
         (a.rotation.x =
@@ -960,9 +972,14 @@ try {
   function ai(dt) {
     const player = world.player.mesh.position;
     policeHitCooldown=Math.max(0,policeHitCooldown-dt);
-    pedestrianNavigator.beginFrame();
+    localCrowd.update(player,state.time,yaw);
+    pedestrianNavigator.beginFrame(state.time);
     for (const n of world.people) {
       if (n.seated) continue;
+      const nearby=Math.hypot(n.mesh.position.x-player.x,n.mesh.position.z-player.z);
+      if(n.kind==='civilian'&&!n.activePedestrian)continue;
+      if(n.kind!=='civilian'&&nearby>70){n.mesh.visible=false;continue;}
+      n.mesh.visible=true;
       if (n.stun > 0) {
         if(n.kind==='police'){policeCombat(n,{stunned:true},dt);n.attack=0;}
         n.stun -= dt;
@@ -1128,7 +1145,8 @@ try {
         }
         continue;
       }
-      v.speed = 6;
+      v.impactBrake=Math.max(0,(v.impactBrake??0)-dt);
+      v.speed = v.impactBrake>0?0:6;
       v.mesh.position.x += dt * v.speed;
       const u=pixel(v.mesh.position.x,0).x,t=T.MathUtils.clamp((u-1340)/100,0,1);
       const arc=u>=1340&&u<=1440?Math.sin(Math.PI*t)**2*36:0;
@@ -1139,18 +1157,19 @@ try {
       if (v.mesh.position.x > point(1650,340).x) v.mesh.position.x = point(20,340).x;
       v.mesh.position.y = world.groundHeight(v.mesh.position.x, v.mesh.position.z);
       v.impactCooldown = Math.max(0, (v.impactCooldown || 0) - dt);
-      if (!vehicle && v.impactCooldown === 0 && circleIntersectsBox(player.x, player.z, PLAYER_SHAPE.radius, vehicleBox(v))) {
+      if (!vehicle && Math.abs(v.speed)>1&&v.impactCooldown === 0 && circleIntersectsBox(player.x, player.z, PLAYER_SHAPE.radius, vehicleBox(v))) {
         v.impactCooldown = 1.5;
-        state.health -= 15;
-        state.stress += 8;
-        player.x -= 4;
-        notify("Смотрите по сторонам!");
+        v.impactBrake=1.2;collisionInjury(state,v.speed,true);knockdownTime=1.2;held=null;
+        const contact=pedestrianContact(player,vehicleBox(v));
+        if(!world.blocked(contact.x,contact.z,PLAYER_SHAPE.radius,v)){player.x=contact.x;player.z=contact.z;}
+        walkingVelocity.set(0,0,0);notify('Вас сбила машина. Поднимаемся…');
       }
-      if (vehicle && boxesIntersect(vehicleBox(vehicle), vehicleBox(v))) {
+      if (vehicle && vehicle.impactCooldown===0&&boxesIntersect(vehicleBox(vehicle), vehicleBox(v))) {
+        const driverSpeed=Math.abs(vehicle.speed);
+        const impactSpeed=Math.abs(vehicle.speed-v.speed);
+        collisionInjury(state,impactSpeed);vehicle.impactCooldown=1;v.impactBrake=1.2;
         vehicle.speed *= -0.3;
-        v.mesh.position.z += 8;
-        state.health -= 4;
-        crime(1);
+        if(driverSpeed>4)crime(1);
       }
     }
   }
@@ -1406,6 +1425,7 @@ try {
         firstPerson,
         playerVisible: world.player.mesh.visible,
         playerY: world.player.mesh.position.y,
+        knockdown:knockdownTime,playerLean:world.player.mesh.rotation.z,
         groundHeight: world.groundHeight(world.player.mesh.position.x, world.player.mesh.position.z),
         collisionRadius: PLAYER_SHAPE.radius,
         firstPersonHandsVisible: world.visuals?.firstPersonHandsVisible ?? false,
@@ -1428,10 +1448,10 @@ try {
         obstacles: [ ...world.blockers.filter((b) => b.enabled !== false).map(({ x, z, w, d }) => ({ x, z, w, d, heading: 0 })),
           ...world.vehicles.filter((v) => v.mesh.visible && !(v.police && state.wanted < 3)).map((v) => vehicleBox(v)) ] };
     },
-    get city() {return JSON.parse(JSON.stringify(world.boroughs.diagnostics));},
+    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,walkways:world.walkways.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics}));},
     get jobs() { return JSON.parse(JSON.stringify(world.jobs.diagnostics)); },
     get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null,
-      attack:n.attack??0,combat:n.combat?{...n.combat}:null,motion:n.motion?.diagnostics??null,
+      visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,motion:n.motion?.diagnostics??null,
       dailyRoute:n.dailyRoute?{index:n.dailyRoute.index,wait:n.dailyRoute.wait,visits:n.dailyRoute.visits,stops:n.dailyRoute.stops}:null,
       navigation:n.navigation?{waypoints:n.navigation.path.length,stuck:n.navigation.stuck}:null })); },
   };
@@ -1440,6 +1460,7 @@ try {
     if (!event.persisted) {
       world.boroughs.dispose();
       crossingMarkings.dispose();
+      world.walkways.dispose();
       world.disposeTerrain?.();
       world.jobs.dispose();
       world.visuals?.dispose();

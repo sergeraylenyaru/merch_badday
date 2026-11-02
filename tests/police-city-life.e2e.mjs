@@ -44,10 +44,12 @@ try{
   const s=freshState();s.onboarding.callReceived=true;s.position=point(370,185);
   ({page,context}=await app.scenario(s,'city-life'));
   const before=await page.evaluate(()=>__MERCH__.people.filter(n=>n.dailyRoute));
-  assert.equal(before.length,24);assert.ok(before.every(n=>n.dailyRoute.stops.length>=3));
+  assert.equal(before.length,24);assert.ok(before.filter(n=>n.activePedestrian).every(n=>n.dailyRoute.stops.length>=3));
+  assert.ok(before.filter(n=>n.activePedestrian).length<=10);
   await advance(page,3.2);
   const after=await page.evaluate(()=>__MERCH__.people.filter(n=>n.dailyRoute));
-  assert.ok(after.filter((n,i)=>Math.hypot(n.position[0]-before[i].position[0],n.position[2]-before[i].position[2])>.5).length>=8);
-  await context.close();console.log('PASS 24 residents follow city destinations and move around actual props');
+  assert.ok(after.filter((n,i)=>Math.hypot(n.position[0]-before[i].position[0],n.position[2]-before[i].position[2])>.5).length>=4);
+  for(const [i,n] of after.entries())if(!n.activePedestrian&&!before[i].activePedestrian)assert.deepEqual(n.position,before[i].position,'distant resident must stay asleep');
+  await context.close();console.log('PASS local residents move while the distant pool stays asleep');
   assert.deepEqual(app.errors,[]);
 }finally{await app.close();}

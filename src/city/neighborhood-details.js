@@ -13,40 +13,29 @@ export const NEIGHBORHOODS = [
 ].map(([id,district,left,top,right,bottom])=>({id,district,left,top,right,bottom}));
 
 const COURTYARD = [
-  ['bench-wood',-9,0], ['trash-bin',-4,0], ['flowerbed',6,0],
-  ['information-board',-9,-10], ['bike-rack',7,-10],
-  ['game-table',-9,14], ['clothesline',8,18], ['garden-fence',8,26],
-  ['spring-rider',-9,28], ['shrub-round',-17,14],
+  ['bench-wood',-8,0], ['game-table',4,8], ['ball',10,0],
 ];
 const PARK = [
-  ['bench-wood',-9,0], ['trash-bin',-4,0], ['flowerbed',6,0],
-  ['bike-rack',-9,-10], ['information-board',8,-10],
-  ['game-table',-9,14], ['flower-planter',8,14], ['shrub-tall',8,25],
+  ['bench-wood',-8,0], ['trash-bin',-2,0], ['ball',8,6],
 ];
 const BUSINESS = [
-  ['bench-metal',-9,0], ['recycling-bin',-4,0], ['flower-planter',6,0],
-  ['bike-rack',-9,-10], ['information-board',8,-10],
-  ['parking-meter',-9,14], ['parking-stop',8,14], ['bollards',8,25],
+  ['bench-metal',-8,0], ['recycling-bin',-2,0], ['bike-rack',8,0],
 ];
 
 export function populateNeighborhoods(add) {
   for (const block of NEIGHBORHOODS) {
     const template = [COURTYARD,PARK,BUSINESS][block.district];
-    // Four small clusters per block, rather than random objects across lawns.
-    for (const [cluster,fx,fy] of [[0,.25,.25],[1,.75,.25],[2,.25,.72],[3,.75,.72]]) {
-      const u=block.left+(block.right-block.left)*fx;
-      const v=block.top+(block.bottom-block.top)*fy;
-      for (const [id,dx,dz] of template) {
-        add(id,u+dx,v+dz,block.district,0,{
-          neighborhood:block.id, cluster, region:block, search:12,
+    // One modest rest area per block. Paths are continuous geometry, not props.
+    for (const [id,dx,dz] of template) {
+      for (const [fx,fy] of [[.55,.75],[.25,.25],[.75,.25],[.25,.65]]) {
+        const u=block.left+(block.right-block.left)*fx;
+        const v=block.top+(block.bottom-block.top)*fy;
+        if(add(id,u+dx,v+dz,block.district,0,{
+          neighborhood:block.id, cluster:0, region:block, search:20,
           parking:id==='parking-stop',
-          solid:!['flowerbed','parking-stop'].includes(id),
-        });
+          solid:id!=='ball',
+        }))break;
       }
-    }
-    if(block.district===0){
-      for(const offset of [-12,0,12])add('parking-stop',(block.left+block.right)/2+offset,
-        block.bottom-23,0,0,{neighborhood:block.id,region:block,search:16,parking:true});
     }
   }
 }

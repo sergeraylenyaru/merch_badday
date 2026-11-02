@@ -135,6 +135,7 @@ export const freshState = () => ({
   ],
   carts: [],
   vehicles: [],
+  brokenProps: [],
   weather: false,
 });
 export function normalize(s) {

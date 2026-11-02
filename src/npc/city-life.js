@@ -14,8 +14,9 @@ export function createCityLife(world){
   }
   for(const [u,v] of LOCAL_POINTS)add(point(u,v+22),'shop',point(u,v));
   for(const u of [215,520,1130,1410])add(point(u+10,305),'bus',point(u,305));
+  for(const node of world.walkways?.nodes??[])add(node,'walk',node.lookAt??node);
   const walkers=world.people.filter(n=>n.kind==='civilian'&&!n.seated);
-  walkers.forEach((person,index)=>{
+  function assign(person,index){
     const p=person.mesh.position;
     // Older authored spawn points may now lie under a courtyard prop.
     if(world.blocked(p.x,p.z,.4)){
@@ -26,15 +27,16 @@ export function createCityLife(world){
       }
       if(safe){p.x=safe.x;p.z=safe.z;person.home.copy(p);}
     }
-    const choices=destinations.filter(d=>d.district===districtAt(p.x)&&Math.hypot(p.x-d.x,p.z-d.z)<100)
+    const choices=destinations.filter(d=>d.district===districtAt(p.x)&&Math.hypot(p.x-d.x,p.z-d.z)<40)
       .sort((a,b)=>Math.hypot(p.x-a.x,p.z-a.z)-Math.hypot(p.x-b.x,p.z-b.z));
     const route=[{x:p.x,z:p.z,kind:'home',lookAt:{x:p.x,z:p.z}}];
-    for(const kind of ['shop','rest','notice','bus','home']){
+    for(const kind of ['walk','rest','notice','shop','home','walk']){
       const matching=choices.filter(d=>d.kind===kind);if(matching.length)route.push(matching[index%Math.min(3,matching.length)]);
     }
     person.dailyRoute={stops:route,index:route.length>1?1+index%(route.length-1):0,wait:index%3,visits:0};
-  });
-  return function cityLife(person,dt){
+  }
+  walkers.forEach(assign);
+  function cityLife(person,dt){
     const route=person.dailyRoute;
     if(!route)return {target:person.home,speed:1.1};
     const stop=route.stops[route.index],p=person.mesh.position;
@@ -50,5 +52,6 @@ export function createCityLife(world){
     while(route.travel.length>1&&Math.hypot(p.x-route.travel[0].x,p.z-route.travel[0].z)<.45)route.travel.shift();
     const target=route.travel[0]??stop;
     return {target,speed:1.1+(person.phase%3)*.12,lookAt:target,social:false,activity:null};
-  };
+  }
+  cityLife.assign=assign;return cityLife;
 }

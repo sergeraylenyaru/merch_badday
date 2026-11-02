@@ -3,7 +3,7 @@ import * as T from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 /** A complete, themed storefront/interior on the shared walkable shop layout. */
-export function createDistrict(scene, { library, materials: m, box: collisionBox, shop, shopState }) {
+export function createDistrict(scene, { library, materials: m, box: collisionBox, shop, shopState, props }) {
   const root = new T.Group();
   root.name = `district-${shop.id + 1}`;
   root.position.set(shop?.x ?? -55, 0, shop?.z ?? 20);
@@ -14,6 +14,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
   const modelBatches = new Map();
   const instanceMeshes = new Set();
   const proxyMeshes = new Set();
+  const breakables=[];
   const style = m.style;
   const metrics = { shop: shop.id, name: shop.name, feature: style.feature, generatedMeshes: 0, modelMeshes: 0, modelPlacements: 0, collisionProxies: 0, triangles: 0 };
   let disposed = false;
@@ -33,6 +34,8 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
     mesh.visible = false;
     proxyMeshes.add(mesh);
     metrics.collisionProxies++;
+    const prop=breakables.find(p=>Math.hypot(p.x-root.position.x-x,p.z-root.position.z-z)<.2);
+    if(prop)prop.proxy=mesh;
   }
 
   function tileUV(geometry, material, dimensions) {
@@ -102,6 +105,10 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
     instance.updateMatrixWorld(true);
     const bounds=new T.Box3().setFromObject(instance),size=bounds.getSize(new T.Vector3());
     if(meetsStreet(root.position.x+x,root.position.z+z,size.x,size.z)){library.release(instance);return true;}
+    const center=bounds.getCenter(new T.Vector3());
+    const prop=id==='bench'&&props?{id:'bench-wood',key:`shop-bench:${shop.id}`,x:root.position.x+center.x,z:root.position.z+center.z,
+      footprint:{x:root.position.x+center.x,z:root.position.z+center.z,w:size.x/2,d:size.z/2},instances:[]}:null;
+    if(prop)breakables.push(prop);
     let accepted = 0;
     instance.traverse((node) => {
       if (!node.isMesh || node.isSkinnedMesh) return;
@@ -110,10 +117,11 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
       const key = `${node.geometry.uuid}:${materialIds}`;
       let batch = modelBatches.get(key);
       if (!batch) {
-        batch = { geometry: node.geometry, material: node.material, matrices: [], shadow: node.castShadow };
+        batch = { geometry: node.geometry, material: node.material, matrices: [], props:[], shadow: node.castShadow };
         modelBatches.set(key, batch);
       }
       batch.matrices.push(node.matrixWorld.clone());
+      batch.props.push(prop);
       accepted++;
     });
     library.release(instance);
@@ -492,6 +500,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
     const mesh = new T.InstancedMesh(batch.geometry, batch.material, batch.matrices.length);
     mesh.name = "district-imported-instances";
     batch.matrices.forEach((matrix, index) => mesh.setMatrixAt(index, matrix));
+    batch.props.forEach((prop,index)=>{if(prop)prop.instances.push({mesh,index});});
     mesh.instanceMatrix.needsUpdate = true;
     mesh.castShadow = batch.shadow;
     mesh.userData.shadowEligible = batch.shadow;
@@ -505,6 +514,7 @@ export function createDistrict(scene, { library, materials: m, box: collisionBox
     metrics.triangles += triangleCount * batch.matrices.length;
   }
   modelBatches.clear();
+  for(const prop of breakables)props.register(prop);
 
   return {
     root,

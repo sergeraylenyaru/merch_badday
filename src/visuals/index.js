@@ -206,6 +206,7 @@ export async function createVisuals(scene, world, shopDecor) {
   let controls = { active: false, heldCart: null };
 
   const districts = SHOPS.map((shop) => createDistrict(scene, {
+    props:world.props,
     library, materials: materials.forShop(SHOP_STYLES[shop.id]), box: world.box, shop, shopState: world.state.shops[shop.id],
   }));
   for (const meshes of shopDecor) for (const mesh of meshes) mesh.visible = false;
@@ -260,6 +261,7 @@ export async function createVisuals(scene, world, shopDecor) {
       }
       for (const actor of actors) {
         const { entity, last, velocity } = actor;
+        if(entity!==world.player&&!entity.mesh.visible)continue;
         velocity.copy(entity.mesh.position).sub(last);
         const teleported = velocity.length() > 2;
         last.copy(entity.mesh.position);

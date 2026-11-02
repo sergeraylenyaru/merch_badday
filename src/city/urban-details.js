@@ -3,6 +3,7 @@ import { MAP_BUILDINGS } from './map-buildings.js';
 import { MAP, HOME, HOME_CAR, ROAD_BOXES, PARK_PATHS, WORK_STOPS, LOCAL_POINTS, isReferenceWater } from './reference-layout.js';
 import { boxesIntersect, vehicleBox } from '../spatial.js';
 import { NEIGHBORHOODS, populateNeighborhoods, populateEntrances } from './neighborhood-details.js';
+import {BREAKABLE_IDS,createDestructibles} from './destructibles.js';
 
 /**
  * Runtime procedural asset library for the final city pass.
@@ -16,7 +17,7 @@ const CATEGORY_DATA = [
   ['bridge-waterfront', 'Мосты и набережная', 'bridge-pier bridge-abutment bridge-railing approach-fence seawall seawall-turn water-stairs pier shoreline-stones drainage-pipe life-ring'],
   ['vegetation', 'Растительность', 'birch poplar linden maple spruce young-tree mature-tree shrub-round shrub-tall hedge flowerbed flower-planter grass-clump reeds stump fallen-branch'],
   ['yard', 'Дворовое благоустройство', 'bench-wood bench-metal trash-bin recycling-bin waste-containers fenced-bin-area information-board bike-rack clothesline gazebo game-table garden-fence'],
-  ['play-sport', 'Детские и спортивные площадки', 'slide swing carousel spring-rider sandbox play-complex pull-up-bars dip-bars outdoor-fitness football-goal basketball-hoop playground-fence'],
+  ['play-sport', 'Детские и спортивные площадки', 'slide swing carousel spring-rider sandbox play-complex pull-up-bars dip-bars outdoor-fitness football-goal basketball-hoop playground-fence ball'],
   ['public-buildings', 'Общественные здания и заведения', 'pharmacy clinic police-station fire-station school kindergarten post-office pickup-point tire-shop car-wash gas-station'],
   ['store-exterior', 'Внешнее оформление магазинов', 'storefront vitrine automatic-door swing-door vestibule storefront-canopy signboard a-board promo-stand atm cart-shelter bike-parking loading-zone-fence'],
   ['retail-equipment', 'Оборудование торгового зала', 'wall-shelving island-shelving endcap checkout pos-terminal self-checkout anti-theft-gates shopping-baskets fridge-case fridge-cabinet freezer bread-rack produce-counter promo-basket'],
@@ -167,7 +168,8 @@ function buildAsset(id, variant, c) {
     mesh.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), new T.Vector3(dx, dy, dz).normalize());
   };
 
-  if (record.archetype === 'building') {
+  if(id==='ball')sp(g,.28,0,.28,0,'yellow',1);
+  else if (record.archetype === 'building') {
     const isHouse = id === 'private-house', isGarage = id.startsWith('garage'), isApartment = id.startsWith('apartment-');
     const w = isGarage ? (id === 'garage-row' ? 8.4 : 4.2) : isHouse ? 5.8 : isApartment ? (id === 'apartment-9' ? 9 : 7.6) : 7.2;
     const h = isGarage ? 2.5 : isHouse ? 3.4 : isApartment ? (id === 'apartment-9' ? 13.5 : 7.7) : 4.3;
@@ -777,6 +779,7 @@ export function createUrbanAsset(id, variant = 0) {
 
 export function createUrbanDetails(sceneRoot, world, point) {
   const context = createContext(), detailRoot = new T.Group();
+  const ownProps=!world.props,props=world.props??createDestructibles(sceneRoot,world),breakables=[];
   detailRoot.name = 'complete-urban-details'; sceneRoot.add(detailRoot);
   const placed = [], sourceGroups = [], colliders = [];
   const byId = new Map(URBAN_ASSET_CATALOG.map((item) => [item.id, item]));
@@ -812,7 +815,8 @@ export function createUrbanDetails(sceneRoot, world, point) {
   }
   function add(id, u, v, variant=0, rotation=0, options={}) {
     if(!byId.has(id))return false;
-    const model=buildAsset(id,variant,context),bounds=new T.Box3(),size=new T.Vector3(),center=new T.Vector3();
+    const model=buildAsset(id,variant,context);
+    const bounds=new T.Box3(),size=new T.Vector3(),center=new T.Vector3();
     if(options.entrance){
       // A shallow vestibule meets the measured wall; the canopy, intercom and
       // steps belong to it, so their intentional overlaps are checked together.
@@ -844,10 +848,13 @@ export function createUrbanDetails(sceneRoot, world, point) {
         if(occupied(approach))continue;
       }
       detailRoot.add(model);sourceGroups.push(model);
+      const prop=BREAKABLE_IDS.has(id)?{key:`urban:${id}:${cu.toFixed(2)}:${cv.toFixed(2)}`,id,x:center.x,z:center.z,footprint,instances:[],proxy:null}:null;
+      if(prop){model.userData.breakable=prop;breakables.push(prop);}
       placed.push({id,u:cu,v:cv,category:byId.get(id).category,footprint,approach,buildingIndex:options.buildingIndex??null,neighborhood:options.neighborhood??null,cluster:options.cluster??null,shopIndex:options.shopIndex??null,loadingShop:options.loadingShop??null,roadSurface:options.roadSurface===true});
       if(options.solid&&world?.box){
         const collider=world.box(center.x,center.y,center.z,size.x,size.y,size.z,'#6c7770',true);
         collider.visible=false;colliders.push(collider);
+        if(prop)prop.proxy=collider;
       }
       return true;
     }
@@ -894,40 +901,11 @@ export function createUrbanDetails(sceneRoot, world, point) {
     add('loading-zone-fence', shop[0] + 18, shop[1] + 5, i % 2, 0, { shopIndex:i, search:24 });
   }
 
-  // Loading-yard props and complete staff-room / merchandiser equipment.
-  for (const [u, v, variant] of [[172, 124, 0], [300, 575, 1], [550, 645, 2]]) {
-    add('wood-pallet', u, v, variant, 0, { radius: 2 }); add('loaded-pallet', u + 4, v, variant, 0, { radius: 3 });
-    add('warehouse-rack', u + 9, v + 2, variant, 0, { radius: 4 }); add('forklift', u + 13, v + 5, variant, 0, { radius: 4 });
-    add('cage-trolley', u + 4, v + 7, variant, 0, { radius: 2 }); add('hand-truck', u + 7, v + 8, variant, 0, { radius: 2 });
-    add('shipping-box', u + 2, v + 10, variant, 0, { radius: 2 }); add('stretch-wrap', u + 6, v + 11, variant, 0, { radius: 2 });
-  }
-
-  // Small public-service buildings are fitted only into clear lots away from the road and mission doors.
-  const services = ['pharmacy', 'clinic', 'police-station', 'fire-station', 'school', 'kindergarten', 'post-office', 'pickup-point', 'tire-shop', 'car-wash', 'gas-station'];
-  const candidates = [];
-  for (let v = 80; v <= 755; v += 21) for (let u = 45; u <= 1620; u += 21) {
-    if (!occupied({x:point(u,v).x,z:point(u,v).z,w:3.8,d:2.9})) candidates.push({ u, v, score: Math.abs(v - 400) + Math.abs(u - 840) * 0.08 });
-  }
-  candidates.sort((a, b) => a.score - b.score);
-  for (const id of services) {
-    const index = candidates.findIndex((p) => !occupied({x:point(p.u,p.v).x,z:point(p.u,p.v).z,w:3.8,d:2.9}));
-    if (index < 0) break;
-    const p = candidates.splice(index, 1)[0];
-    add(id, p.u, p.v, services.indexOf(id) % 3, 0, { radius: 20, solid: true, width: 7.2, height: 4.3, depth: 5.2 });
-  }
-
   // Remaining everyday objects, extra packaging variants, and utility infrastructure.
   for (const [u, v, id, variant] of [
-    [168, 280, 'shopping-bag', 0], [173, 280, 'backpack', 1], [178, 280, 'umbrella', 2], [183, 280, 'suitcase', 0],
-    [188, 280, 'coffee-cup', 1], [193, 280, 'newspaper', 2], [198, 280, 'parked-bicycle', 0],
-    [210, 270, 'pigeon', 0], [215, 270, 'cat', 1], [220, 270, 'dog', 2],
-    [170, 300, 'tea-box', 0], [174, 300, 'juice-carton', 1], [178, 300, 'canned-food', 2],
-    [182, 300, 'bread', 0], [186, 300, 'apple', 1], [190, 300, 'banana', 2],
-    [194, 300, 'household-chemistry', 0], [198, 300, 'tobacco-carton', 1],
     [230, 275, 'electrical-cabinet', 0], [236, 275, 'transformer-hut', 1], [242, 275, 'manhole', 2],
     [248, 275, 'drain-grate', 0], [254, 275, 'fire-hydrant', 1], [260, 275, 'gas-pipe', 2],
-    [266, 275, 'power-pole', 0], [272, 275, 'ventilation-grille', 1], [278, 275, 'construction-fence', 2],
-    [284, 275, 'rubble-pile', 0], [290, 275, 'waste-skip', 1],
+    [266, 275, 'power-pole', 0],
   ]) add(id, u, v, variant, 0, { search: 32, roadSurface: id==='manhole'||id==='drain-grate', solid:id==='transformer-hut'||id==='electrical-cabinet' });
 
   // Put real entry assemblies against measured facades before filling yards,
@@ -943,17 +921,6 @@ export function createUrbanDetails(sceneRoot, world, point) {
     }
   }
 
-  // Short pavement runs give each block a street edge, leaving gaps at drives
-  // and rejecting any segment that touches roads, buildings or existing props.
-  for(const block of NEIGHBORHOODS){
-    for(let u=block.left+8;u<block.right-8;u+=10)for(const v of [block.top+4,block.bottom-4]){
-      add('sidewalk-straight',u,v,block.district,0,{neighborhood:block.id,region:block});
-    }
-    for(let v=block.top+14;v<block.bottom-12;v+=10)for(const u of [block.left+4,block.right-4]){
-      add('curb',u,v,block.district,Math.PI/2,{neighborhood:block.id,region:block});
-    }
-  }
-
   // Final instancing pass: preserve model detail while keeping repeated props draw-call efficient.
   const batches = new Map();
   for (const model of sourceGroups) {
@@ -961,8 +928,9 @@ export function createUrbanDetails(sceneRoot, world, point) {
     model.traverse((node) => {
       if (!node.isMesh) return;
       const key = node.geometry.uuid + '/' + (Array.isArray(node.material) ? node.material.map((m) => m.uuid).join(',') : node.material.uuid) + '/' + Number(node.castShadow) + '/' + Number(node.receiveShadow);
-      if (!batches.has(key)) batches.set(key, { geometry: node.geometry, material: node.material, castShadow: node.castShadow, receiveShadow: node.receiveShadow, matrices: [] });
+      if (!batches.has(key)) batches.set(key, { geometry: node.geometry, material: node.material, castShadow: node.castShadow, receiveShadow: node.receiveShadow, matrices: [],props:[] });
       batches.get(key).matrices.push(node.matrixWorld.clone());
+      batches.get(key).props.push(model.userData.breakable);
     });
     detailRoot.remove(model);
   }
@@ -971,15 +939,17 @@ export function createUrbanDetails(sceneRoot, world, point) {
     const mesh = new T.InstancedMesh(batch.geometry, batch.material, batch.matrices.length);
     mesh.name = 'urban-prop-batch-' + instanceCount;
     batch.matrices.forEach((matrix, i) => mesh.setMatrixAt(i, matrix));
+    batch.props.forEach((prop,index)=>{if(prop)prop.instances.push({mesh,index});});
     mesh.instanceMatrix.needsUpdate = true; mesh.castShadow = batch.castShadow; mesh.receiveShadow = batch.receiveShadow;
     detailRoot.add(mesh); instanceCount += batch.matrices.length;
   }
 
+  for(const prop of breakables)props.register(prop);
   return {
     root: detailRoot,
     diagnostics: { categories: CATEGORY_DATA.length, catalogModels: URBAN_ASSET_CATALOG.length, placedModels: placed.length, instances: instanceCount, uniqueBatches: batches.size, publicServices: placed.filter(p=>p.category==='public-buildings').length, colliders: colliders.length, neighborhoods:NEIGHBORHOODS.map(b=>({id:b.id,district:b.district,placed:placed.filter(p=>p.neighborhood===b.id).length})), entrances:placed.filter(p=>p.buildingIndex!==null).length, loadingYards:LOCAL_POINTS.map((_,i)=>({shopIndex:i,placed:placed.filter(p=>p.loadingShop===i).length})), placements:placed.map(p=>({...p,footprint:{...p.footprint}})) },
     dispose() {
-      detailRoot.removeFromParent();context.dispose();
+      detailRoot.removeFromParent();context.dispose();if(ownProps)props.dispose();
       for(const mesh of colliders){
         const collider=world?.physics?.getCollider(mesh.userData.colliderHandle);
         const body=collider?.parent();if(body)world.physics.removeRigidBody(body);

@@ -9,6 +9,7 @@ import { createVisuals } from "./visuals/index.js";
 import { PLAYER_SHAPE, circleIntersectsBox, boxesIntersect, vehicleBox } from "./spatial.js";
 import { createJobWorld } from './jobs/world.js';
 import { createCartBody } from './physics/cart.js';
+import {createWalkways} from './city/walkways.js';
 export async function createWorld(scene, state) {
   await RAPIER.init();
   const physics = new RAPIER.World({ x: 0, y: -20, z: 0 });
@@ -396,6 +397,7 @@ export async function createWorld(scene, state) {
   const carLabel=label('ВАША МАШИНА · E',0,0,0,'#ffe5ab',1.2);homeCar.mesh.add(carLabel);carLabel.position.set(0,3,0);
   for(const employee of people.filter(n=>n.kind==='employee')){const badge=label(employee.role,0,0,0,'#dae9de',.9);employee.mesh.add(badge);badge.position.set(0,3,0);}
   world.jobs = createJobWorld(scene, world, state);
+  world.walkways=createWalkways(scene,world,world.boroughs.diagnostics.urbanDetails.placements);
   for(const cart of carts) cart.mesh.scale.set(.74,.84,.74);
   world.streetObstructions = blockers.filter(blocker=>ROADS.some(([a,b,c,d,width])=>{
     const start=point(a,b),end=point(c,d);
