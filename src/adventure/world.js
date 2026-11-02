@@ -114,11 +114,11 @@ export function createAdventure(scene,world,state,callbacks){
   if(id==='football'){p=goal;label=`Ворота · ${Math.min(3,a.fun.goals)}/3`;}
   if(id==='hospital'){p=world.hospital.spawn;label='Городская больница №1';}
   if(id==='ladder'){p=world.parkour.nearest();label='Лестница на крышу · Space + E';}
-  if(id==='wire'){p=world.cables.wires.flatMap(w=>[w.a,w.b]).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Столб с проводом · Space + E';}
+  if(id==='wire'){p=world.cables.wires.flatMap(w=>[w.a,w.b]).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Провод на крыше · Space + E';if(p&&world.player.mesh.position.y<p.roofY-1){p=world.parkour.diagnostics.ladders.find(l=>l.id===p.roofId)??p;label='Поднимитесь по лестнице к проводу';}else if(p)p={...p,y:p.roofY};}
   if(id==='garage-yard'){p=world.yards.yards.flatMap(y=>y.props).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Ящики, баки и забор у гаражей';}
   if(id==='van'){p=world.vehicles.find(v=>v.id===a.garage.vanId)?.mesh.position;label='Ваш фургон';}
   if(id.startsWith('guard:')){p=guards[Number(id.split(':')[1])]?.mesh.position;label='Охранник · договориться';}
-  return p?{x:p.x,z:p.z,label}:null;
+  return p?{x:p.x,z:p.z,...(Number.isFinite(p.y)?{y:p.y}:{}),label}:null;
  }
  return {
   target,

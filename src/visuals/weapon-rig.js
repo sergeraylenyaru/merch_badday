@@ -4,6 +4,7 @@ export const MELEE_TIMING={bat:{quick:{duration:.68,impact:.34},strong:{duration
 const smooth=t=>T.MathUtils.smoothstep(t,0,1);
 const poses={
  carry:{p:[.36,1.35,.3],r:[.15,0,-2.7]},
+ batCarry:{p:[.36,1.35,.3],r:[.15,0,Math.PI-2.7]},
  first:{p:[.28,1.51,.45],r:[.65,0,-.35]},
  ready:{p:[.25,1.47,.22],r:[-.7,0,-.9]},
  windup:{p:[.28,1.52,.13],r:[-1.05,0,-.95]},
@@ -12,7 +13,7 @@ const poses={
 export function meleePose(id,remaining=0,strong=false,firstPerson=false){
  if(id==='water')return {position:new T.Vector3(.3,1.3,.4),quaternion:new T.Quaternion(),phase:'carry',progress:0,twist:0,twoHanded:false};
  const timing=MELEE_TIMING[id]?.[strong?'strong':'quick'];
- const rest=firstPerson?poses.first:poses.carry;
+ const rest=firstPerson?poses.first:id==='bat'?poses.batCarry:poses.carry;
  if(!timing||remaining<=0)return {position:new T.Vector3(...rest.p),quaternion:new T.Quaternion().setFromEuler(new T.Euler(...rest.r)),phase:'carry',progress:0,twist:0,twoHanded:false};
  const t=T.MathUtils.clamp(1-remaining/timing.duration,0,1);
  const keys=[{t:0,pose:rest,twist:0},{t:.18,pose:poses.ready,twist:.18},{t:.37,pose:poses.windup,twist:.42},{t:.65,pose:poses.follow,twist:-.48},{t:1,pose:rest,twist:0}];

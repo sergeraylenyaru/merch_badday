@@ -33,10 +33,10 @@ test('strong hits and car contact roll the same ball without breaking or expirin
  props.vehicle({x:0,z:0,w:1,d:1},12,{x:0,z:1});for(let n=0;n<30;n++){physics.timestep=1/60;physics.step();props.update(1/60);}assert.ok(props.diagnostics.props[0].z>1);props.update(20);assert.equal(props.diagnostics.activeBodies,1);assert.equal(ball.broken,false);assert.deepEqual(state.brokenProps,[]);props.dispose();physics.free();
 });
 function traversalFixture(){const scene=new T.Scene(),mesh=new T.Group();scene.add(mesh);mesh.position.set(0,.6,1);
- const wire={id:'w',a:{x:0,y:5.8,z:0},b:{x:30,y:5.8,z:0},length:30},fence={id:'f',x:50,z:0,w:3,d:.1,y0:0,height:2.1,props:[{x:50,z:1.4,y:.85}]};
+ const wire={id:'w',a:{x:0,y:19.536,z:0,roofY:15.736,roofId:'a'},b:{x:30,y:19.536,z:0,roofY:15.736,roofId:'b'},length:30},fence={id:'f',x:50,z:0,w:3,d:.1,y0:0,height:2.1,props:[{x:50,z:1.4,y:.85}]};
  const world={player:{mesh},cables:{wires:[wire]},yards:{fences:[fence]},groundHeight:()=>0,blockedAt:()=>false};return {scene,world,mesh};}
 test('pole grab becomes a suspended ride, resumes from a save and drops before the far pole',()=>{
- const f=traversalFixture(),t=createTraversal(f.scene,f.world,{});assert.ok(t.grab());t.advance(1.15);assert.equal(t.motion.kind,'zipline');assert.ok(f.mesh.position.y>3.5);t.advance(1);assert.ok(f.mesh.position.x>6);
+ const f=traversalFixture(),t=createTraversal(f.scene,f.world,{});assert.equal(t.grab(),false,'ground level cannot grab a rooftop cable');f.mesh.position.y=16;assert.ok(t.grab());t.advance(1.15);assert.equal(t.motion.kind,'zipline');assert.ok(f.mesh.position.y>17);t.advance(1);assert.ok(f.mesh.position.x>6);
  const saved={parkour:{traversal:t.saved}};t.dispose();const restored=createTraversal(f.scene,f.world,saved);for(let i=0;i<100&&restored.active;i++)restored.advance(.1);assert.equal(restored.active,false);assert.ok(f.mesh.position.x>29&&f.mesh.position.x<30);restored.dispose();
 });
 test('vault requires a nearby box/bin, clears the fence and lands continuously on the far side',()=>{

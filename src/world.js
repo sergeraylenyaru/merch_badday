@@ -19,6 +19,7 @@ import {createWater} from './city/water.js';
 import {createTraffic} from './city/traffic.js';
 import {createServiceYards} from './city/service-yards.js';
 import {createCables} from './city/cables.js';
+import {createEnclosures} from './city/enclosures.js';
 export async function createWorld(scene, state) {
   await RAPIER.init();
   const physics = new RAPIER.World({ x: 0, y: -20, z: 0 });
@@ -434,6 +435,7 @@ export async function createWorld(scene, state) {
   const carLabel=label('ВАША МАШИНА · E',0,0,0,'#ffe5ab',1.2);homeCar.mesh.add(carLabel);homeCar.nameplate=carLabel;carLabel.position.set(0,3,0);carLabel.visible=!homeCar.sunk&&!homeCar.waterTime;
   for(const employee of people.filter(n=>n.kind==='employee')){const badge=label(employee.role,0,0,0,'#dae9de',.9);employee.mesh.add(badge);badge.position.set(0,3,0);}
   world.jobs = createJobWorld(scene, world, state);
+  world.enclosures=createEnclosures(scene,world);
   world.walkways=createWalkways(scene,world,world.boroughs.diagnostics.urbanDetails.placements);
   world.homeYard=createHomeYard(scene,world);
   world.homeTarget=()=>state.selected!==0||state.onboarding.carTaken||state.shops[0].job.paid?null:{x:homeCar.mesh.position.x,z:homeCar.mesh.position.z,label:'Ваша машина · парковка у дома'};

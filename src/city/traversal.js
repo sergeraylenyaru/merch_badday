@@ -5,8 +5,8 @@ export function createTraversal(scene,world,state){
  let active=state.parkour?.traversal?structuredClone(state.parkour.traversal):null;
  if(active?.kind==='zipline'&&!world.cables.wires.some(w=>w.id===active.id))active=null;
  function candidates(){const out=[];
-  for(const wire of world.cables.wires)for(const [side,p]of [wire.a,wire.b].entries()){const d=Math.hypot(pos.x-p.x,pos.z-p.z);if(d<1.9)out.push({kind:'zipline',id:wire.id,side,d});}
-  for(const f of world.yards.fences){const d=Math.hypot(pos.x-f.x,pos.z-f.z),near=f.props.some(p=>Math.hypot(pos.x-p.x,pos.z-p.z)<1.9);if(d<3.2&&Math.abs(pos.x-f.x)<f.w&&near&&pos.y<f.y0+f.height+1)out.push({kind:'vault',id:f.id,d});}
+  for(const wire of world.cables.wires)for(const [side,p]of [wire.a,wire.b].entries()){const d=Math.hypot(pos.x-p.x,pos.z-p.z),base=p.roofY??p.y-5.8;if(d<1.9&&pos.y>=base-.12&&pos.y<base+2.2)out.push({kind:'zipline',id:wire.id,side,d});}
+  for(const f of world.yards.fences){const nx=f.nx??0,nz=f.nz??1,along=(pos.x-f.x)*nz-(pos.z-f.z)*nx,d=Math.abs((pos.x-f.x)*nx+(pos.z-f.z)*nz),near=f.props.some(p=>Math.hypot(pos.x-p.x,pos.z-p.z)<1.9);if(d<3.2&&Math.abs(along)<(f.span??f.w)-.3&&near&&pos.y<f.y0+f.height+1)out.push({kind:'vault',id:f.id,d});}
   return out.sort((a,b)=>a.d-b.d);
  }
  function detach(force=false){if(!active)return false;if(active.kind==='vault'&&!force)return false;active=null;grip.visible=false;return true;}
@@ -14,7 +14,7 @@ export function createTraversal(scene,world,state){
   get active(){return !!active;},get saved(){return active?structuredClone(active):null;},
   grab(){const c=candidates()[0];if(!c)return false;
    if(c.kind==='zipline'){const w=world.cables.wires.find(w=>w.id===c.id);active={...c,phase:'reach',elapsed:0,progress:c.side?1-.6/w.length:.6/w.length,from:pos.toArray()};world.player.mesh.rotation.y=Math.atan2((w.b.x-w.a.x)*(c.side?-1:1),(w.b.z-w.a.z)*(c.side?-1:1));}
-   else {const f=world.yards.fences.find(f=>f.id===c.id),side=pos.z>=f.z?1:-1,to={x:T.MathUtils.clamp(pos.x,f.x-f.w+.7,f.x+f.w-.7),z:f.z-side*1.9};if(world.blockedAt(to.x,to.z,.35,null,world.groundHeight(to.x,to.z)))return false;active={...c,phase:'vault',elapsed:0,from:pos.toArray(),to:[to.x,world.groundHeight(to.x,to.z),to.z],top:f.y0+f.height+.35};}
+   else {const f=world.yards.fences.find(f=>f.id===c.id),nx=f.nx??0,nz=f.nz??1,span=f.span??f.w,side=Math.sign((pos.x-f.x)*nx+(pos.z-f.z)*nz)||1,along=T.MathUtils.clamp((pos.x-f.x)*nz-(pos.z-f.z)*nx,-span+.7,span-.7),to={x:f.x+nz*along-nx*side*1.9,z:f.z-nx*along-nz*side*1.9};if(world.blockedAt(to.x,to.z,.35,null,world.groundHeight(to.x,to.z)))return false;active={...c,phase:'vault',elapsed:0,from:pos.toArray(),to:[to.x,world.groundHeight(to.x,to.z),to.z],top:f.y0+f.height+.35};}
    return true;
   },detach,
   advance(dt){if(!active)return null;const a=active;a.elapsed+=dt;

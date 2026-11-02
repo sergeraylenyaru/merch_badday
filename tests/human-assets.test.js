@@ -22,7 +22,7 @@ test('a real skinned merchant grips the bat with both palms through windup, cont
  for(const heading of [0,1.3,-2.2])for(const remaining of [0,.8,.68,.47,.3]){
   mesh.rotation.y=heading;rig.update({remaining,strong:true});motion.update(1/60,{weaponRig:rig,attack:remaining,attackKind:'strong',grounded:true,velocity:new Vector3()});
   assert.equal(motion.diagnostics.weaponGripErrors.length,rig.twoHanded?2:1);
-  if(remaining===0){const h=model.getObjectByName('RightHand').getWorldPosition(new Vector3()),e=model.getObjectByName('RightElbow').getWorldPosition(new Vector3()),p=model.getObjectByName('Middle2R').getWorldPosition(new Vector3());assert.ok(h.clone().sub(e).angleTo(p.clone().sub(h))<Math.PI/4,'relaxed wrist stays aligned with the forearm');assert.ok(model.getObjectByName('Index3R').quaternion.angleTo(fingerRest)>1,'right fingers curl during one-handed carry');}
+  if(remaining===0){assert.ok(new Vector3(0,1,0).applyQuaternion(rig.root.getWorldQuaternion(mesh.quaternion.clone())).y>.85,'barrel points above the hand');const h=model.getObjectByName('RightHand').getWorldPosition(new Vector3()),e=model.getObjectByName('RightElbow').getWorldPosition(new Vector3()),p=model.getObjectByName('Middle2R').getWorldPosition(new Vector3());assert.ok(h.clone().sub(e).angleTo(p.clone().sub(h))<Math.PI/4,'relaxed wrist stays aligned with the forearm');assert.ok(model.getObjectByName('Index3R').quaternion.angleTo(fingerRest)>1,'right fingers curl during one-handed carry');}
   for(const error of motion.diagnostics.weaponGripErrors)assert.ok(error<.003,'bat palm contact '+error+' at '+heading+'/'+remaining);
  }
  rig.dispose();motion.dispose();library.dispose();

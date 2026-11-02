@@ -1459,12 +1459,12 @@ try {
     marker.scale.setScalar(nearby ? 0.32 : 1);
     marker.position.set(
       goal.x,
-      world.groundHeight(goal.x, goal.z) + (nearby ? 3.0 : 9) + Math.sin(visualTime * 2) * 0.12,
+      (goal.y??world.groundHeight(goal.x, goal.z)) + (nearby ? 3.0 : 9) + Math.sin(visualTime * 2) * 0.12,
       goal.z,
     );
     marker.rotation.z = Math.PI;
     marker.visible = !!sideGoal||!state.shops[state.selected].done;
-    goalZone.visible=marker.visible;goalZone.position.set(goal.x,world.groundHeight(goal.x,goal.z)+.045,goal.z);
+    goalZone.visible=marker.visible;goalZone.position.set(goal.x,(goal.y??world.groundHeight(goal.x,goal.z))+.045,goal.z);
     goalRing.scale.setScalar(1+Math.sin(visualTime*3)*.06);
     atmosphere.update({
       day: Math.min(1,state.time / 1500),
@@ -1516,7 +1516,7 @@ try {
         playerVisible: world.player.mesh.visible,
         playerY: world.player.mesh.position.y,
         knockdown:knockdownTime,playerLean:world.player.mesh.rotation.z,
-        goalZone:{visible:goalZone.visible,x:goalZone.position.x,z:goalZone.position.z},
+        goalZone:{visible:goalZone.visible,x:goalZone.position.x,y:goalZone.position.y,z:goalZone.position.z},
         groundHeight: world.groundHeight(world.player.mesh.position.x, world.player.mesh.position.z),
         collisionRadius: PLAYER_SHAPE.radius,
         firstPersonHandsVisible: world.visuals?.firstPersonHandsVisible ?? false,
@@ -1539,7 +1539,7 @@ try {
         obstacles: [ ...world.blockers.filter((b) => b.enabled !== false).map(({ x, z, w, d }) => ({ x, z, w, d, heading: 0 })),
           ...world.vehicles.filter((v) => v.mesh.visible && !(v.police && state.wanted < 3)).map((v) => vehicleBox(v)) ] };
     },
-    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,water:world.water.diagnostics,traffic:world.traffic.diagnostics,hospital:world.hospital.diagnostics,yards:world.yards.diagnostics,cables:world.cables.diagnostics,parkour:world.parkour.diagnostics,orchard:world.orchard.diagnostics,walkways:world.walkways.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,flyers:flyerSellers.diagnostics}));},
+    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,water:world.water.diagnostics,traffic:world.traffic.diagnostics,hospital:world.hospital.diagnostics,yards:world.yards.diagnostics,enclosures:world.enclosures.diagnostics,cables:world.cables.diagnostics,parkour:world.parkour.diagnostics,orchard:world.orchard.diagnostics,walkways:world.walkways.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,flyers:flyerSellers.diagnostics}));},
     get jobs() { return JSON.parse(JSON.stringify(world.jobs.diagnostics)); },
     get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null,
       personType:n.personType,role:n.role,weapon:n.weapon??null,policeIndex:n.policeIndex??null,visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,motion:n.motion?.diagnostics??null,
@@ -1549,7 +1549,7 @@ try {
   // BFCache preserves the page and its GPU resources. Dispose only on a real exit.
   addEventListener("pagehide", (event) => {
     if (!event.persisted) {
-      world.parkour.dispose();world.cables.dispose();world.yards.dispose();world.hospital.dispose();world.orchard.dispose();
+      world.parkour.dispose();world.cables.dispose();world.enclosures.dispose();world.yards.dispose();world.hospital.dispose();world.orchard.dispose();
       world.homeYard.dispose();
       world.boroughs.dispose();
       world.adventure.dispose();goalFill.geometry.dispose();goalFill.material.dispose();goalRing.geometry.dispose();goalRing.material.dispose();
