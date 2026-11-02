@@ -37,6 +37,8 @@ import {collisionInjury,pedestrianContact} from './physics/vehicle-impact.js';
 import {createAdventure} from './adventure/world.js';
 import {tickHealth} from './city/vitals.js';
 import {createFlyerSellers} from './npc/flyer-sellers.js';
+import {MELEE_TIMING} from './visuals/weapon-rig.js';
+import {createIllustratedRenderer} from './visuals/illustrated-renderer.js';
 import {ensureAdventure,WEAPONS} from './adventure/state.js';
 const state = load();
 ensureAdventure(state);
@@ -52,6 +54,7 @@ let world,
   scene,
   camera,
   atmosphere,
+  illustrated,
   mouseCapture,
   ui,
   mode = "intro",
@@ -65,6 +68,7 @@ let world,
   vertical = 0,
   attack = 0,
   attackKind = "quick",
+  pendingSwing = null,
   policeHitCooldown = 0,
   policeDefeatLevel = 0,
   knockdownTime = 0,
@@ -330,7 +334,7 @@ function photo() {
     return;
   }
   state.shops[shop.id].photo = true;
-  renderer.render(scene, camera);
+  illustrated.render();
   const img = document.createElement("img");
   img.className = "photo";
   img.alt = `Фотоотчёт: ${shop.name}`;
@@ -379,9 +383,10 @@ try {
     },
   });
   atmosphere = createAtmosphere(scene, renderer);
+  illustrated=createIllustratedRenderer(renderer,scene,camera);
   applyQuality();
   ui = createUI(state, {
-    adventure(name,value,tab){world.adventure.action(name,value);snapshot();if(name==='table')ui.tableGame();else ui.phone(tab??'Город');},
+    adventure(name,value,tab){if(name==='equip'){pendingSwing=null;attack=0;}world.adventure.action(name,value);snapshot();if(name==='table')ui.tableGame();else ui.phone(tab??'Город');},
     settings,
     resume,
     answerCall(){state.onboarding.callReceived=true;state.selected=0;message('Региональный: Доброе утро! Ваша машина у дома. Первое задание — доехать до «У дома», занять голубое место и оплатить парковку. Затем зайдите к Нине за заданием в зале.');snapshot();resume();},
@@ -602,6 +607,7 @@ try {
         return;
       }
       vehicle = car;
+      if(car.homeVehicle)state.onboarding.carTaken=true;
       if(state.adventure.tracked==='van'&&car.id===state.adventure.garage.vanId)state.adventure.tracked=null;
       if (car.traffic && !car.claimed) {
         car.claimed = true;
@@ -696,7 +702,17 @@ try {
     beep(strong ? 130 : 200);
     const weapon=WEAPONS[state.adventure.equipped];
     if(state.adventure.equipped==='water'){attack=.35;attackKind='quick';world.adventure.shootWater(world.player.mesh.position,{x:-Math.sin(yaw),z:-Math.cos(yaw)});return;}
-    const target = nearest(world.people, weapon?.reach??2.9);
+    if(MELEE_TIMING[state.adventure.equipped]){
+      const timing=MELEE_TIMING[state.adventure.equipped][strong?'strong':'quick'];attack=timing.duration;
+      pendingSwing={weapon,strong,timing,id:state.adventure.equipped};world.player.mesh.rotation.y=yaw+Math.PI;return;
+    }
+    resolveMelee(weapon,strong);
+  }
+  function resolveMelee(weapon,strong){
+    const target=weapon?nearest(world.people.filter(n=>{
+      const dx=n.mesh.position.x-world.player.mesh.position.x,dz=n.mesh.position.z-world.player.mesh.position.z,d=Math.hypot(dx,dz);
+      return n.stun<=0&&d>.01&&(-Math.sin(yaw)*dx-Math.cos(yaw)*dz)/d>.1&&clearSegment(world.player.mesh.position,n.mesh.position,walkingBlocked,.05);
+    }),weapon.reach):nearest(world.people,2.9);
     if (target && target.stun <= 0) {
       target.stun = weapon?(strong?7:4):strong?5:2;
       world.adventure.dropMoney(target);
@@ -745,7 +761,7 @@ try {
     if (mode !== "play") return;
     if(['Digit0','Digit1','Digit2','Digit3'].includes(e.code)){
       const id=({Digit0:null,Digit1:'bat',Digit2:'stick',Digit3:'water'})[e.code];
-      if(id===null||state.adventure.inventory.includes(id)){world.adventure.action('equip',id);notify(id?WEAPONS[id].name:'Кулаки');}else notify('Сначала найдите и подберите этот предмет');return;
+      if(id===null||state.adventure.inventory.includes(id)){pendingSwing=null;attack=0;world.adventure.action('equip',id);notify(id?WEAPONS[id].name:'Кулаки');}else notify('Сначала найдите и подберите этот предмет');return;
     }
     keys.add(e.code);
     if (e.code === "KeyE") interact();
@@ -866,7 +882,7 @@ try {
             ? 1.7
             : held
               ? held.missionCargo ? 2.7 : 3.2
-              : runningSpeed(state,keys.has("ShiftLeft")||keys.has("ShiftRight"))) * (state.health < 25 ? 0.65 : 1) * (knockdownTime>.45?0:1);
+              : runningSpeed(state,keys.has("ShiftLeft")||keys.has("ShiftRight"))) * (state.health < 25 ? 0.65 : 1) * (knockdownTime>.45?0:(attack>0&&MELEE_TIMING[state.adventure.equipped]?0.35:1));
       let dx = -Math.sin(yaw) * forward + Math.cos(yaw) * side,
         dz = -Math.cos(yaw) * forward - Math.sin(yaw) * side;
       if (activity?.approach) { dx = activity.approach.x - pos.x; dz = activity.approach.z - pos.z; }
@@ -885,7 +901,7 @@ try {
         if (!world.blocked(frontX, frontZ, 0.65)) held.pushHeading = proposed;
         world.player.mesh.rotation.y = held.pushHeading;
       }
-      else if (firstPerson && !busy) world.player.mesh.rotation.y = yaw + Math.PI;
+      else if ((firstPerson||attack>0&&MELEE_TIMING[state.adventure.equipped]) && !busy) world.player.mesh.rotation.y = yaw + Math.PI;
       if (walkingVelocity.lengthSq() > 0) {
         const aheadX = held ? Math.sin(held.pushHeading) * .98 : 0;
         const aheadZ = held ? Math.cos(held.pushHeading) * .98 : 0;
@@ -897,7 +913,7 @@ try {
         if (attached && !world.blocked(pos.x, pos.z + dz) &&
             (!held || !world.blocked(pos.x + aheadX, pos.z + dz + aheadZ, 0.65))) pos.z += dz;
         else walkingVelocity.z = 0;
-        if (!held && !firstPerson && !busy) {
+        if (!held && !firstPerson && !busy && !(attack>0&&MELEE_TIMING[state.adventure.equipped])) {
           const target = Math.atan2(dx, dz);
           const turn = Math.atan2(Math.sin(target - world.player.mesh.rotation.y), Math.cos(target - world.player.mesh.rotation.y));
           world.player.mesh.rotation.y += turn * (1 - Math.exp(-dt * 14));
@@ -952,7 +968,7 @@ try {
     });
     state.position = { x: pos.x, z: pos.z };
     if (attack > 0) {
-      attack -= dt;
+      attack = Math.max(0,attack-dt);
       world.player.mesh.rotation.z =
         Math.sin(attack * (attackKind === "strong" ? 7 : 14)) * 0.15;
     } else world.player.mesh.rotation.z = 0;
@@ -1373,6 +1389,10 @@ try {
     }
     if (mode === "play") {
       move(dt);
+      if(pendingSwing){
+        if(vehicle||state.carrying||held||knockdownTime>.5||state.adventure.equipped!==pendingSwing.id){pendingSwing=null;attack=0;}
+        else if(attack<=pendingSwing.timing.duration-pendingSwing.timing.impact){const swing=pendingSwing;pendingSwing=null;resolveMelee(swing.weapon,swing.strong);}
+      }
       accumulator += dt;
       let steps = 0;
       while (accumulator >= 1 / 60 && steps++ < 4) {
@@ -1403,7 +1423,7 @@ try {
       ui.context(context());
     } else { world.jobs.update(0, visualTime, false); ui.context(""); }
     const selected = SHOPS[state.selected];
-    const sideGoal=world.adventure.target();
+    const sideGoal=world.adventure.target()??world.homeTarget();
     const goal = sideGoal??world.jobs.targetFor(selected.id) ?? selected;
     const nearby = Math.hypot(goal.x - world.player.mesh.position.x, goal.z - world.player.mesh.position.z) < 25;
     marker.scale.setScalar(nearby ? 0.32 : 1);
@@ -1422,6 +1442,7 @@ try {
       player: world.player.mesh.position,
       dt,
     });
+    world.adventure.prepareWeapons({inVehicle:!!vehicle,carrying:!!state.carrying||!!held,firstPerson,pitch,attack,attackKind});
     world.visuals?.setFirstPerson(firstPerson && !vehicle && hasStarted);
     world.visuals?.update?.(dt, visualTime, {
       active: mode === "play", heldCart: held?.mesh ?? null,
@@ -1435,7 +1456,7 @@ try {
     world.adventure.update(mode==='play'?dt:0,visualTime,{inVehicle:!!vehicle,carrying:!!state.carrying||!!held,firstPerson,camera,attack});
     flyerSellers.update(mode==='play'?dt:0,visualTime);
     ui.update(world, vehicle);
-    renderer.render(scene, camera);
+    illustrated.render();
   }
   frame();
   // Read-only diagnostics for smoke tests and troubleshooting, with no gameplay shortcuts.
@@ -1448,6 +1469,7 @@ try {
     },
     get renderer() {
       return {
+        art:illustrated.diagnostics,
         calls: renderer.info.render.calls,
         triangles: renderer.info.render.triangles,
         geometries: renderer.info.memory.geometries,
@@ -1490,13 +1512,14 @@ try {
     get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,walkways:world.walkways.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,flyers:flyerSellers.diagnostics}));},
     get jobs() { return JSON.parse(JSON.stringify(world.jobs.diagnostics)); },
     get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null,
-      personType:n.personType,role:n.role,visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,motion:n.motion?.diagnostics??null,
+      personType:n.personType,role:n.role,weapon:n.weapon??null,policeIndex:n.policeIndex??null,visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,motion:n.motion?.diagnostics??null,
       dailyRoute:n.dailyRoute?{index:n.dailyRoute.index,wait:n.dailyRoute.wait,visits:n.dailyRoute.visits,stops:n.dailyRoute.stops}:null,
       navigation:n.navigation?{waypoints:n.navigation.path.length,stuck:n.navigation.stuck}:null })); },
   };
   // BFCache preserves the page and its GPU resources. Dispose only on a real exit.
   addEventListener("pagehide", (event) => {
     if (!event.persisted) {
+      world.homeYard.dispose();
       world.boroughs.dispose();
       world.adventure.dispose();goalFill.geometry.dispose();goalFill.material.dispose();goalRing.geometry.dispose();goalRing.material.dispose();
       flyerSellers.dispose();
@@ -1507,6 +1530,7 @@ try {
       world.visuals?.dispose();
       mouseCapture.dispose();
       atmosphere.dispose();
+      illustrated.dispose();
     }
   });
 } catch (err) {

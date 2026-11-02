@@ -54,7 +54,7 @@
 
 ## Новые мужская и женская модели — Quaternius
 
-В игре используются настоящие skinned meshes **Casual2** из [Ultimate Modular Men](https://quaternius.com/packs/ultimatemodularcharacters.html) и **Casual** из [Ultimate Modular Women](https://quaternius.com/packs/ultimatemodularwomen.html), оба набора CC0. Мужская модель получила синюю футболку, чёрные брюки и структурированный портфель за спиной. Женская модель отличается геометрией и пропорциями, это отдельный исходный персонаж.
+В игре используются настоящие skinned meshes **Casual2** из [Ultimate Modular Men](https://quaternius.com/packs/ultimatemodularcharacters.html) и **Casual** из [Ultimate Modular Women](https://quaternius.com/packs/ultimatemodularwomen.html), оба набора CC0. Мужская модель получила охристую куртку, тёмные брюки и холщовый портфель за спиной по четырём листам пользовательского концепта. Женская модель отличается геометрией и пропорциями, это отдельный исходный персонаж. Адаптация одежды воспроизводится `scripts/style-concept-hero.py`; исходные локальные трансформации точек ладоней, стоп и портфеля сохраняются при экспорте. Художественное направление описано в `art/CONCEPT_DIRECTION.md`.
 
 Клипы взяты из [Universal Animation Library Standard](https://quaternius.com/packs/universalanimationlibrary.html), CC0. Сохраняются и проигрываются настоящие ключевые треки скелета; ходьба/бег не выдаются за извлечённые из GTA анимации. Пинованные зеркала, SHA, лицензии и способ воспроизведения — в [art/quaternius/README.md](art/quaternius/README.md). Результат адаптации — `public/models/characters/`, исходные мужская и женская GLB — `art/quaternius/`.
 

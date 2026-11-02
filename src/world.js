@@ -1,7 +1,7 @@
 import {createTerrainMaterials,tileBoxUV} from './city/terrain-materials.js';
 import {createReferenceCity, buildReferenceTerrain, isReferenceWater} from './city/reference-city.js';
 import {roadHeight} from './city/terrain.js';
-import {MAP, point, pixel, START, HOME_CAR, ROADS} from './city/reference-layout.js';
+import {MAP, point, pixel, START, HOME_CAR, HOME_CAR_HEADING, ROADS} from './city/reference-layout.js';
 import * as T from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
 import { SHOPS } from "./state.js";
@@ -11,6 +11,8 @@ import { createJobWorld } from './jobs/world.js';
 import { createCartBody } from './physics/cart.js';
 import {createWalkways} from './city/walkways.js';
 import {LOCAL_SHOPS} from './city/layout.js';
+import {policeWeapon} from './npc/police-combat.js';
+import {createHomeYard} from './city/home-yard.js';
 export async function createWorld(scene, state) {
   await RAPIER.init();
   const physics = new RAPIER.World({ x: 0, y: -20, z: 0 });
@@ -284,7 +286,7 @@ export async function createWorld(scene, state) {
     label("КОФЕ", x + 17, 3, z + 4, "#ffe5a1", 0.9);
   }
   visualBucket = null;
-  vehicles.push(car(START.x+6, START.z+5, 2, vehicles.length));
+  vehicles.push(car(START.x-12, START.z+5, 2, vehicles.length));
   for (let i = 0; i < 6; i++) {
     const p = point(70+i*245,340);
     const v = car(p.x, p.z, i % 4, vehicles.length, true);
@@ -300,6 +302,7 @@ export async function createWorld(scene, state) {
   for (let i = 0; i < 3; i++) {
     const loc=point([220,800,1450][i],380);
     const p = human(loc.x,loc.z,"#577d9a", "police");
+    p.policeIndex=i;p.weapon=policeWeapon(i);
     people.push(p);
   }
   for(const [i,shop] of [...SHOPS,...LOCAL_SHOPS].entries()){
@@ -394,7 +397,11 @@ export async function createWorld(scene, state) {
   // Rendering supplies measured vehicle extents. Entity IDs, transforms,
   // interaction targets and physical bodies remain owned by the world.
   world.boroughs = await createReferenceCity(scene,world,{human,car,label});
+  for(const [i,uv]of [[3,[570,380]],[4,[1070,380]]]){
+    const p=point(...uv),officer=human(p.x,p.z,'#577d9a','police');officer.policeIndex=i;officer.weapon=policeWeapon(i);people.push(officer);
+  }
   const homeCar=car(HOME_CAR.x,HOME_CAR.z,0,vehicles.length);
+  homeCar.heading=HOME_CAR_HEADING;homeCar.mesh.rotation.y=HOME_CAR_HEADING;
   homeCar.claimed=true;homeCar.homeVehicle=true;vehicles.push(homeCar);
   label('ВАШ ДОМ',START.x,4,START.z-4,'#ffe5ab',1.7);
   const savedHomeCar=state.vehicles[homeCar.id];
@@ -404,6 +411,8 @@ export async function createWorld(scene, state) {
   for(const employee of people.filter(n=>n.kind==='employee')){const badge=label(employee.role,0,0,0,'#dae9de',.9);employee.mesh.add(badge);badge.position.set(0,3,0);}
   world.jobs = createJobWorld(scene, world, state);
   world.walkways=createWalkways(scene,world,world.boroughs.diagnostics.urbanDetails.placements);
+  world.homeYard=createHomeYard(scene,world);
+  world.homeTarget=()=>state.selected!==0||state.onboarding.carTaken||state.shops[0].job.paid?null:{x:homeCar.mesh.position.x,z:homeCar.mesh.position.z,label:'Ваша машина · парковка у дома'};
   for(const cart of carts) cart.mesh.scale.set(.74,.84,.74);
   world.streetObstructions = blockers.filter(blocker=>ROADS.some(([a,b,c,d,width])=>{
     const start=point(a,b),end=point(c,d);

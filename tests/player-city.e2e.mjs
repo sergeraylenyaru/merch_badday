@@ -13,7 +13,7 @@ try{
  const status=await page.locator('.player-status').boundingBox();assert.ok(status.x>600&&status.y<250);
  let weapon=await page.evaluate(()=>__MERCH__.city.adventure);assert.ok(weapon.heldVisible);assert.ok(Math.max(...weapon.heldBounds)>.9);assert.ok(weapon.heldScale.every(n=>Math.abs(n-1)<.01));
  await page.screenshot({path:'.playwright/player-bat-third.png'});await page.keyboard.press('KeyC');await advance(page,.1);
- weapon=await page.evaluate(()=>__MERCH__.city.adventure);assert.ok(weapon.heldVisible);assert.ok(weapon.heldScale.every(n=>Math.abs(n-.72)<.01));await page.screenshot({path:'.playwright/player-bat-first.png'});
+ weapon=await page.evaluate(()=>__MERCH__.city.adventure);assert.ok(weapon.heldVisible);assert.ok(weapon.heldScale.every(n=>Math.abs(n-1)<.01));await page.screenshot({path:'.playwright/player-bat-first.png'});
  await page.waitForFunction(()=>__MERCH__.state.health===51);console.log('PASS visible full-size bat in both cameras, right HUD and timed HP recovery');
  await page.keyboard.press('KeyM');assert.equal(await page.locator('.tablet-sheet').count(),0);
  const tabs=['Маршрут','Город','Охрана','Коллекция','Снаряжение','Гараж','Сообщения','Показатели','Фото'];

@@ -11,6 +11,8 @@ export async function createTerrainMaterials(){
    const texture=await loader.loadAsync(base+'textures/'+file);texture.wrapS=texture.wrapT=RepeatWrapping;texture.flipY=false;if(role==='base')texture.colorSpace=SRGBColorSpace;texture.anisotropy=4;textures.set(file,texture);return texture;
   }));
   const material=new MeshStandardMaterial({map:maps[0],normalMap:maps[1],roughnessMap:maps[2],metalnessMap:maps[2],roughness:1,metalness:1});material.userData.tileSize=name==='water'?6:4;materials.push(material);for(const color of colors)byColor.set(color,material);
+  if(name==='grass')material.color.set('#c7bd95');
+  if(name==='water')material.color.set('#9ba9ac');
  }));
  return {byColor,water:byColor.get('#287f9d'),dispose(){for(const m of materials)m.dispose();for(const t of textures.values())t.dispose();}};
 }

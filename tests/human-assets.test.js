@@ -5,11 +5,36 @@ import { Box3, Group, Vector3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { AssetLibrary } from "../src/visuals/assets.js";
 import { createCharacterMotion } from "../src/visuals/character-motion.js";
+import {createWeaponRig,meleePose,MELEE_TIMING} from '../src/visuals/weapon-rig.js';
 
 async function load(name) {
   const bytes = await readFile(new URL(`../public/models/characters/${name}.glb`, import.meta.url));
   return new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), "");
 }
+
+test('a real skinned merchant grips the bat with both palms through windup, contact and recovery',async()=>{
+ const asset=await load('merch-male');
+ const library=new AssetLibrary({human:{url:'fixture:bat-user'}},{loader:{loadAsync:async()=>asset},logger:{info(){},warn(){}}});await library.preload();
+ const scene=new Group(),mesh=new Group(),model=library.instantiate('human',{height:2.1});scene.add(mesh);mesh.add(model);mesh.position.set(8,0,-3);
+ const motion=createCharacterMotion({mesh},model),rig=createWeaponRig(scene,mesh,'bat',()=>{});
+ for(let i=0;i<30;i++)motion.update(1/60,{grounded:true,velocity:new Vector3()});
+ for(const heading of [0,1.3,-2.2])for(const remaining of [0,.8,.68,.47,.3]){
+  mesh.rotation.y=heading;rig.update({remaining,strong:true});motion.update(1/60,{weaponRig:rig,attack:remaining,attackKind:'strong',grounded:true,velocity:new Vector3()});
+  assert.equal(motion.diagnostics.weaponGripErrors.length,rig.twoHanded?2:1);
+  for(const error of motion.diagnostics.weaponGripErrors)assert.ok(error<.003,'bat palm contact '+error+' at '+heading+'/'+remaining);
+ }
+ rig.dispose();motion.dispose();library.dispose();
+});
+
+test('bat animations have distinct windup, strike and recovery poses with finite unit rotations',()=>{
+ for(const strong of [false,true]){
+  const duration=MELEE_TIMING.bat[strong?'strong':'quick'].duration;
+  const samples=[.2,.5,.8].map(progress=>meleePose('bat',duration*(1-progress),strong));
+  assert.deepEqual(samples.map(p=>p.phase),['windup','strike','recover']);
+  assert.ok(samples[0].quaternion.angleTo(samples[1].quaternion)>1);
+  for(const p of samples){assert.ok(Math.abs(p.quaternion.length()-1)<1e-6);assert.ok(p.position.toArray().every(Number.isFinite));}
+ }
+});
 
 test("both licensed human models contain real skins and changing recorded locomotion tracks", async () => {
   for (const name of ["merch-male", "civilian-female"]) {
@@ -55,15 +80,17 @@ test('a carried carton stays in both real palms while recorded walking and turni
   motion.dispose(); library.dispose();
 });
 
-test("merch wears a blue T-shirt, black trousers and a two-strap backpack", async () => {
+test("merch wears a rust jacket with a hood, dark trousers and a two-strap canvas backpack", async () => {
   const asset = await load("merch-male");
   const materials = new Map(), names = [];
   asset.scene.traverse((node) => {
     names.push(node.name);
     if (node.isMesh) for (const m of Array.isArray(node.material) ? node.material : [node.material]) materials.set(m.name, m);
   });
-  assert.equal(materials.get("Merch_BlueTShirt").color.getHexString(), "225ab5");
-  assert.equal(materials.get("Merch_BlackTrousers").color.getHexString(), "17191e");
+  const jacket=materials.get('Merch_BlueTShirt').color;
+  assert.ok(jacket.r>jacket.g*2&&jacket.r>jacket.b*2);
+  assert.ok(materials.get('Merch_BlackTrousers').color.getHex()<0x606060);
+  assert.ok(names.includes('ConceptHood'));
   assert.ok(names.some((name) => name === "Backpack"));
   assert.equal(names.filter((name) => name.startsWith("Backpack_ShoulderStrap")).length, 2);
   assert.ok(!names.some((name) => /satchel|shoulder.bag/i.test(name)));

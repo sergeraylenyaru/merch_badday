@@ -43,8 +43,8 @@ try{
  if(run('guard')){
   const s=fresh(),guard=city.adventure.guards[0];s.money=500;s.wanted=3;s.position={x:guard.x+1.8,z:guard.z};
   await scenario(s,'guard');await page.keyboard.press('KeyE');await page.locator('#extra-bribe').click();
-  await page.waitForFunction(()=>__MERCH__.state.wanted===2);assert.equal(await page.evaluate(()=>__MERCH__.state.money),350);
-  await page.keyboard.press('KeyE');assert.equal(await page.locator('#extra-bribe').isDisabled(),true);await close();console.log('PASS guard dialogue, 150 ₽ for exactly one star and bribe cooldown');
+  await page.waitForFunction(()=>__MERCH__.state.wanted===2);assert.equal(await page.evaluate(()=>__MERCH__.state.money),450);
+  await page.keyboard.press('KeyE');assert.equal(await page.locator('#extra-bribe').isEnabled(),true);assert.match(await page.locator('#extra-bribe').textContent(),/100/);await page.locator('#extra-bribe').click();await page.waitForFunction(()=>__MERCH__.state.wanted===1);assert.equal(await page.evaluate(()=>__MERCH__.state.money),350);await close();console.log('PASS guard dialogue, escalating 50/100 ₽ payments and exactly one star per payment');
  }
 
  if(run('money')){

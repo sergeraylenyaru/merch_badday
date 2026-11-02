@@ -2,11 +2,15 @@ import {remember} from '../city/shift.js';
 export const WEAPONS={bat:{name:'Бита',reach:3.5,power:3,color:'#ffba45'},stick:{name:'Палка',reach:3.2,power:2,color:'#adf16b'},water:{name:'Водяной пистолет',reach:10,power:0,color:'#43deff'}};
 export const PACKS=['Красная','Синяя','Зелёная','Жёлтая','Фиолетовая','Оранжевая','Бирюзовая','Розовая','Белая','Чёрная'].map((name,id)=>({id,name,color:['#f04d52','#4c8cff','#54cd72','#ffe268','#b67aff','#ff9e46','#49e1cf','#ff79bb','#e7edf4','#43495c'][id]}));
 export const EVENT_INFO={spill:{title:'Упавший груз',text:'Соберите три коробки возле фургона. Можно помочь за 80 ₽ или отказаться.',reward:80},delivery:{title:'Срочная доставка',text:'Заберите посылку и доставьте за четыре минуты. До 150 ₽ за целый груз; авария может выбросить его из машины.',reward:150},favor:{title:'Кошелёк продавца',text:'Найдите потерянный кошелёк и верните продавцу. Награда 120 ₽ и знакомство: кофе здесь вполовину дешевле в следующих сменах.',reward:120}};
-export function newAdventure(){return {inventory:[],equipped:null,pickedWeapons:[],cigarettes:[],collectionRewarded:false,knocked:[],drops:[],events:{spill:{status:'offered',boxes:[]},delivery:{status:'offered',carrying:false,integrity:100,due:0,drop:null},favor:{status:'offered',found:false}},fun:{goals:0,footballWon:false,table:{matched:[],open:[],won:false}},garage:{condition:100,vanId:null},tracked:null,bribeReadyAt:0};}
+export const BRIBE_RESET_SECONDS=30;
+export function newAdventure(){return {inventory:[],equipped:null,pickedWeapons:[],cigarettes:[],collectionRewarded:false,knocked:[],drops:[],events:{spill:{status:'offered',boxes:[]},delivery:{status:'offered',carrying:false,integrity:100,due:0,drop:null},favor:{status:'offered',found:false}},fun:{goals:0,footballWon:false,table:{matched:[],open:[],won:false}},garage:{condition:100,vanId:null},tracked:null,bribes:{count:0,lastAt:null}};}
 export function ensureAdventure(state){
  const base=newAdventure(),old=state.adventure??{};
  Object.assign(old,{...base,...old,events:Object.fromEntries(Object.keys(base.events).map(k=>[k,{...base.events[k],...old.events?.[k]}])),fun:{...base.fun,...old.fun,table:{...base.fun.table,...old.fun?.table}},garage:{...base.garage,...old.garage}});state.adventure=old;
  const a=state.adventure;
+ a.bribes={count:0,lastAt:null,...a.bribes};
+ a.bribes.count=Math.max(0,Math.floor(Number(a.bribes.count)||0));
+ if(!Number.isFinite(a.bribes.lastAt))a.bribes.lastAt=null;
  a.inventory=[...new Set(Array.isArray(a.inventory)?a.inventory:[])].filter(k=>WEAPONS[k]);
  a.cigarettes=[...new Set(Array.isArray(a.cigarettes)?a.cigarettes:[])].filter(i=>Number.isInteger(i)&&i>=0&&i<10);
  if(!a.inventory.includes(a.equipped))a.equipped=null;
@@ -16,7 +20,8 @@ export function ensureAdventure(state){
 }
 export function collectPack(state,id){const a=state.adventure;if(!PACKS[id]||a.cigarettes.includes(id))return false;a.cigarettes.push(id);if(a.cigarettes.length===10&&!a.collectionRewarded){a.collectionRewarded=true;state.money+=300;}return true;}
 export function pickupWeapon(state,id){const a=state.adventure;if(!WEAPONS[id])return false;if(!a.inventory.includes(id))a.inventory.push(id);if(!a.pickedWeapons.includes(id))a.pickedWeapons.push(id);a.equipped=id;return true;}
-export function bribeGuard(state){if(state.wanted<=0||state.money<150||state.time<state.adventure.bribeReadyAt)return false;state.money-=150;state.wanted=Math.max(0,Math.ceil(state.wanted)-1);state.wantedElapsed=0;state.adventure.bribeReadyAt=state.time+10;return true;}
+export function bribePrice(state){const b=state.adventure.bribes,elapsed=state.time-(b?.lastAt??-Infinity);return 50*(1+(elapsed>=0&&elapsed<BRIBE_RESET_SECONDS?(b?.count??0):0));}
+export function bribeGuard(state){const price=bribePrice(state);if(state.wanted<=0||state.money<price)return false;state.money-=price;state.wanted=Math.max(0,Math.ceil(state.wanted)-1);state.wantedElapsed=0;state.adventure.bribes={count:price/50,lastAt:state.time};return true;}
 export function startEvent(state,id){const e=state.adventure.events[id];if(!e||e.status!=='offered')return false;e.status='active';if(id==='delivery')e.due=state.time+240;state.adventure.tracked=id;return true;}
 export function finishEvent(state,id,keep=false){const a=state.adventure,e=a.events[id];if(!e||e.status!=='active')return 0;let amount=0;
  if(id==='spill'&&e.boxes.length===3)amount=80+(state.career.contacts.includes('seller')?20:0);

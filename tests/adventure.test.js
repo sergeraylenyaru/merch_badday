@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {freshState,save,load} from '../src/state.js';
-import {ensureAdventure,collectPack,pickupWeapon,bribeGuard,startEvent,finishEvent,buyGarage,crashCargo,tableCard} from '../src/adventure/state.js';
+import {ensureAdventure,collectPack,pickupWeapon,bribeGuard,bribePrice,startEvent,finishEvent,buyGarage,crashCargo,tableCard} from '../src/adventure/state.js';
 const fresh=()=>{const s=freshState();ensureAdventure(s);return s;};
 test('all ten distinct cigarette colours persist and award the collection exactly once',()=>{
  const s=fresh(),before=s.money;for(let i=0;i<10;i++){assert.equal(collectPack(s,i),true);assert.equal(collectPack(s,i),false);}assert.equal(collectPack(s,10),false);assert.equal(s.money,before+300);
@@ -9,8 +9,17 @@ test('all ten distinct cigarette colours persist and award the collection exactl
 });
 test('weapons equip on pickup and a guard bribe removes precisely one star',()=>{
  const s=fresh();pickupWeapon(s,'bat');pickupWeapon(s,'water');assert.equal(s.adventure.equipped,'water');assert.deepEqual(s.adventure.inventory,['bat','water']);
- s.wanted=3;s.money=500;assert.equal(bribeGuard(s),true);assert.equal(s.wanted,2);assert.equal(s.money,350);assert.equal(bribeGuard(s),false);
- s.time+=10;assert.equal(bribeGuard(s),true);assert.equal(s.wanted,1);s.money=0;s.time+=10;assert.equal(bribeGuard(s),false);assert.equal(s.wanted,1);
+ s.wanted=5;s.money=1000;
+ for(const [price,wanted]of [[50,4],[100,3],[150,2]]){const before=s.money;assert.equal(bribePrice(s),price);assert.equal(bribeGuard(s),true);assert.equal(s.wanted,wanted);assert.equal(s.money,before-price);}
+ s.time+=29.99;assert.equal(bribePrice(s),200);s.time+=.01;assert.equal(bribePrice(s),50);assert.equal(bribeGuard(s),true);assert.equal(s.wanted,1);
+ const count=s.adventure.bribes.count;s.money=0;assert.equal(bribeGuard(s),false);assert.equal(s.adventure.bribes.count,count);
+
+});
+test('bribe escalation survives saving and resets thirty seconds after the last successful payment',()=>{
+ const s=fresh();s.wanted=5;s.money=1000;bribeGuard(s);s.time=20;bribeGuard(s);
+ const storage={value:null,setItem(k,v){this.value=v;},getItem(){return this.value;}};save(s,storage);const restored=load(storage);
+ assert.equal(bribePrice(restored),150);restored.time=49.99;assert.equal(bribePrice(restored),150);restored.time=50;assert.equal(bribePrice(restored),50);
+ restored.wanted=0;assert.equal(bribeGuard(restored),false);assert.equal(bribePrice(restored),50);
 });
 test('side jobs require their actual objective, have choices and cannot pay twice',()=>{
  const s=fresh();startEvent(s,'spill');assert.equal(finishEvent(s,'spill'),0);s.adventure.events.spill.boxes=[0,1,2];assert.equal(finishEvent(s,'spill'),80);assert.equal(finishEvent(s,'spill'),0);

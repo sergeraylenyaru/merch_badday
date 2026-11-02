@@ -22,14 +22,14 @@ try{
   await advance(page,.2);
   const actors=await page.evaluate(()=>({people:__MERCH__.people,replacements:__MERCH__.visuals.replacements,assets:__MERCH__.visuals.assets}));
   for(const shop of SHOPS){assert.equal(actors.people.filter(n=>n.kind==='staff'&&n.shop===shop.id).length,1);assert.equal(actors.people.filter(n=>n.kind==='employee'&&n.shop===shop.id).length,2);}
-  assert.equal(actors.replacements.filter(n=>n.entity==='officer'&&n.kind==='police').length,3);assert.equal(actors.assets.failed,0);
+  assert.equal(actors.replacements.filter(n=>n.entity==='officer'&&n.kind==='police').length,5);assert.equal(actors.assets.failed,0);
   console.log('CHECK home path to personal car');
-  await navigate(page,HOME_CAR.x-1.8,HOME_CAR.z, .5);await page.keyboard.press('KeyE');
+  await navigate(page,HOME_CAR.x,HOME_CAR.z+2, .5);await page.keyboard.press('KeyE');
   await page.waitForFunction(()=>__MERCH__.vehicles.some(v=>v.controlled));assert.equal(await page.evaluate(()=>__MERCH__.state.wanted),0);
   const before=await page.evaluate(()=>__MERCH__.state.position);await hold(page,['KeyW'],.4);const after=await page.evaluate(()=>__MERCH__.state.position);assert.ok(Math.hypot(after.x-before.x,after.z-before.z)>.05);
   await page.keyboard.press('KeyE');await page.waitForFunction(()=>!__MERCH__.vehicles.some(v=>v.controlled));
   await page.keyboard.press('KeyM');await page.locator('#bigmap').waitFor();await page.reload();await page.locator('#begin').click();await page.waitForFunction(()=>__MERCH__.view.pointerLocked);assert.equal(await page.locator('#answerCall').count(),0);
-  console.log('PASS home, call, personal car, driving, 18 employees, 3 police models, save/reload');
+  console.log('PASS home, call, personal car, driving, 18 employees, 5 police models, save/reload');
  }finally{await browser.close();}
  // A vehicle already aligned in the bay is a starting fixture; payment and
  // the entire in-store assignment run through player controls and collisions.

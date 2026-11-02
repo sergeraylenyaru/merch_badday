@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {policeCombat,POLICE_ATTACK} from '../src/npc/police-combat.js';
+import {policeCombat,POLICE_ATTACK,BATON_ATTACK,policeWeapon} from '../src/npc/police-combat.js';
 const close={hostile:true,distance:1.4,clear:true};
+test('exactly every fifth officer carries a baton and its damage occurs once during its swing',()=>{
+ assert.deepEqual(Array.from({length:15},(_,i)=>policeWeapon(i)).map((w,i)=>w?i+1:null).filter(Boolean),[5,10,15]);
+ const officer={weapon:'baton'},input={...close,distance:2.1};policeCombat(officer,input,.01);
+ assert.equal(policeCombat(officer,input,.25).damage,0);assert.equal(policeCombat(officer,input,.08).damage,BATON_ATTACK.damage);assert.equal(policeCombat(officer,input,.1).damage,0);
+ const guarded={weapon:'baton'};policeCombat(guarded,input,.01);assert.equal(policeCombat(guarded,{...input,guarding:true},.33).damage,3);
+});
 test('a police punch winds up, hits once at contact and recovers before another swing',()=>{
   const officer={};assert.deepEqual(policeCombat(officer,close,.01),{attack:.35,damage:0});
   assert.equal(policeCombat(officer,close,.1).damage,0);

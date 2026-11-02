@@ -12,6 +12,12 @@ export function createCityMaterialPool(){
  }
  return {
   material(material){
+   if(/^leaf2?$/i.test(material.name)&&!material.userData.conceptLeaves){
+    material.userData.conceptLeaves=true;
+    const tint=material.name.toLowerCase()==='leaf2'?'vec3(1.05,1.10,.63)':'vec3(1.48,1.19,.49)';
+    material.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>\nfloat leafLight=dot(diffuseColor.rgb,vec3(.25,.6,.15));diffuseColor.rgb=mix(diffuseColor.rgb,${tint}*leafLight,.84);`);};
+    material.customProgramCacheKey=()=> 'concept-autumn-'+material.name;
+   }
    for(const [name,value]of Object.entries(material))if(value?.isTexture)material[name]=internTexture(value);
    const content=material.userData.cityMaterialKey;
    if(!content)return material;

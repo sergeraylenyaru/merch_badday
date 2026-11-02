@@ -1,7 +1,8 @@
 import * as T from 'three';
+import {createWeaponRig} from '../visuals/weapon-rig.js';
 import {point,HOME_CAR} from '../city/reference-layout.js';
 import {clearSegment} from '../npc/navigation.js';
-import {WEAPONS,PACKS,EVENT_INFO,ensureAdventure,collectPack,pickupWeapon,bribeGuard,startEvent,finishEvent,buyGarage,crashCargo,tableCard} from './state.js';
+import {WEAPONS,PACKS,EVENT_INFO,ensureAdventure,collectPack,pickupWeapon,bribeGuard,bribePrice,startEvent,finishEvent,buyGarage,crashCargo,tableCard} from './state.js';
 
 export function createAdventure(scene,world,state,callbacks){
  const a=ensureAdventure(state),root=new T.Group();root.name='city-adventures';scene.add(root);
@@ -30,12 +31,14 @@ export function createAdventure(scene,world,state,callbacks){
  }
  function weaponModel(parent,id){
   if(id==='water'){
-   box(parent,.17,.28,.46,0,0,0,'#29c7e9');box(parent,.10,.25,.12,0,-.2,-.1,'#f6ba45');cylinder(parent,.08,.08,.34,0,.13,0,'#ff6159').rotation.x=Math.PI/2;
-   box(parent,.14,.13,.18,0,.05,.29,'#ffe469');
+   box(parent,.17,.28,.46,0,.2,.08,'#29c7e9');box(parent,.10,.25,.12,0,0,-.02,'#f6ba45');cylinder(parent,.08,.08,.34,0,.33,.08,'#ff6159').rotation.x=Math.PI/2;
+   box(parent,.14,.13,.18,0,.25,.37,'#ffe469');
+  }else if(id==='baton'){
+   cylinder(parent,.028,.026,.65,0,.25,0,'#242c32');cylinder(parent,.033,.033,.18,0,0,0,'#141b20');cylinder(parent,.047,.047,.035,0,.11,0,'#38444c');
   }else{
-   cylinder(parent,id==='bat'?.075:.035,id==='bat'?.035:.05,1.05,0,.32,0,id==='bat'?'#e7b176':'#906b43');
-   cylinder(parent,.04,.04,.22,0,-.24,0,'#394b62');
-   if(id==='stick'){const branch=cylinder(parent,.022,.03,.32,.09,.5,0,'#906b43');branch.rotation.z=-.6;}
+   cylinder(parent,id==='bat'?.067:.035,id==='bat'?.031:.045,.9,0,.5,0,id==='bat'?'#c9a174':'#906b43');
+   cylinder(parent,.029,.029,.23,0,.005,0,'#39404a');cylinder(parent,.043,.043,.035,0,-.13,0,'#a78155');
+   if(id==='stick'){const branch=cylinder(parent,.022,.03,.25,.08,.72,0,'#906b43');branch.rotation.z=-.6;}
   }
  }
  const positions={bat:[195,185],stick:[770,440],water:[1450,610]};
@@ -71,10 +74,11 @@ export function createAdventure(scene,world,state,callbacks){
   const holder=new T.Group();label(holder,'ОХРАНА · E · '+guard.role,'#ffe877').scale.set(3.8,.65,1);
   const ring=new T.Mesh(geo('guard-ring',()=>new T.RingGeometry(.75,.86,24)),mat('#ead856',true));ring.rotation.x=-Math.PI/2;ring.position.y=-.46;holder.add(ring);
   root.add(holder);const vest=new T.Group();box(vest,.63,.5,.42,0,1.4,0,'#cfcc54');box(vest,.65,.07,.44,0,1.42,0,'#e9e5bc');guard.mesh.add(vest);guardLabels.push({guard,holder,vest});});
- function guardDialog(guard){callbacks.dialog('Охранник · '+guard.role,'Договориться за 150 ₽: убрать одну звезду розыска. После сделки до следующей нужно подождать 10 секунд.',[{label:'Дать 150 ₽ · −1 звезда',id:'bribe',disabled:state.wanted<=0||state.money<150||state.time<a.bribeReadyAt,run(){if(bribeGuard(state)){callbacks.notify('Охранник договорился: −1 звезда, −150 ₽');if(a.tracked?.startsWith('guard:'))a.tracked=null;}changed();callbacks.resume();}},{label:'Уйти',id:'leave',run:callbacks.resume}]);}
+ function guardDialog(guard){const price=bribePrice(state);callbacks.dialog('Охранник · '+guard.role,`Убрать одну звезду: ${price} ₽. Каждая следующая сделка дороже на 50 ₽. Через 30 секунд после последней оплаты цена снова 50 ₽.`,[{label:`Дать ${price} ₽ · −1 звезда`,id:'bribe',disabled:state.wanted<=0||state.money<price,run(){if(bribeGuard(state)){callbacks.notify(`Охранник договорился: −1 звезда, −${price} ₽`);if(a.tracked?.startsWith('guard:'))a.tracked=null;}changed();callbacks.resume();}},{label:'Уйти',id:'leave',run:callbacks.resume}]);}
  const carriedParcel=new T.Group();box(carriedParcel,.55,.4,.4,0,0,0,'#c19a60');world.player.mesh.add(carriedParcel);carriedParcel.position.set(0,1,.7);
- const held=new T.Group();root.add(held);held.matrixAutoUpdate=false;let heldId=null;
- function setHeld(id){if(id===heldId)return;held.clear();heldId=id;if(id)weaponModel(held,id);}
+ let heldRig=null,heldId=null;
+ function setHeld(id){if(id===heldId)return;heldRig?.dispose();heldId=id;heldRig=id?createWeaponRig(scene,world.player.mesh,id,weaponModel):null;}
+ const policeRigs=world.people.filter(n=>n.kind==='police'&&n.weapon==='baton').map(person=>{const rig=createWeaponRig(scene,person.mesh,'baton',weaponModel);person.weaponRig=rig;return {person,rig};});
  const gunMaterial=new T.MeshBasicMaterial({color:'#42d7ff',transparent:true,opacity:.65});materials.set('water-jet',gunMaterial);
  function shootWater(origin,direction){
   const target=world.people.filter(n=>n.mesh.visible&&n.stun<=0).map(n=>({n,dx:n.mesh.position.x-origin.x,dz:n.mesh.position.z-origin.z})).filter(v=>{const d=Math.hypot(v.dx,v.dz);return d<10&&d>.1&&(v.dx*direction.x+v.dz*direction.z)/d>.94&&clearSegment(origin,v.n.mesh.position,world.blocked,.05);}).sort((p,q)=>Math.hypot(p.dx,p.dz)-Math.hypot(q.dx,q.dz))[0]?.n;
@@ -137,23 +141,23 @@ export function createAdventure(scene,world,state,callbacks){
   onCrash(speed,vehicle){const own=vehicle?.homeVehicle||vehicle?.id===a.garage.vanId,condition=a.garage.condition,wasCarrying=a.events.delivery.carrying,p=world.player.mesh.position;
    const drop={x:p.x+3,z:p.z+2};crashCargo(state,speed,world.blocked(drop.x,drop.z,.4)?p:drop);if(!own)a.garage.condition=condition;if(wasCarrying&&!a.events.delivery.carrying){a.tracked='delivery';callbacks.notify('Посылка выпала! Подберите её в подсвеченной зоне.');}changed();},
   speedMultiplier(vehicle){return vehicle.homeVehicle||vehicle.id===a.garage.vanId?(state.career.garage.engine?1.15:1)*(.55+.45*a.garage.condition/100):1;},
+  prepareWeapons({inVehicle=false,carrying=false,firstPerson=false,pitch=0,attack=0,attackKind='quick'}={}){
+   setHeld(a.equipped);const visible=!!heldRig&&!inVehicle&&!carrying&&!a.events.delivery.carrying;
+   if(heldRig)heldRig.update({remaining:attack,strong:attackKind==='strong',firstPerson,pitch,visible});world.player.weaponRig=visible?heldRig:null;
+   for(const {person,rig}of policeRigs)rig.update({remaining:person.attack??0,visible:person.mesh.visible&&person.stun<=0});
+  },
   update(dt,time,{inVehicle=false,carrying=false,firstPerson=false,camera=null,attack=0}={}){
    const position=world.player.mesh.position,e=a.events.delivery,pp=e.drop??source;parcel.x=pp.x;parcel.z=pp.z;parcel.group.position.set(pp.x,world.groundHeight(pp.x,pp.z),pp.z);
    for(const item of items){const distance=Math.hypot(item.x-position.x,item.z-position.z);
     if(dt>0&&!inVehicle&&item.kind==='money'&&item.enabled()&&distance<1.55&&clearSegment(position,{x:item.x,z:item.z},world.blocked,.05))item.interaction();
     item.group.visible=item.enabled()&&distance<65;if(item.group.visible){const floating=['weapon','pack','money','wallet'].includes(item.kind);if(floating)item.object.rotation.y=time*.8;item.object.position.y=floating?.8+Math.sin(time*2+item.x)*.1:.35;}}
    for(let i=effects.length-1;i>=0;i--){effects[i].life-=dt;if(effects[i].life<=0){root.remove(effects[i].mesh);effects.splice(i,1);}}
-   carriedParcel.visible=e.carrying&&!inVehicle;const equipped=a.equipped;setHeld(equipped);
+   carriedParcel.visible=e.carrying&&!inVehicle;
    for(const {guard,holder} of guardLabels){holder.position.copy(guard.mesh.position);holder.position.y+=.5;holder.visible=guard.mesh.visible;}
-   held.visible=!!equipped&&!inVehicle&&!carrying&&!e.carrying;
-   if(held.visible){
-    if(firstPerson&&camera){camera.updateMatrixWorld();const swing=attack>0?Math.sin(attack*12)*.55:0;held.matrix.copy(camera.matrixWorld).multiply(new T.Matrix4().compose(new T.Vector3(.36-swing*.2,-.33,-.74),new T.Quaternion().setFromEuler(new T.Euler(-.2+swing,0,-.2-swing)),new T.Vector3(.72,.72,.72)));}
-    else{const hand=world.player.mesh.getObjectByName('RightHand');if(hand){hand.updateWorldMatrix(true,false);const p=new T.Vector3(),q=new T.Quaternion(),scale=new T.Vector3();hand.matrixWorld.decompose(p,q,scale);held.matrix.compose(p,q,new T.Vector3(1,1,1));}}
-   }
    const near=Math.hypot(position.x-court.x,position.z-court.z)<55;if(near!==ballEnabled){ballBody.setEnabled(near);ballEnabled=near;}ball.visible=near;goalRoot.visible=near;
    if(near){ball.position.copy(ballBody.translation());ball.quaternion.copy(ballBody.rotation());if(flight){ballAge+=dt;const p=ballBody.translation();if(Math.hypot(p.x-goal.x,p.z-goal.z)<1.15&&p.y<world.groundHeight(goal.x,goal.z)+1.65){a.fun.goals++;flight=false;if(a.fun.goals>=3&&!a.fun.footballWon){a.fun.footballWon=true;state.money+=30;state.stress=Math.max(0,state.stress-12);callbacks.notify('Три гола! +30 ₽ · стресс −12');}else callbacks.notify(`Гол! ${Math.min(3,a.fun.goals)}/3`);changed();}else if(ballAge>5)flight=false;}}
   },
-  get diagnostics(){return {items:items.map(i=>({kind:i.kind,id:i.id,x:i.x,z:i.z,available:i.enabled(),visible:i.group.visible})),guards:guards.map(g=>({x:g.mesh.position.x,z:g.mesh.position.z,name:g.role,shopName:g.shopName})),goal:{...goal},court:{...court},equipped:a.equipped,heldVisible:held.visible,heldY:held.getWorldPosition(new T.Vector3()).y,heldScale:held.getWorldScale(new T.Vector3()).toArray(),heldBounds:new T.Box3().setFromObject(held).getSize(new T.Vector3()).toArray(),activeEffects:effects.length};},
-  dispose(){root.removeFromParent();for(const {vest}of guardLabels)vest.removeFromParent();carriedParcel.removeFromParent();world.physics.removeRigidBody(ballBody);for(const g of geometries.values())g.dispose();for(const m of materials.values())m.dispose();for(const t of textures)t.dispose();},
+  get diagnostics(){return {items:items.map(i=>({kind:i.kind,id:i.id,x:i.x,z:i.z,available:i.enabled(),visible:i.group.visible})),guards:guards.map(g=>({x:g.mesh.position.x,z:g.mesh.position.z,name:g.role,shopName:g.shopName})),goal:{...goal},court:{...court},equipped:a.equipped,heldVisible:!!heldRig?.root.visible,heldY:heldRig?.root.position.y??0,heldScale:heldRig?.root.scale.toArray()??[1,1,1],heldBounds:heldRig?new T.Box3().setFromObject(heldRig.root).getSize(new T.Vector3()).toArray():[0,0,0],weaponRig:heldRig?.diagnostics??null,policeWeapons:policeRigs.map(({person,rig})=>({officer:person.policeIndex,...rig.diagnostics})),activeEffects:effects.length};},
+  dispose(){heldRig?.dispose();for(const {rig}of policeRigs)rig.dispose();root.removeFromParent();for(const {vest}of guardLabels)vest.removeFromParent();carriedParcel.removeFromParent();world.physics.removeRigidBody(ballBody);for(const g of geometries.values())g.dispose();for(const m of materials.values())m.dispose();for(const t of textures)t.dispose();},
  };
 }

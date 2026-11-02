@@ -108,10 +108,10 @@ export function createAtmosphere(scene, renderer) {
     update({ day, weather, player, dt }) {
       if (disposed) return;
       const evening = T.MathUtils.smoothstep(day, 0.62, 1);
-      targets.top.set(weather ? "#849eac" : evening > 0.5 ? "#818eb3" : "#5896cb");
-      targets.horizon.set(weather ? "#bdc9ca" : evening > 0.5 ? "#e7bd9d" : "#e1e7dc");
+      targets.top.set(weather ? "#8796a6" : evening > 0.5 ? "#828aa5" : "#91a6bc");
+      targets.horizon.set(weather ? "#c5c7c6" : evening > 0.5 ? "#e2b99b" : "#e5d9c8");
       targets.sun.set(weather ? "#e0e8ed" : evening > 0.5 ? "#ffc78c" : "#fff0d1");
-      targets.ground.set(weather ? "#717c77" : "#7d7863");
+      targets.ground.set(weather ? "#777c79" : "#92816b");
       const blend = firstUpdate ? 1 : 1 - Math.exp(-Math.max(dt, 0) * 1.4);
       firstUpdate = false;
       uniforms.top.value.lerp(targets.top, blend);

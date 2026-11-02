@@ -8,7 +8,8 @@ export const WORK_STOPS = [
  ['O2',1300,575],['O3',1590,548],['P2',1034,273],['C3',407,622],['P3',735,585],
 ].map(([code,u,v],id)=>({id,code,u,v,...point(u,v)}));
 export const HOME = {...point(165,180)};
-export const HOME_CAR = {...point(225,180)};
+export const HOME_CAR = {...point(167.5,171.5)};
+export const HOME_CAR_HEADING=-Math.PI/2;
 export const START = {...HOME};
 export const ROUNDABOUT={u:1390,v:337,radius:37,width:25};
 export const ROADS = [
