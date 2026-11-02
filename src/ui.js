@@ -47,6 +47,7 @@ export function createUI(state, actions) {
       if(mini&&Math.hypot(guard.x-state.position.x,guard.z-state.position.z)>55)continue;
       const p=xy(guard.x,guard.z);ctx.fillStyle='#f8d856';ctx.beginPath();ctx.arc(p.x,p.y,mini?5:7,0,Math.PI*2);ctx.fill();ctx.fillStyle='#22333b';ctx.font='bold 10px Arial';ctx.textAlign='center';ctx.fillText('О',p.x,p.y+3.5);
     }
+    if(world?.hospital){const p=xy(world.hospital.spawn.x,world.hospital.spawn.z);ctx.fillStyle='#f1e8cc';ctx.beginPath();ctx.arc(p.x,p.y,mini?7:10,0,Math.PI*2);ctx.fill();ctx.fillStyle='#c94b40';ctx.font='bold 18px Arial';ctx.textAlign='center';ctx.fillText('+',p.x,p.y+6);}
     ctx.save();ctx.translate(me.x,me.y);ctx.rotate(-(world?.player.mesh.rotation.y??0)+Math.PI);ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(6,6);ctx.lineTo(0,3);ctx.lineTo(-6,6);ctx.closePath();ctx.fillStyle='#fff6c8';ctx.fill();ctx.strokeStyle='#102331';ctx.lineWidth=2;ctx.stroke();ctx.restore();
   }
   function update(world, vehicle) {
@@ -168,6 +169,7 @@ export function createUI(state, actions) {
     if(tab==='Коллекция')body=`<h3>Разноцветные пачки · <span id="collectionCount">${a.cigarettes.length}/10</span></h3><p>Найдите десять разных пачек в трёх районах. E — подобрать. За полную коллекцию — 300 ₽.</p><div class="collection-grid">${PACKS.map(p=>`<div class="collection-card ${a.cigarettes.includes(p.id)?'collected':''}" data-pack="${p.id}" style="--pack-color:${p.color}"><i></i><strong>${p.name}</strong><span>${a.cigarettes.includes(p.id)?'✓ Собрана':'Не найдена'}</span></div>`).join('')}</div>`;
     if(tab==='Снаряжение')body=`<p>Оружие видно на ярких стойках. E — подобрать, F — использовать, G — сильный удар, 1/2/3 — переключить, 0 — кулаки.</p><button class="shoprow" data-extra="equip" data-value="fists">${a.equipped===null?'✓ ':''}Кулаки</button>${Object.entries(WEAPONS).map(([id,w])=>`<button class="shoprow" data-extra="equip" data-value="${id}" ${!a.inventory.includes(id)?'disabled':''}>${a.equipped===id?'✓ ':''}${w.name} · ${a.inventory.includes(id)?'Подобрано':'Найдите в городе'}</button>`).join('')}`;
     if(tab==='Город')body=Object.entries(EVENT_INFO).map(([id,info])=>{const e=a.events[id];return `<div class="message"><h3>${info.title}</h3><p>${info.text}</p><strong>${({offered:'Можно принять',active:'Выполняется',done:'✓ Выполнено',declined:'Вы отказались',kept:'Деньги оставлены'})[e.status]}</strong>${id==='spill'&&e.status==='active'?`<p>Коробки ${e.boxes.length}/3</p>`:''}${id==='delivery'&&e.status==='active'?`<p>Груз ${e.integrity}% · до срока ${Math.max(0,Math.ceil(e.due-state.time))} с</p>`:''}<div class="actions">${e.status==='offered'?`<button data-extra="start" data-value="${id}">Принять</button><button data-extra="decline" data-value="${id}">Отказаться</button>`:''}${e.status==='active'?`<button data-extra="track" data-value="${id}">Показать цель</button>`:''}${id==='favor'&&e.status==='active'&&e.found?'<button data-extra="keep">Оставить 80 ₽ себе · −5 репутации</button>':''}</div></div>`;}).join('')+`<div class="message"><h3>Отдых во дворе</h3><p>Мяч в парке: три гола — 30 ₽ и −12 стресса. Найдите столик и сыграйте в пары: 20 ₽ и −10 стресса.</p><button data-extra="track" data-value="football">Показать ворота</button></div><div class="message"><h3>Знакомства</h3><p>${state.career.contacts.includes('seller')?'Продавец помнит помощь: кофе у «У дома» 20 ₽.':'Верните кошелёк продавцу, чтобы заслужить доверие.'}</p><button data-extra="guard">Найти ближайшего охранника</button></div>`;
+    if(tab==='Город')body+='<div class="message"><h3>Лестницы и крыши</h3><p>У лестницы нажмите Space + E, затем W / S — вверх / вниз. E — отпустить. Выше 6,3 м от земли доступен один двойной прыжок. Красное яблоко на яблоне можно сбить ударом и подобрать: +30 HP, стресс −50.</p><button data-extra="track" data-value="ladder">Показать ближайшую лестницу</button><button data-extra="track" data-value="hospital">Показать больницу</button></div>';
     if(tab==='Гараж')body=`<div class="message">Состояние рабочей машины: ${a.garage.condition}%<br>Целый груз приносит больше денег. Сильная авария может выбросить посылку.</div>${[['repair','Ремонт рабочей машины',120],['engine','Тюнинг двигателя · +15% скорости',400],['suspension','Подвеска · защита груза',250],['van','Собственный фургон у дома · перевозка тележек',900]].map(([id,title,cost])=>`<button class="shoprow" data-extra="garage" data-value="${id}" ${state.money<cost||(id==='repair'?a.garage.condition===100:state.career.garage[id])?'disabled':''}>${title} · ${id!=='repair'&&state.career.garage[id]?'✓ Куплено':cost+' ₽'}</button>`).join('')}${state.career.garage.van?'<button data-extra="track" data-value="van">Показать мой фургон</button>':''}`;
     if(tab==='Охрана')body=`<p>Охранники в жёлтых жилетах дежурят у входов магазинов. На карте — жёлтая отметка «О». Подойдите и нажмите E: сейчас ${bribePrice(state)} ₽ за одну звезду. Следующая сделка дороже на 50 ₽, через 30 секунд без оплаты цена снова 50 ₽.</p>`+(currentWorld?.adventure?.diagnostics.guards??[]).map((g,i)=>({...g,i,d:Math.round(Math.hypot(g.x-state.position.x,g.z-state.position.z))})).sort((p,q)=>p.d-q.d).map(g=>`<button class="shoprow" data-extra="track" data-value="guard:${g.i}"><strong>Охрана · ${g.shopName}</strong><small>${g.name} · ${g.d} м · показать цель</small></button>`).join('');
     show(
@@ -335,6 +337,11 @@ export function createUI(state, actions) {
     $("restart").onclick = actions.restart;
     $("freeRoam").onclick = actions.freeRoam;
   }
+  function defeatScreen(defeat){
+    show(`<div class="failure-screen" role="dialog" aria-modal="true" aria-label="Поражение"><div class="failure-content"><div class="failure-title">ПРОВАЛЕНО</div><p>Городская больница готова принять вас.</p><small>${defeat.policeLevel?'Штраф за задержание':'Медицинская помощь'}: ${defeat.penalty} ₽ · прогресс заданий сохраняется</small><button id="heal" disabled>Хочу вылечиться</button></div></div>`);
+    $('hud').classList.add('hidden');$('heal').onclick=actions.heal;
+  }
+  function updateDefeat(defeat){const screen=document.querySelector('.failure-screen');if(!screen)return;screen.classList.toggle('revealed',defeat.elapsed>=1);screen.classList.toggle('ready',defeat.phase==='ready');$('heal').disabled=defeat.phase!=='ready';}
   return {
     root,
     $,
@@ -356,6 +363,7 @@ export function createUI(state, actions) {
     expiry,
     prices,
     ending,
+    defeatScreen,updateDefeat,
     context(t) {
       $("context").classList.toggle("hidden", !t);
       $("context").firstElementChild.textContent = t;

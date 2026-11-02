@@ -27,6 +27,7 @@ test('a real skinned merchant grips the bat with both palms through windup, cont
 });
 
 test('bat animations have distinct windup, strike and recovery poses with finite unit rotations',()=>{
+ assert.equal(meleePose('bat',0,false).gripRoll,Math.PI,'relaxed grip turns the wrist to the handle side');
  for(const strong of [false,true]){
   const duration=MELEE_TIMING.bat[strong?'strong':'quick'].duration;
   const samples=[.2,.5,.8].map(progress=>meleePose('bat',duration*(1-progress),strong));
@@ -34,6 +35,22 @@ test('bat animations have distinct windup, strike and recovery poses with finite
   assert.ok(samples[0].quaternion.angleTo(samples[1].quaternion)>1);
   for(const p of samples){assert.ok(Math.abs(p.quaternion.length()-1)<1e-6);assert.ok(p.position.toArray().every(Number.isFinite));}
  }
+});
+
+test('real climbing alternates both palms and legs without changing the collision root',async()=>{
+ const source=await load('merch-male'),library=new AssetLibrary({human:{url:'fixture:climbing'}},{loader:{loadAsync:async()=>source},logger:{info(){},warn(){}}});await library.preload();
+ const scene=new Group(),mesh=new Group(),model=library.instantiate('human',{height:2.1});scene.add(mesh);mesh.add(model);mesh.position.set(8,7,-3);
+ const motion=createCharacterMotion({mesh},model),root=mesh.position.clone();
+ const hands=[],knees=[];
+ for(const heading of [0,1.3,-2.2])for(const phase of [0,Math.PI/2,Math.PI,Math.PI*1.5]){
+  mesh.rotation.y=heading;motion.update(1/60,{climb:{phase},grounded:false,velocity:new Vector3(0,1.85,0)});
+  assert.equal(motion.diagnostics.state,'climb');assert.equal(motion.diagnostics.climbGripErrors.length,2);
+  assert.ok(motion.diagnostics.climbGripErrors.every(e=>e<.003),JSON.stringify(motion.diagnostics.climbGripErrors));
+  assert.ok(mesh.position.equals(root));assert.deepEqual(mesh.scale.toArray(),[1,1,1]);
+  if(heading===0){hands.push(model.getObjectByName('PalmGripLeft').getWorldPosition(new Vector3()).y);knees.push(model.getObjectByName('LeftKnee').quaternion.clone());}
+ }
+ assert.ok(Math.max(...hands)-Math.min(...hands)>.25);assert.ok(knees[0].angleTo(knees[1])>.05);
+ motion.dispose();library.dispose();
 });
 
 test("both licensed human models contain real skins and changing recorded locomotion tracks", async () => {
@@ -80,7 +97,7 @@ test('a carried carton stays in both real palms while recorded walking and turni
   motion.dispose(); library.dispose();
 });
 
-test("merch wears a rust jacket with a hood, dark trousers and a two-strap canvas backpack", async () => {
+test("merch wears a rust jacket, dark trousers and a two-strap canvas backpack", async () => {
   const asset = await load("merch-male");
   const materials = new Map(), names = [];
   asset.scene.traverse((node) => {
@@ -90,7 +107,7 @@ test("merch wears a rust jacket with a hood, dark trousers and a two-strap canva
   const jacket=materials.get('Merch_BlueTShirt').color;
   assert.ok(jacket.r>jacket.g*2&&jacket.r>jacket.b*2);
   assert.ok(materials.get('Merch_BlackTrousers').color.getHex()<0x606060);
-  assert.ok(names.includes('ConceptHood'));
+  assert.ok(!names.includes('ConceptHood'));
   assert.ok(names.some((name) => name === "Backpack"));
   assert.equal(names.filter((name) => name.startsWith("Backpack_ShoulderStrap")).length, 2);
   assert.ok(!names.some((name) => /satchel|shoulder.bag/i.test(name)));

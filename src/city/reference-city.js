@@ -4,7 +4,7 @@ import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {prepareCityAsset} from './city-assets.js';
 import {MAP_BUILDINGS} from './map-buildings.js';
-import { MAP, point, WORK_STOPS, ROADS, nearRoad, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT, COAST, PARK_PATHS } from './reference-layout.js';
+import { MAP, point, WORK_STOPS, ROADS, nearRoad, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT, COAST, PARK_PATHS,HOSPITAL } from './reference-layout.js';
 export {isReferenceWater} from './reference-layout.js';
 import { BOROUGHS, LOCAL_SHOPS } from './layout.js';
 import { createUrbanDetails } from './urban-details.js';
@@ -18,7 +18,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  const root=new T.Group(); root.name='uploaded-reference-city';scene.add(root);
  const housing=createHousingFacades();
  const placements=new Map(), collision=[], animated=[], preparedAssets=[];
- const traced=[];
+ const traced=[];world.roofs=[];world.treeSpots=[];
  const clearShop=(u,v,r=0)=>WORK_STOPS.every(s=>Math.abs(u-s.u)>52+r || Math.abs(v-s.v)>44+r);
  function add(name,u,v,scale=1,angle=0,solid=false,force=false){
    if(!force && (!clearShop(u,v,14) || nearRoad(u,v,12))) return;
@@ -53,6 +53,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  let seed=1971;const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
  for(let i=0;i<1400;i++){
   const u=35+random()*1600,v=30+random()*740;
+  const p=point(u,v);if(Math.abs(p.x-HOSPITAL.x)<HOSPITAL.w+4&&Math.abs(p.z-HOSPITAL.z)<HOSPITAL.d+4)continue;
   if(!clearShop(u,v,8)||nearRoad(u,v,20)||isReferenceWater(u,v))continue;
   if([...placements].some(([n,list])=>!['tree','shrub','bench','trash_bin','streetlight','bus_stop'].includes(n)&&list.some(p=>(p.width?Math.abs(u-p.u)<p.width/2+12&&Math.abs(v-p.v)<p.depth/2+12:Math.hypot(u-p.u,v-p.v)<45))))continue;
   add(i%5?'tree':'shrub',u,v,.85+random()*.45);
@@ -82,10 +83,26 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
     const width=c*nativeW*scale.x+s*nativeD*scale.z,depth=s*nativeW*scale.x+c*nativeD*scale.z;
     return {...p,scaleVector:scale,worldWidth:width,worldDepth:depth};
   }).filter(p=>!p.solid||!meetsStreet(point(p.u,p.v).x,point(p.u,p.v).z,p.worldWidth,p.worldDepth));
+  let roofHeight=nativeH;
+  if(name.startsWith('panel')){
+    const levels=new Map();
+    for(const batch of asset.batches)if(batch.material.name==='roof'){
+      const pos=batch.geometry.attributes.position,normal=batch.geometry.attributes.normal,idx=batch.geometry.index;
+      for(let i=0;i<(idx?.count??pos.count);i+=3){const ids=[0,1,2].map(j=>idx?idx.getX(i+j):i+j);if(ids.some(j=>normal.getY(j)<.9))continue;
+        const a=new T.Vector3().fromBufferAttribute(pos,ids[0]),b0=new T.Vector3().fromBufferAttribute(pos,ids[1]),c0=new T.Vector3().fromBufferAttribute(pos,ids[2]);
+        const level=Math.round((a.y+b0.y+c0.y)/3*100)/100,area=b0.sub(a).cross(c0.sub(a)).length()/2;levels.set(level,(levels.get(level)??0)+area);
+      }
+    }
+    const main=[...levels].sort((a,b)=>b[1]-a[1]||b[0]-a[0])[0];if(main)roofHeight=main[0]-b.min.y+.006;
+  }
+  // Fruit must hang below the opaque crown, not disappear inside its mesh.
+  const leafBottom=name==='tree'?Math.min(...asset.batches.filter(a=>/^leaf/i.test(a.material.name)).map(a=>{a.geometry.computeBoundingBox();return a.geometry.boundingBox.min.y;}))-b.min.y:0;
   placedCount+=list.length;
   for(const p of list){
     if(p.traced)traced.push({model:name,u:p.u,v:p.v,width:p.worldWidth/MAP.scale,depth:p.worldDepth/MAP.scale,...(name.startsWith('panel')?{housingStyle:HOUSING_STYLES[housingStyleAt(p.u,p.v)].id}:{})});
-    if(p.solid){const pos=point(p.u,p.v),h=nativeH*p.scale;const proxy=world.box(pos.x,h/2,pos.z,p.worldWidth,h,p.worldDepth,'#70796d',true);proxy.visible=false;collision.push(proxy);p.proxy=proxy;}
+    if(name==='tree'){const pos=point(p.u,p.v);world.treeSpots.push({id:`tree:${p.u.toFixed(2)}:${p.v.toFixed(2)}`,...pos,scale:p.scale,height:nativeH*p.scale,fruitHeight:Math.max(.9,(Number.isFinite(leafBottom)?leafBottom:nativeH*.32)*p.scale-.22)});}
+    if(name.startsWith('panel')){const pos=point(p.u,p.v);world.roofs.push({id:`roof:${p.u}:${p.v}`,...pos,w:p.worldWidth/2,d:p.worldDepth/2,y:roofHeight*p.scale,model:name});}
+    if(p.solid){const pos=point(p.u,p.v),h=(name.startsWith('panel')?roofHeight:nativeH)*p.scale;const proxy=world.box(pos.x,h/2,pos.z,p.worldWidth,h,p.worldDepth,'#70796d',true);proxy.visible=false;collision.push(proxy);p.proxy=proxy;}
     if(name==='bench'){const pos=point(p.u,p.v);p.breakable={key:`city-bench:${p.u}:${p.v}`,id:'bench-wood',x:pos.x,z:pos.z,footprint:{...pos,w:p.worldWidth/2,d:p.worldDepth/2},proxy:p.proxy,instances:[]};}
   }
   const matrix=new T.Matrix4(),q=new T.Quaternion(),center=b.getCenter(new T.Vector3());center.y=b.min.y;

@@ -39,6 +39,8 @@ import {tickHealth} from './city/vitals.js';
 import {createFlyerSellers} from './npc/flyer-sellers.js';
 import {MELEE_TIMING} from './visuals/weapon-rig.js';
 import {createIllustratedRenderer} from './visuals/illustrated-renderer.js';
+import {beginDefeat,advanceDefeat,healAtHospital,DEFEAT_SECONDS} from './city/recovery.js';
+import {createOrchard} from './city/orchard.js';
 import {ensureAdventure,WEAPONS} from './adventure/state.js';
 const state = load();
 ensureAdventure(state);
@@ -69,6 +71,7 @@ let world,
   attack = 0,
   attackKind = "quick",
   pendingSwing = null,
+  defeatCameraStart = null,
   policeHitCooldown = 0,
   policeDefeatLevel = 0,
   knockdownTime = 0,
@@ -149,6 +152,7 @@ function open(next) {
   snapshot();
 }
 function resume() {
+  if(state.defeat||state.health<=0){world?.startDefeat?.();return;}
   if (state.ending) {
     mode = "end";
     ui.ending();
@@ -388,6 +392,7 @@ try {
   ui = createUI(state, {
     adventure(name,value,tab){if(name==='equip'){pendingSwing=null;attack=0;}world.adventure.action(name,value);snapshot();if(name==='table')ui.tableGame();else ui.phone(tab??'Город');},
     settings,
+    heal:recoverHero,
     resume,
     answerCall(){state.onboarding.callReceived=true;state.selected=0;message('Региональный: Доброе утро! Ваша машина у дома. Первое задание — доехать до «У дома», занять голубое место и оплатить парковку. Затем зайдите к Нине за заданием в зале.');snapshot();resume();},
     configure,
@@ -413,6 +418,7 @@ try {
     dialog(title,text,choices){open('adventure');ui.adventureDialog(title,text,choices);},
     table(){open('adventure');ui.tableGame();},
   });
+  world.orchard=createOrchard(scene,world,state,{notify,changed:snapshot});
   const walkingBlocked=createWalkingBlocker(world);
   const pedestrianNavigator=createPedestrianNavigator(walkingBlocked);
   const cityLife=createCityLife(world);
@@ -427,7 +433,7 @@ try {
   const playerBody = world.physics.createRigidBody(
     world.RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(
       state.position.x,
-      world.groundHeight(state.position.x, state.position.z) + PLAYER_SHAPE.height / 2,
+      world.player.mesh.position.y + PLAYER_SHAPE.height / 2,
       state.position.z,
     ),
   );
@@ -486,10 +492,12 @@ try {
     return best;
   }
   function context() {
+    if(world.parkour.climbing)return world.parkour.context();
     if (vehicle)
       return cargo
         ? "R · Выгрузить тележку   E · Выйти"
         : [1, 3].includes(vehicle.type) ? 'E · Выйти   R · Загрузить тележку' : 'E · Выйти из машины';
+    const ladderHint=world.parkour.context();if(ladderHint)return ladderHint;
     if (world.jobs.activity) return 'Выполняем работу…';
     const pos = world.player.mesh.position;
     const task = world.jobs.nearest(pos);
@@ -516,9 +524,13 @@ try {
     const car = nearestBoardableVehicle(world.vehicles, pos);
     if (car) return car.traffic && !car.claimed
       ? `E · Остановить и сесть · ${car.displayName}` : `E · Сесть · ${car.displayName}`;
-    return "";
+    return world.orchard.context();
   }
   function interact() {
+    if(!vehicle&&!held&&!state.carrying&&!world.jobs.activity){
+      if(world.parkour.climbing){world.parkour.detach();vertical=0;return;}
+      if((keys.has('Space')||!world.parkour.grounded)&&world.parkour.tryGrab()){vertical=0;jump=.1;pendingSwing=null;attack=0;walkingVelocity.set(0,0,0);yaw=world.player.mesh.rotation.y-Math.PI;notify('W / S — лезть, E — отпустить');return;}
+    }
     if (vehicle) {
       walkingVelocity.set(0, 0, 0);
       if (cargo) {
@@ -690,7 +702,7 @@ try {
     }
   }
   function hit(strong = false) {
-    if(knockdownTime>.5)return;
+    if(knockdownTime>.5||world.parkour.climbing)return;
     if (state.carrying || world.jobs.activity || state.adventure.events.delivery.carrying) { notify('Руки заняты работой.'); return; }
     if (held) {
       notify("Сначала отпустите ручку тележки: R.");
@@ -728,6 +740,7 @@ try {
           : "Конфликт испортил репутацию.",
       );
     } else {
+      if(world.orchard.hit(world.player.mesh.position,weapon?.reach??2.9,{x:-Math.sin(yaw),z:-Math.cos(yaw)}))return;
       if(world.props.hit(world.player.mesh.position,weapon?.reach??2.5,weapon?weapon.power+(strong?1:0):strong?2:1,{x:-Math.sin(yaw),z:-Math.cos(yaw)})){beep(160);return;}
       const cart = nearest(world.carts, 3);
       if (cart)
@@ -738,6 +751,7 @@ try {
     }
   }
   document.addEventListener("keydown", (e) => {
+    if(mode==='defeat'){if(e.code==='Enter'&&state.defeat?.phase==='ready')recoverHero();if(e.code!=='Tab')e.preventDefault();return;}
     if (mode === 'play' && ["Tab", "Space", "ArrowUp", "ArrowDown"].includes(e.code))
       e.preventDefault();
     if (e.code === "Escape") {
@@ -769,7 +783,11 @@ try {
     if (e.code === "KeyF") hit();
     if (e.code === "KeyG") hit(true);
     if (e.code === "KeyC") firstPerson = !firstPerson;
-    if (e.code === "Space" && !vehicle && !held && !state.carrying && !world.jobs.activity && jump === 0) vertical = 8;
+    if(e.code==='Space'&&!vehicle&&!held&&!state.carrying&&!world.jobs.activity){
+      if(world.parkour.climbing){world.parkour.detach();vertical=6;}
+      else if(keys.has('KeyE')&&world.parkour.tryGrab()){vertical=0;jump=.1;attack=0;pendingSwing=null;walkingVelocity.set(0,0,0);yaw=world.player.mesh.rotation.y-Math.PI;}
+      else{const leap=world.parkour.requestJump();if(leap){vertical=leap.velocity;jump=.001;if(leap.double)notify('Двойной прыжок!');}}
+    }
   });
   document.addEventListener("keyup", (e) => keys.delete(e.code));
   window.addEventListener("blur", () => {
@@ -801,6 +819,7 @@ try {
   window.addEventListener("pagehide", snapshot);
   function move(dt) {
     const pos = world.player.mesh.position;
+    if(!vehicle&&world.parkour.climbing){world.parkour.advanceClimb(dt,keys);vertical=0;jump=world.parkour.grounded?0:.1;walkingVelocity.set(0,0,0);state.position={x:pos.x,z:pos.z};playerBody.setNextKinematicTranslation({x:pos.x,y:pos.y+PLAYER_SHAPE.height/2,z:pos.z});return;}
     knockdownTime=Math.max(0,knockdownTime-dt);
     const forward = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0),
       side = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
@@ -907,10 +926,10 @@ try {
         const aheadZ = held ? Math.cos(held.pushHeading) * .98 : 0;
         const cp = held?.body.translation();
         const attached = !held || held.gripTime < 0.35 || Math.hypot(cp.x - pos.x - aheadX, cp.z - pos.z - aheadZ) < 0.65;
-        if (attached && !world.blocked(pos.x + dx, pos.z) &&
+        if (attached && !world.blockedAt(pos.x + dx, pos.z) &&
             (!held || !world.blocked(pos.x + dx + aheadX, pos.z + aheadZ, 0.65))) pos.x += dx;
         else walkingVelocity.x = 0;
-        if (attached && !world.blocked(pos.x, pos.z + dz) &&
+        if (attached && !world.blockedAt(pos.x, pos.z + dz) &&
             (!held || !world.blocked(pos.x + aheadX, pos.z + dz + aheadZ, 0.65))) pos.z += dz;
         else walkingVelocity.z = 0;
         if (!held && !firstPerson && !busy && !(attack>0&&MELEE_TIMING[state.adventure.equipped])) {
@@ -926,10 +945,7 @@ try {
         const turn = Math.atan2(Math.sin(world.player.actionFacing - rotation), Math.cos(world.player.actionFacing - rotation));
         world.player.mesh.rotation.y += turn * (1 - Math.exp(-dt * 10));
       }
-      vertical -= 20 * dt;
-      jump = Math.max(0, jump + vertical * dt);
-      if (jump === 0) vertical = 0;
-      pos.y = world.groundHeight(pos.x, pos.z) + jump;
+      const heightStep=world.parkour.advance(dt,vertical);vertical=heightStep.velocity;jump=heightStep.grounded?0:Math.max(.001,pos.y-world.groundHeight(pos.x,pos.z));
       // Articulated characters crouch at the hips/knees, preserving limb size.
       world.player.mesh.scale.y = world.player.motion ? 1 : crouch ? 0.7 : 1;
       if (held) {
@@ -1204,7 +1220,7 @@ try {
       if (v.mesh.position.x > point(1650,340).x) v.mesh.position.x = point(20,340).x;
       v.mesh.position.y = world.groundHeight(v.mesh.position.x, v.mesh.position.z);
       v.impactCooldown = Math.max(0, (v.impactCooldown || 0) - dt);
-      if (!vehicle && Math.abs(v.speed)>1&&v.impactCooldown === 0 && circleIntersectsBox(player.x, player.z, PLAYER_SHAPE.radius, vehicleBox(v))) {
+      if (!vehicle && player.y<v.mesh.position.y+v.h+.2 && Math.abs(v.speed)>1&&v.impactCooldown === 0 && circleIntersectsBox(player.x, player.z, PLAYER_SHAPE.radius, vehicleBox(v))) {
         v.impactCooldown = 1.5;
         v.impactBrake=1.2;collisionInjury(state,v.speed,true);knockdownTime=1.2;held=null;
         const contact=pedestrianContact(player,vehicleBox(v));
@@ -1275,24 +1291,8 @@ try {
         notify("Тайник коллеги: +150 ₽ и записка «держись, брат».");
       }
     }
-    if (state.health <= 0) {
-      const arrested=policeDefeatLevel>0;
-      const penalty=arrested?100+Math.ceil(policeDefeatLevel)*70:150;
-      state.health = 65;
-      state.money = Math.max(0, state.money - penalty);
-      state.fines += penalty;
-      state.time += arrested?80:100;
-      state.wanted = 0;
-      if (vehicle) {
-        vehicle.speed = 0;
-        vehicle = null;
-        world.player.mesh.visible = true;
-      }
-      world.player.mesh.position.set(START.x, 0, START.z);
-      held = null;
-      policeDefeatLevel=0;policeHitCooldown=0;
-      message(arrested?`Задержание после потери здоровья: штраф ${penalty} ₽ и потеря рабочего времени. Можно продолжать смену.`:"Медпункт: −150 ₽ и потеря времени. Можно продолжать смену.");
-    }
+    if(state.health<=0){startDefeat();return;}
+
     normalize(state);
     if (state.time >= SHIFT_DURATION && !state.overtime) {
       end();
@@ -1303,8 +1303,28 @@ try {
       snapshot();
     }
   }
+  function startDefeat(){
+    if(mode==='defeat')return;
+    if(vehicle){vehicle.speed=0;const exit=findVehicleExit(vehicle);if(exit)world.player.mesh.position.set(exit.x,world.groundHeight(exit.x,exit.z),exit.z);vehicle=null;}
+    if(cargo){const p=world.player.mesh.position;cargo.mesh.visible=true;cargo.body.setTranslation({x:p.x+2,y:world.groundHeight(p.x+2,p.z)+.3,z:p.z},true);cargo.body.setLinvel({x:0,y:0,z:0},true);cargo=null;}
+    held=null;world.jobs.cancelPending();world.parkour.detach();pendingSwing=null;attack=0;vertical=0;walkingVelocity.set(0,0,0);world.player.mesh.visible=true;
+    beginDefeat(state,{...world.player.mesh.position,floor:world.parkour.floorAt(world.player.mesh.position.x,world.player.mesh.position.z)},policeDefeatLevel);mode='defeat';hasStarted=true;firstPerson=false;unlock();defeatCameraStart=camera.position.clone();ui.defeatScreen(state.defeat);snapshot();
+  }
+  world.startDefeat=startDefeat;
+  function recoverHero(){
+    const d=state.defeat;if(!healAtHospital(state))return;
+    world.player.mesh.rotation.z=0;world.player.mesh.rotation.y=Math.PI;world.player.mesh.position.set(world.hospital.spawn.x,0,world.hospital.spawn.z);world.parkour.reset();world.player.motion?.reset();
+    jump=vertical=attack=knockdownTime=policeDefeatLevel=policeHitCooldown=0;pendingSwing=null;yaw=0;pitch=.15;cameraNeedsSnap=true;defeatCameraStart=null;state.position={x:world.hospital.spawn.x,z:world.hospital.spawn.z};
+    playerBody.setNextKinematicTranslation({x:state.position.x,y:world.player.mesh.position.y+PLAYER_SHAPE.height/2,z:state.position.z});
+    message(d.policeLevel?`Лечение в городской больнице. Штраф за задержание: ${d.penalty} ₽.`:'Лечение в городской больнице. Здоровье восстановлено.');snapshot();resume();
+  }
   function updateCamera(dt) {
     const pos = world.player.mesh.position;
+    if(mode==='defeat'){
+      world.visuals?.setFirstPerson(false);world.player.mesh.visible=true;if(camera.fov!==58){camera.fov=58;camera.updateProjectionMatrix();}
+      const progress=T.MathUtils.smoothstep(state.defeat.elapsed/DEFEAT_SECONDS,0,1),origin=state.defeat.origin,focus=new T.Vector3(origin.x-.8,pos.y+.35,origin.z);
+      const desired=focus.clone().add(new T.Vector3(Math.sin(yaw)*11,8.5,Math.cos(yaw)*11));camera.position.lerpVectors(defeatCameraStart??camera.position,desired,progress);camera.lookAt(focus);return;
+    }
     world.visuals?.setFirstPerson(firstPerson && !vehicle && hasStarted);
     const fov = firstPerson && !vehicle && hasStarted ? 78 : 58;
     if (camera.fov !== fov) {
@@ -1319,7 +1339,8 @@ try {
     const head = world.player.mesh.getObjectByName('Head');
     const headY = head ? head.getWorldPosition(v3).y - pos.y + 0.05 : PLAYER_SHAPE.eyeHeight;
     eyeHeight = T.MathUtils.damp(eyeHeight, T.MathUtils.clamp(headY, 0.8, 1.9), 10, dt);
-    const target = pos.clone().add(new T.Vector3(0, vehicle ? 2 : firstPerson ? eyeHeight : Math.min(1.3, Math.max(0.8, eyeHeight * 0.75)), 0));
+    const target = pos.clone().add(new T.Vector3(0, vehicle ? 2 : firstPerson ? eyeHeight : 1.65, 0));
+    const anchor=target.clone();if(!firstPerson&&!vehicle)target.add(new T.Vector3(Math.cos(yaw)*.65,0,-Math.sin(yaw)*.65));
     let desired;
     if (firstPerson && !vehicle) {
       desired = target;
@@ -1338,7 +1359,7 @@ try {
       );
     } else {
       world.player.mesh.visible = !vehicle;
-      const r = vehicle ? 10 : 4.25;
+      const r = vehicle ? 10 : 4.8;
       desired = target
         .clone()
         .add(
@@ -1348,20 +1369,18 @@ try {
             Math.cos(yaw) * r * Math.cos(pitch),
           ),
         );
-      avoidCameraCollision(target, desired);
+      avoidCameraCollision(anchor, desired);
       if (cameraNeedsSnap) { camera.position.copy(desired); cameraNeedsSnap = false; }
       else camera.position.lerp(desired, 1 - Math.exp(-dt * 10));
-      avoidCameraCollision(target, camera.position);
+      avoidCameraCollision(anchor, camera.position);
       if (!vehicle) world.player.mesh.visible = camera.position.distanceTo(target) > 0.65;
       camera.lookAt(target);
     }
   }
   ui.update(world, null);
   updateCarts();
-  if (state.ending) {
-    mode = "end";
-    ui.ending();
-  } else ui.intro();
+  if(state.defeat)startDefeat();
+  else if (state.ending) {mode='end';ui.ending();} else ui.intro();
   function frame() {
     requestAnimationFrame(frame);
     const rawDelta = clock.getDelta(),
@@ -1422,6 +1441,10 @@ try {
       systems(dt);
       ui.context(context());
     } else { world.jobs.update(0, visualTime, false); ui.context(""); }
+    if(mode==='defeat'){
+      const before=state.defeat.phase;advanceDefeat(state,dt);const fall=T.MathUtils.smoothstep(state.defeat.elapsed/.85,0,1);world.player.mesh.rotation.z=fall*1.48;world.player.mesh.position.y=Math.max(state.defeat.groundY??state.defeat.origin.y,state.defeat.origin.y-7*state.defeat.elapsed*state.defeat.elapsed)+fall*.15;ui.updateDefeat(state.defeat);if(before!==state.defeat.phase)snapshot();
+    }
+    world.parkour.updateLabel();world.orchard.update(mode==='play'?dt:0);illustrated.setFailure(mode==='defeat'?Math.min(1,state.defeat.elapsed/2):0);
     const selected = SHOPS[state.selected];
     const sideGoal=world.adventure.target()??world.homeTarget();
     const goal = sideGoal??world.jobs.targetFor(selected.id) ?? selected;
@@ -1442,12 +1465,12 @@ try {
       player: world.player.mesh.position,
       dt,
     });
-    world.adventure.prepareWeapons({inVehicle:!!vehicle,carrying:!!state.carrying||!!held,firstPerson,pitch,attack,attackKind});
+    world.adventure.prepareWeapons({inVehicle:!!vehicle,carrying:!!state.carrying||!!held||world.parkour.climbing||mode==='defeat',firstPerson,pitch,attack,attackKind});
     world.visuals?.setFirstPerson(firstPerson && !vehicle && hasStarted);
     world.visuals?.update?.(dt, visualTime, {
-      active: mode === "play", heldCart: held?.mesh ?? null,
-      carriedBox: world.jobs.handObject, activity: state.adventure.equipped==='water'&&attack>0?{id:'water-spray',clip:'Interact',duration:.35,remaining:attack}:world.jobs.activity,
-      grounded: jump <= 0, verticalVelocity: vertical,
+      active: mode === "play"||mode==='defeat', defeated:mode==='defeat',defeatElapsed:state.defeat?.elapsed??0,climb:world.parkour.motion,airKick:world.parkour.airKick,heldCart: held?.mesh ?? null,
+      carriedBox:mode==='defeat'?null:world.jobs.handObject, activity: state.adventure.equipped==='water'&&attack>0?{id:'water-spray',clip:'Interact',duration:.35,remaining:attack}:world.jobs.activity,
+      grounded:mode==='defeat'?false:world.parkour.grounded,verticalVelocity:vertical,
       crouch: !held && keys.has("ControlLeft"), guard: !held && keys.has("KeyQ"),
       attack, attackKind, inVehicle: !!vehicle,
       firstPerson,
@@ -1509,7 +1532,7 @@ try {
         obstacles: [ ...world.blockers.filter((b) => b.enabled !== false).map(({ x, z, w, d }) => ({ x, z, w, d, heading: 0 })),
           ...world.vehicles.filter((v) => v.mesh.visible && !(v.police && state.wanted < 3)).map((v) => vehicleBox(v)) ] };
     },
-    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,walkways:world.walkways.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,flyers:flyerSellers.diagnostics}));},
+    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,hospital:world.hospital.diagnostics,parkour:world.parkour.diagnostics,orchard:world.orchard.diagnostics,walkways:world.walkways.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,flyers:flyerSellers.diagnostics}));},
     get jobs() { return JSON.parse(JSON.stringify(world.jobs.diagnostics)); },
     get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null,
       personType:n.personType,role:n.role,weapon:n.weapon??null,policeIndex:n.policeIndex??null,visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,motion:n.motion?.diagnostics??null,
@@ -1519,6 +1542,7 @@ try {
   // BFCache preserves the page and its GPU resources. Dispose only on a real exit.
   addEventListener("pagehide", (event) => {
     if (!event.persisted) {
+      world.parkour.dispose();world.hospital.dispose();world.orchard.dispose();
       world.homeYard.dispose();
       world.boroughs.dispose();
       world.adventure.dispose();goalFill.geometry.dispose();goalFill.material.dispose();goalRing.geometry.dispose();goalRing.material.dispose();

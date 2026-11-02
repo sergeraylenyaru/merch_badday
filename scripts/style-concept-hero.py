@@ -34,12 +34,8 @@ for mesh in [o for o in bpy.data.objects if o.type=='MESH']:
         if not source or not source.name.startswith('Skin'):continue
         weight=sum(sum(g.weight for g in mesh.data.vertices[i].groups if g.group in groups) for i in polygon.vertices)/len(polygon.vertices)
         if weight>.55:polygon.material_index=slot
-head=arm.matrix_world@arm.data.bones['Head'].head_local
-bpy.ops.mesh.primitive_torus_add(major_segments=16,minor_segments=6,location=head+Vector((0,.10,-.04)),major_radius=.145,minor_radius=.05)
-hood=bpy.context.object;hood.name='ConceptHood';hood.scale=(1,.9,.6);hood.data.materials.append(jacket)
-bpy.context.view_layer.update();matrix=hood.matrix_world.copy();hood.parent=arm;hood.parent_type='BONE';hood.parent_bone='Chest';bpy.context.view_layer.update();hood.matrix_world=matrix
-arm['visualStyle']='Rust hoodie, canvas backpack; user concept 2026-11-02';arm['rigVersion']=5
-arm['wardrobe']='rust jacket with long sleeves and folded hood; charcoal trousers; canvas backpack with two shoulder straps'
+arm['visualStyle']='Rust hoodie, canvas backpack; user concept 2026-11-02';arm['rigVersion']=6
+arm['wardrobe']='rust jacket with long sleeves; charcoal trousers; canvas backpack with two shoulder straps'
 bpy.ops.export_scene.gltf(filepath=str(path),export_format='GLB',export_animations=True,export_animation_mode='NLA_TRACKS',export_skins=True,export_cameras=False,export_lights=False,export_extras=True,export_rest_position_armature=True)
 # Blender's glTF round-trip shifts bone-parented empties by the bone length.
 # Preserve the authored local transforms of the palm/foot anchors and backpack.

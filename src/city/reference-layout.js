@@ -11,6 +11,8 @@ export const HOME = {...point(165,180)};
 export const HOME_CAR = {...point(167.5,171.5)};
 export const HOME_CAR_HEADING=-Math.PI/2;
 export const START = {...HOME};
+// A permanent civic plot: saved cars and destroyed props must not move the hospital.
+export const HOSPITAL = {...point(1437,683),w:11,d:8};
 export const ROUNDABOUT={u:1390,v:337,radius:37,width:25};
 export const ROADS = [
  [0,337,1355,337,38],[1425,337,1672,337,38],

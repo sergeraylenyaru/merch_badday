@@ -22,6 +22,7 @@ test('benches lose their instances and collision, damage persists and debris bod
     const proxy={userData:{blocker:{enabled:true},colliderHandle:collider.handle}};
     records.push(props.register({key:'bench-'+i,id:'bench-wood',x:i*4,z:0,footprint:{x:i*4,z:0,w:.5,d:.5},proxy,instances:[{mesh,index:i}]}));
   }
+  assert.equal(props.hit({x:0,y:15,z:1},2,1,{x:0,z:-1}),false,'a rooftop swing cannot destroy a bench on the street');
   assert.ok(props.hit({x:0,z:1},2,1,{x:0,z:-1}));assert.equal(records[0].broken,false);
   assert.ok(props.hit({x:0,z:1},2,1,{x:0,z:-1}));assert.equal(records[0].broken,true);
   assert.equal(records[0].proxy.userData.blocker.enabled,false);

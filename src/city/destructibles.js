@@ -45,6 +45,7 @@ export function createDestructibles(scene,world){
     register(record){const prop={...record,hp:record.id==='ball'?1:2,broken:false};records.push(prop);if(saved.has(prop.key))hide(prop);return prop;},
     hit(position,reach,power,direction){
       const nearby=records.filter(p=>!p.broken&&Math.hypot(p.x-position.x,p.z-position.z)<reach+Math.min(p.footprint.w,p.footprint.d))
+        .filter(p=>Math.abs((position.y??0)-(world.groundHeight?.(p.x,p.z)??0))<2.5)
         .filter(p=>{const dx=p.x-position.x,dz=p.z-position.z;return dx*direction.x+dz*direction.z>-.1;})
         .sort((a,b)=>Math.hypot(a.x-position.x,a.z-position.z)-Math.hypot(b.x-position.x,b.z-position.z));
       return nearby.length?strike(nearby[0],power,direction):false;

@@ -240,6 +240,7 @@ export function createJobWorld(scene, world, state) {
     world.player.mesh.position.set(SHOPS[7].x, world.groundHeight(SHOPS[7].x, SHOPS[7].z + 6), SHOPS[7].z + 6);
 
   return {
+    cancelPending(){pending=null;state.carrying=null;carryingAge=0;},
     update,
     get parkingCar() { return world.vehicles.find((car) => fitsParkingBay(car, SHOPS[0])) ?? null; },
     get activity() { return pending ? { id: pending.id * 2 + (pending.approach ? 0 : 1), clip: pending.approach ? 'Walk' : { stocking: 'Interact', extra: 'PickUp', pickup: 'PickUp', drop: 'Interact', repair: 'Fixing', search: 'Interact' }[pending.kind],
@@ -270,6 +271,7 @@ export function createJobWorld(scene, world, state) {
     startSearch(spot) { return start('search', { spot }); },
     takeEvents() { return events.splice(0); },
     nearest(position) {
+      if(Math.abs((position.y??0)-world.groundHeight(position.x,position.z))>2.1)return null;
       let best = null, distance = Infinity;
       for (const item of targets) {
         const d = Math.hypot(position.x - item.x, position.z - item.z);

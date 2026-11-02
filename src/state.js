@@ -110,6 +110,8 @@ export const freshState = () => ({
   gateNotified: false,
   time: 0,
   health: 100,
+  defeat:null,
+  parkour:{feetY:null},
   stress: 12,
   reputation: 50,
   money: 300,

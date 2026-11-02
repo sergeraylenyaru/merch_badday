@@ -135,7 +135,7 @@ export function createCharacterMotion(entity, model) {
   let state = "idle", grounded = true, lastCart = null;
   let wasMoving = false;
   const gripErrors = [], feetErrors = [];
-  const weaponGripErrors=[];
+  const weaponGripErrors=[],climbGripErrors=[];
   const mixer = model.animations?.some((clip) => clip.name === "Walk") ? new AnimationMixer(model) : null;
   const actions = new Map();
   const capturedPose = records.map(record=>({q:record.node.quaternion.clone(),p:record.node.position.clone()}));
@@ -164,7 +164,7 @@ export function createCharacterMotion(entity, model) {
   }
 
   function recordedPose(dt, input, held, rawSpeed) {
-    let next = input.activity?.clip ?? (input.inVehicle ? "Drive" : !grounded ? lastVertical > 0 ? "Jump" : "Fall"
+    let next = input.defeated?'Fall':input.climb?'Idle':input.activity?.clip ?? (input.inVehicle ? "Drive" : !grounded ? lastVertical > 0 ? "Jump" : "Fall"
       : input.attack > 0 && !input.weaponRig ? input.attackKind === "strong" ? "StrongPunch" : "Punch"
         : landing > 0.2 ? "Land" : input.crouch ? rawSpeed > 0.08 ? "CrouchWalk" : "Crouch"
           : locomotionRun && !held ? "Sprint" : rawSpeed > 0.08 ? input.staff ? 'WalkFormal' : "Walk" : input.social ? 'Talk' : "Idle");
@@ -191,6 +191,7 @@ export function createCharacterMotion(entity, model) {
       if (name === "Punch" || name === "StrongPunch") rate = action.getClip().duration / (name === "Punch" ? 0.35 : 0.85);
       if (name === "Land") rate = action.getClip().duration / 0.25;
       if (name === next && input.activity && ['PickUp', 'Interact', 'Fixing'].includes(name)) rate = action.getClip().duration / input.activity.duration;
+      if(input.defeated&&name===next){action.time=Math.min(.8,input.defeatElapsed??0)/.8*action.getClip().duration*.8;rate=0;}
       action.setEffectiveTimeScale(rate);
     }
     mixer.update(dt);
@@ -268,6 +269,7 @@ export function createCharacterMotion(entity, model) {
     restore();
     gripErrors.length = 0;
     weaponGripErrors.length=0;
+    climbGripErrors.length=0;
     feetErrors.length = 0;
     const recorded = !!mixer;
     if (mixer) {
@@ -280,8 +282,8 @@ export function createCharacterMotion(entity, model) {
         prior.q.slerp(record.node.quaternion,blend);prior.p.lerp(record.node.position,blend);
         record.node.quaternion.copy(prior.q);record.node.position.copy(prior.p);
       });
-      if (held||input.weaponRig) for (const record of records) if (/Index|Middle|Ring|Pinky|Thumb/.test(record.node.name)) {
-        const closed = closedFingers.get(record.node);const closeHand=held||input.weaponRig.twoHanded||/Right|\.R$/.test(record.node.name);
+      if (held||input.weaponRig||input.climb) for (const record of records) if (/Index|Middle|Ring|Pinky|Thumb/.test(record.node.name)) {
+        const closed = closedFingers.get(record.node);const closeHand=held||input.climb||input.weaponRig.twoHanded||/Right|\.R$/.test(record.node.name);
         if (closed&&closeHand) record.node.quaternion.slerp(closed, held?gripWeight:1);
       }
     }
@@ -465,9 +467,21 @@ export function createCharacterMotion(entity, model) {
       if(input.attack>0)state=input.weaponRig.id+'-swing';
     }
 
+    if(input.climb){
+      const cycle=input.climb.phase;
+      for(const [i,arm]of arms.entries())if(arm){
+        target.set(arm.side*.25,1.65+Math.sin(cycle+i*Math.PI)*.16,.35);root.localToWorld(target);arm.endQ.copy(entityQ).multiply(arm.gripOrientation||arm.neutralEndRotation);pole.set(arm.side*.6,-.8,.12).applyQuaternion(entityQ);solve(arm,target,arm.endQ,pole);arm.contact.getWorldPosition(arm.actual);climbGripErrors.push(arm.actual.distanceTo(target));
+      }
+      for(const [i,leg]of legs.entries())if(leg){
+        target.set(leg.side*.2,.10+Math.max(0,Math.sin(cycle+i*Math.PI))*.3,.25);root.localToWorld(target);leg.endQ.copy(entityQ).multiply(leg.neutralEndRotation);pole.set(0,-.05,1).applyQuaternion(entityQ);solve(leg,target,leg.endQ,pole);
+      }
+      state='climb';model.updateWorldMatrix(true,true);
+    }
+
     for (let i = 0; i < arms.length; i++) {
       const arm = arms[i];
       if (!arm) continue;
+      if(input.climb)continue;
       if (held) {
         if (lastCart !== held) arm.targetObject = held.getObjectByName(arm.side < 0 ? "CartHandleLeft" : "CartHandleRight");
         held.updateWorldMatrix(true, true);
@@ -501,8 +515,8 @@ export function createCharacterMotion(entity, model) {
       } else if(input.weaponRig&&(i===1||input.weaponRig.twoHanded)){
         const weapon=input.weaponRig;weapon.root.updateWorldMatrix(true,true);
         (i===1?weapon.right:weapon.left).getWorldPosition(arm.contactGoal);
-        weapon.root.getWorldQuaternion(arm.endQ);arm.endQ.multiply(tilt.setFromAxisAngle(Z,-arm.side*Math.PI/2)).multiply(arm.gripOrientation||arm.neutralEndRotation);
-        pole.set(arm.side*.75,-.55,.12).applyQuaternion(entityQ);solve(arm,arm.contactGoal,arm.endQ,pole);
+        weapon.root.getWorldQuaternion(arm.endQ);arm.endQ.multiply(new Quaternion().setFromAxisAngle(UP,weapon.gripRoll??0)).multiply(tilt.setFromAxisAngle(Z,-arm.side*Math.PI/2)).multiply(arm.gripOrientation||arm.neutralEndRotation);
+        pole.set(arm.side*(weapon.phase==='carry'?.35:.75),weapon.phase==='carry'?-1:-.55,.08).applyQuaternion(entityQ);solve(arm,arm.contactGoal,arm.endQ,pole);
         model.updateWorldMatrix(true,true);arm.contact.getWorldPosition(arm.actual);arm.error=arm.actual.distanceTo(arm.contactGoal);weaponGripErrors.push(arm.error);
       } else if (input.guard && recorded) {
         target.set(arm.side * 0.19, 1.73, 0.25);
@@ -517,6 +531,7 @@ export function createCharacterMotion(entity, model) {
       }
     }
     if (held || gripWeight === 0) lastCart = held;
+    if(input.defeated)state='defeated';else if(input.airKick>0)state='double-jump';
     wasMoving = gaitMoving;
     model.updateWorldMatrix(true, true);
   }
@@ -557,7 +572,7 @@ export function createCharacterMotion(entity, model) {
     get diagnostics() {
       return {
         state, speed, stride: phase / TAU, distance, gripWeight, grounded, crouchWeight: crouching, articulated,
-        gripErrors: [...gripErrors], weaponGripErrors:[...weaponGripErrors], feetErrors: [...feetErrors], soleClearance, bodyLean, headTurn,
+        gripErrors: [...gripErrors], weaponGripErrors:[...weaponGripErrors],climbGripErrors:[...climbGripErrors], feetErrors: [...feetErrors], soleClearance, bodyLean, headTurn,
         feetPlanted: legs.map((leg) => leg?.wasStance === true),
         animation: mixer ? {
           source: "Quaternius Universal Animation Library (CC0)", clip: activeClip,

@@ -13,6 +13,8 @@ import {createWalkways} from './city/walkways.js';
 import {LOCAL_SHOPS} from './city/layout.js';
 import {policeWeapon} from './npc/police-combat.js';
 import {createHomeYard} from './city/home-yard.js';
+import {createHospital} from './city/hospital.js';
+import {createParkour} from './city/parkour.js';
 export async function createWorld(scene, state) {
   await RAPIER.init();
   const physics = new RAPIER.World({ x: 0, y: -20, z: 0 });
@@ -373,6 +375,11 @@ export async function createWorld(scene, state) {
     return blockers.some((b) => b.enabled !== false && boxesIntersect(shape, b)) || vehicles.some((v) => v !== vehicle && v.mesh.visible
       && !(v.police && state.wanted < 3) && boxesIntersect(shape, vehicleBox(v)));
   }
+  function blockedAt(x,z,r=PLAYER_SHAPE.radius,ignoreCar=null,feetY=player.mesh.position.y){
+    const p=pixel(x,z);if(p.x<8||p.x>1664||p.y<8||p.y>930||isReferenceWater(p.x,p.y))return true;
+    if(blockers.some(b=>b.enabled!==false&&feetY<(b.y??b.h/2)+b.h/2-.04&&feetY+PLAYER_SHAPE.height>(b.y??b.h/2)-b.h/2+.04&&circleIntersectsBox(x,z,r,b)))return true;
+    return vehicles.some(v=>v!==ignoreCar&&v.mesh.visible&&!(v.police&&state.wanted<3)&&feetY<v.mesh.position.y+v.h-.04&&feetY+PLAYER_SHAPE.height>v.mesh.position.y&&circleIntersectsBox(x,z,r,vehicleBox(v)));
+  }
   const world = {
     physics,
     disposeTerrain:()=>terrainMaterials.dispose(),
@@ -388,6 +395,7 @@ export async function createWorld(scene, state) {
     shelves,
     secrets,
     blocked,
+    blockedAt,
     vehicleBlocked,
     groundHeight,
     blockers,
@@ -397,6 +405,7 @@ export async function createWorld(scene, state) {
   // Rendering supplies measured vehicle extents. Entity IDs, transforms,
   // interaction targets and physical bodies remain owned by the world.
   world.boroughs = await createReferenceCity(scene,world,{human,car,label});
+  world.hospital=createHospital(scene,world);
   for(const [i,uv]of [[3,[570,380]],[4,[1070,380]]]){
     const p=point(...uv),officer=human(p.x,p.z,'#577d9a','police');officer.policeIndex=i;officer.weapon=policeWeapon(i);people.push(officer);
   }
@@ -406,6 +415,8 @@ export async function createWorld(scene, state) {
   label('ВАШ ДОМ',START.x,4,START.z-4,'#ffe5ab',1.7);
   const savedHomeCar=state.vehicles[homeCar.id];
   if(savedHomeCar){homeCar.mesh.position.set(savedHomeCar.x,groundHeight(savedHomeCar.x,savedHomeCar.z),savedHomeCar.z);homeCar.heading=savedHomeCar.heading;homeCar.mesh.rotation.y=savedHomeCar.heading;}
+  world.shopRoofs=SHOPS.map(s=>({x:s.x,z:s.z-3,w:14.5,d:6,y:6.8}));
+  world.parkour=createParkour(scene,world,state);
   world.visuals = await createVisuals(scene, world, shopDecor);
   const carLabel=label('ВАША МАШИНА · E',0,0,0,'#ffe5ab',1.2);homeCar.mesh.add(carLabel);carLabel.position.set(0,3,0);
   for(const employee of people.filter(n=>n.kind==='employee')){const badge=label(employee.role,0,0,0,'#dae9de',.9);employee.mesh.add(badge);badge.position.set(0,3,0);}

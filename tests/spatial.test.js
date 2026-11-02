@@ -29,6 +29,7 @@ test('passing cars can be selected at their doors; inactive and reserved cars ca
   assert.equal(door.x, 10);
   assert.ok(door.z > 21.5);
   assert.equal(nearestBoardableVehicle([car], door), car);
+  assert.equal(nearestBoardableVehicle([car], {...door,y:15}), null,'a roof above the door cannot be used to enter a car');
   assert.equal(nearestBoardableVehicle([{ ...car, police: true }], door), null);
   assert.equal(nearestBoardableVehicle([{ ...car, rival: true }], door), null);
   assert.equal(nearestBoardableVehicle([{ ...car, mesh: { ...car.mesh, visible: false } }], door), null);

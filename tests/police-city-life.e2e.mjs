@@ -34,12 +34,16 @@ try{
   console.log('PASS guarding reduces police damage');
 
   ({page,context}=await app.scenario(fightState(20),'police-defeat'));
-  await page.waitForFunction(start=>__MERCH__.state.fines>0&&Math.hypot(__MERCH__.state.position.x-start.x,__MERCH__.state.position.z-start.z)<.1,START);
+  await page.waitForFunction(()=>__MERCH__.mode==='defeat');
+  assert.equal(await page.evaluate(()=>__MERCH__.state.health),0);
+  assert.equal(await page.evaluate(()=>__MERCH__.state.fines),0);
+  await page.locator('#heal:enabled').waitFor();await page.click('#heal');
+  await page.waitForFunction(()=>__MERCH__.mode==='play');
   const defeated=await page.evaluate(()=>__MERCH__.state);
-  assert.equal(defeated.fines,240);assert.equal(defeated.health,65);assert.equal(defeated.wanted,0);
-  assert.ok(Math.hypot(defeated.position.x-START.x,defeated.position.z-START.z)<.1);
-  assert.ok(defeated.messages.some(m=>m.includes('Задержание после потери здоровья')));
-  await context.close();console.log('PASS arrest only after health depletion');
+  assert.equal(defeated.fines,240);assert.equal(defeated.health,100);assert.equal(defeated.wanted,0);
+  const hospital=await page.evaluate(()=>__MERCH__.city.hospital.spawn);
+  assert.ok(Math.hypot(defeated.position.x-hospital.x,defeated.position.z-hospital.z)<.1);
+  await context.close();console.log('PASS fall and manual hospital treatment only after health depletion');
 
   const s=freshState();s.onboarding.callReceived=true;s.position=point(370,185);
   ({page,context}=await app.scenario(s,'city-life'));
