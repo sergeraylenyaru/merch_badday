@@ -83,6 +83,7 @@ export class AssetLibrary {
     root.userData.assetId = id;
     root.animations = gltf.animations || [];
     const visual = new Group();
+    visual.rotation.x = entry.rotationX || 0;
     visual.rotation.y = entry.rotationY || 0;
     visual.add(cloneSkeleton(gltf.scene));
     root.add(visual);

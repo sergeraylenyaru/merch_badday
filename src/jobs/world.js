@@ -20,12 +20,12 @@ export function createJobWorld(scene, world, state) {
     const mesh = new T.Mesh(geometries.get(key), material(color));
     mesh.position.set(x, y, z); mesh.castShadow = mesh.receiveShadow = true; group.add(mesh); return mesh;
   }
-  function sign(group, text, x, y, z, width = 3, color = '#f2ddb0', background = '#233c48') {
+  function sign(group, text, x, y, z, width = 3, color = '#f2ddb0', background = '#233c48',fixed=false) {
     const canvas = document.createElement('canvas'); canvas.width = 768; canvas.height = 160;
     const ctx = canvas.getContext('2d');
     const texture = new T.CanvasTexture(canvas); texture.colorSpace = T.SRGBColorSpace; textures.add(texture);
-    const mat = new T.SpriteMaterial({ map: texture, depthWrite: false });
-    const sprite = new T.Sprite(mat); sprite.position.set(x, y, z); sprite.scale.set(width, width * 160 / 768, 1); group.add(sprite);
+    const mat = fixed?new T.MeshBasicMaterial({map:texture}):new T.SpriteMaterial({ map: texture, depthWrite: false });
+    const sprite = fixed?new T.Mesh(new T.PlaneGeometry(1,1),mat):new T.Sprite(mat);if(fixed){geometries.set('warehouse-sign',sprite.geometry);sprite.name='warehouse-facade-sign';}sprite.position.set(x, y, z); sprite.scale.set(width, width * 160 / 768, 1); group.add(sprite);
     let last = '';
     const label = { sprite, set(value) {
       if (value === last) return; last = value;
@@ -82,7 +82,7 @@ export function createJobWorld(scene, world, state) {
   box(warehouse, -22, 2, -5, 10, 4, 0.22, '#74878b'); proxy(shop, -22, 2, -5, 10, 4, 0.22);
   box(warehouse, -22, 4.12, 0.15, 10.4, 0.24, 10.7, '#465a5f');
   box(warehouse, -22, 3.4, 5.15, 10.2, 0.9, 0.16, '#234652');
-  sign(warehouse, 'СКЛАД · АКЦИЗНЫЙ ТОВАР', -22, 3.4, 5.3, 8.7);
+  const warehouseSign=sign(warehouse, 'СКЛАД · АКЦИЗНЫЙ ТОВАР', -22, 3.4, 5.3, 8.7,'#f2ddb0','#233c48',true);
   for (const x of [-25.1, -18.9]) {
     box(warehouse, x, 0.5, -3.9, 2.5, 0.8, 1.2, '#8e7353');
     proxy(shop, x, 0.8, -3.9, 2.5, 1.5, 1.2);
@@ -297,7 +297,7 @@ export function createJobWorld(scene, world, state) {
       return targets.find((t) => t.shop === id && enabled(t));
     },
     get diagnostics() { return { targets: targets.filter(enabled).map((t) => ({ ...t })), parkingCar: this.parkingCar?.id ?? null, gateOpen: isShopUnlocked(state, 7), activity: this.activity,
-      carrying: state.carrying, handPosition: this.handObject?.position.toArray() ?? null }; },
+      carrying: state.carrying, handPosition: this.handObject?.position.toArray() ?? null,warehouseSign:{mesh:warehouseSign.sprite.isMesh===true,position:warehouseSign.sprite.getWorldPosition(new T.Vector3()).toArray(),rotation:warehouseSign.sprite.getWorldQuaternion(new T.Quaternion()).toArray()} }; },
     dispose() {
       if (disposed) return; disposed = true; root.removeFromParent();
       for (const geometry of geometries.values()) geometry.dispose();

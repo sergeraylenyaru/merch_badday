@@ -128,6 +128,8 @@ function snapshot() {
     z: v.mesh.position.z,
     heading: v.heading,
     claimed: !!v.claimed,
+    model:v.visualModel,type:v.type,name:v.displayName,
+    y:v.mesh.position.y,sunk:!!v.sunk,waterTime:v.waterTime??0,waterStartY:v.waterStartY??0,waterDistance:v.waterDistance??0,
   }));
   let savedPosition = state.position;
   if (vehicle) {
@@ -492,6 +494,8 @@ try {
     return best;
   }
   function context() {
+    if(vehicle?.waterTime>0)return 'Машина тонет · выберитесь после остановки';
+    if(world.water.diagnostics.headUnder)return 'Голова под водой · теряете здоровье · выходите к берегу';
     if(world.parkour.climbing)return world.parkour.context();
     if (vehicle)
       return cargo
@@ -529,7 +533,7 @@ try {
   function interact() {
     if(!vehicle&&!held&&!state.carrying&&!world.jobs.activity){
       if(world.parkour.climbing){world.parkour.detach();vertical=0;return;}
-      if((keys.has('Space')||!world.parkour.grounded)&&world.parkour.tryGrab()){vertical=0;jump=.1;pendingSwing=null;attack=0;walkingVelocity.set(0,0,0);yaw=world.player.mesh.rotation.y-Math.PI;notify('W / S — лезть, E — отпустить');return;}
+      if((keys.has('Space')||!world.parkour.grounded)&&world.parkour.tryGrab()){vertical=0;jump=.1;pendingSwing=null;attack=0;walkingVelocity.set(0,0,0);yaw=world.player.mesh.rotation.y-Math.PI;notify(world.parkour.context());return;}
     }
     if (vehicle) {
       walkingVelocity.set(0, 0, 0);
@@ -740,6 +744,7 @@ try {
           : "Конфликт испортил репутацию.",
       );
     } else {
+      if(world.adventure.kickBall(world.player.mesh.position,weapon?.reach??2.5,{x:-Math.sin(yaw),z:-Math.cos(yaw)},weapon?.power??1))return;
       if(world.orchard.hit(world.player.mesh.position,weapon?.reach??2.9,{x:-Math.sin(yaw),z:-Math.cos(yaw)}))return;
       if(world.props.hit(world.player.mesh.position,weapon?.reach??2.5,weapon?weapon.power+(strong?1:0):strong?2:1,{x:-Math.sin(yaw),z:-Math.cos(yaw)})){beep(160);return;}
       const cart = nearest(world.carts, 3);
@@ -817,8 +822,19 @@ try {
     renderer.setSize(innerWidth, innerHeight);
   });
   window.addEventListener("pagehide", snapshot);
+  function ejectSinkingCar(){
+    const car=vehicle;if(!car)return;const p=car.mesh.position,reach=car.w+PLAYER_SHAPE.radius+.7;
+    const options=[-1,1].map(side=>({x:p.x+Math.cos(car.heading)*reach*side,z:p.z-Math.sin(car.heading)*reach*side}));
+    const exit=options.find(q=>!world.blockedAt(q.x,q.z,.3,car,Math.max(world.groundHeight(q.x,q.z),-.45-.85)))??options[0];
+    vehicle=null;world.player.mesh.visible=true;world.player.mesh.position.set(exit.x,Math.max(world.groundHeight(exit.x,exit.z),-.45-.85),exit.z);world.parkour.reset(world.player.mesh.position.y);vertical=0;jump=.1;
+    if(cargo){cargo.mesh.visible=true;cargo.body.setTranslation({x:p.x+reach,y:world.groundHeight(p.x+reach,p.z)+.3,z:p.z},true);cargo.body.setLinvel({x:0,y:0,z:0},true);cargo=null;}
+    cameraNeedsSnap=true;notify('Машина затонула и осталась на дне. Выбирайтесь на берег!');snapshot();
+  }
   function move(dt) {
     const pos = world.player.mesh.position;
+    if(vehicle&&(vehicle.waterTime>0||world.water.isWater(vehicle.mesh.position.x,vehicle.mesh.position.z))){
+      const car=vehicle,finished=world.water.carTick(car,dt);pos.copy(car.mesh.position);if(finished)ejectSinkingCar();state.position={x:pos.x,z:pos.z};playerBody.setNextKinematicTranslation({x:pos.x,y:pos.y+PLAYER_SHAPE.height/2,z:pos.z});return;
+    }
     if(!vehicle&&world.parkour.climbing){world.parkour.advanceClimb(dt,keys);vertical=0;jump=world.parkour.grounded?0:.1;walkingVelocity.set(0,0,0);state.position={x:pos.x,z:pos.z};playerBody.setNextKinematicTranslation({x:pos.x,y:pos.y+PLAYER_SHAPE.height/2,z:pos.z});return;}
     knockdownTime=Math.max(0,knockdownTime-dt);
     const forward = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0),
@@ -853,7 +869,7 @@ try {
       const nx = p.x + dx,
         nz = p.z + dz;
       world.props.vehicle(vehicleBox(vehicle,nx,nz),vehicle.speed,{x:Math.sin(vehicle.heading),z:Math.cos(vehicle.heading)});
-      if (world.vehicleBlocked(vehicle, nx, nz)) {
+      if (world.vehicleBlocked(vehicle, nx, nz,vehicle.heading,true)) {
         if (Math.abs(vehicle.speed) > 7&&vehicle.impactCooldown===0) {
           collisionInjury(state,vehicle.speed);vehicle.impactCooldown=1;
           world.adventure.onCrash(vehicle.speed,vehicle);
@@ -861,7 +877,7 @@ try {
         }
         vehicle.speed *= -0.25;
         vehicle.heading = oldHeading;
-      } else p.set(nx, world.groundHeight(nx, nz), nz);
+      } else {p.set(nx,world.water.isWater(nx,nz)?p.y:world.groundHeight(nx,nz),nz);if(world.water.isWater(nx,nz))world.water.carTick(vehicle,0);}
       vehicle.mesh.rotation.y = vehicle.heading;
       pos.copy(p);
       for (const n of world.people) {
@@ -901,7 +917,7 @@ try {
             ? 1.7
             : held
               ? held.missionCargo ? 2.7 : 3.2
-              : runningSpeed(state,keys.has("ShiftLeft")||keys.has("ShiftRight"))) * (state.health < 25 ? 0.65 : 1) * (knockdownTime>.45?0:(attack>0&&MELEE_TIMING[state.adventure.equipped]?0.35:1));
+              : runningSpeed(state,keys.has("ShiftLeft")||keys.has("ShiftRight"))) * (world.water.isWater(pos.x,pos.z)?.55:1) * (state.health < 25 ? 0.65 : 1) * (knockdownTime>.45?0:(attack>0&&MELEE_TIMING[state.adventure.equipped]?0.35:1));
       let dx = -Math.sin(yaw) * forward + Math.cos(yaw) * side,
         dz = -Math.cos(yaw) * forward - Math.sin(yaw) * side;
       if (activity?.approach) { dx = activity.approach.x - pos.x; dz = activity.approach.z - pos.z; }
@@ -1174,8 +1190,9 @@ try {
       if (officer.mesh.position.distanceTo(p) > 12)
         officer.mesh.position.set(p.x + 3, 0, p.z);
     }
+    world.traffic.update(dt,player,state.time);
     for (const v of world.vehicles.filter((v) => v.traffic)) {
-      if (v === vehicle || v.claimed) continue;
+      if (v === vehicle || v.claimed || v.sunk || !v.mesh.visible) continue;
       if (v.rival) {
         const stop = SHOPS[Math.floor(state.time / 80) % SHOPS.length],
           d = stop.x - v.mesh.position.x,
@@ -1208,17 +1225,6 @@ try {
         }
         continue;
       }
-      v.impactBrake=Math.max(0,(v.impactBrake??0)-dt);
-      v.speed = v.impactBrake>0?0:6;
-      v.mesh.position.x += dt * v.speed;
-      const u=pixel(v.mesh.position.x,0).x,t=T.MathUtils.clamp((u-1340)/100,0,1);
-      const arc=u>=1340&&u<=1440?Math.sin(Math.PI*t)**2*36:0;
-      v.mesh.position.z=point(0,343+arc).z;
-      const slope=u>=1340&&u<=1440?36*Math.PI/100*Math.sin(2*Math.PI*t):0;
-      v.heading = Math.atan2(1,slope);
-      v.mesh.rotation.y = v.heading;
-      if (v.mesh.position.x > point(1650,340).x) v.mesh.position.x = point(20,340).x;
-      v.mesh.position.y = world.groundHeight(v.mesh.position.x, v.mesh.position.z);
       v.impactCooldown = Math.max(0, (v.impactCooldown || 0) - dt);
       if (!vehicle && player.y<v.mesh.position.y+v.h+.2 && Math.abs(v.speed)>1&&v.impactCooldown === 0 && circleIntersectsBox(player.x, player.z, PLAYER_SHAPE.radius, vehicleBox(v))) {
         v.impactCooldown = 1.5;
@@ -1238,6 +1244,7 @@ try {
     }
   }
   function systems(dt) {
+    if(world.water.update(dt,vehicle)>0)notify('Вы задыхаетесь под водой · быстрее к берегу');
     state.time += dt;
     state.energy = Math.max(0, state.energy - dt);
     if (state.energy === 0 && state._energyActive) {
@@ -1307,7 +1314,7 @@ try {
     if(mode==='defeat')return;
     if(vehicle){vehicle.speed=0;const exit=findVehicleExit(vehicle);if(exit)world.player.mesh.position.set(exit.x,world.groundHeight(exit.x,exit.z),exit.z);vehicle=null;}
     if(cargo){const p=world.player.mesh.position;cargo.mesh.visible=true;cargo.body.setTranslation({x:p.x+2,y:world.groundHeight(p.x+2,p.z)+.3,z:p.z},true);cargo.body.setLinvel({x:0,y:0,z:0},true);cargo=null;}
-    held=null;world.jobs.cancelPending();world.parkour.detach();pendingSwing=null;attack=0;vertical=0;walkingVelocity.set(0,0,0);world.player.mesh.visible=true;
+    held=null;world.jobs.cancelPending();world.parkour.detach(true);pendingSwing=null;attack=0;vertical=0;walkingVelocity.set(0,0,0);world.player.mesh.visible=true;
     beginDefeat(state,{...world.player.mesh.position,floor:world.parkour.floorAt(world.player.mesh.position.x,world.player.mesh.position.z)},policeDefeatLevel);mode='defeat';hasStarted=true;firstPerson=false;unlock();defeatCameraStart=camera.position.clone();ui.defeatScreen(state.defeat);snapshot();
   }
   world.startDefeat=startDefeat;
@@ -1444,7 +1451,7 @@ try {
     if(mode==='defeat'){
       const before=state.defeat.phase;advanceDefeat(state,dt);const fall=T.MathUtils.smoothstep(state.defeat.elapsed/.85,0,1);world.player.mesh.rotation.z=fall*1.48;world.player.mesh.position.y=Math.max(state.defeat.groundY??state.defeat.origin.y,state.defeat.origin.y-7*state.defeat.elapsed*state.defeat.elapsed)+fall*.15;ui.updateDefeat(state.defeat);if(before!==state.defeat.phase)snapshot();
     }
-    world.parkour.updateLabel();world.orchard.update(mode==='play'?dt:0);illustrated.setFailure(mode==='defeat'?Math.min(1,state.defeat.elapsed/2):0);
+    illustrated.setSubmerged(mode==='play'&&world.water.diagnostics.headUnder);world.orchard.update(mode==='play'?dt:0);illustrated.setFailure(mode==='defeat'?Math.min(1,state.defeat.elapsed/2):0);
     const selected = SHOPS[state.selected];
     const sideGoal=world.adventure.target()??world.homeTarget();
     const goal = sideGoal??world.jobs.targetFor(selected.id) ?? selected;
@@ -1524,7 +1531,7 @@ try {
     },
     get vehicles() {
       return world.vehicles.map((v) => ({ id: v.id, type: v.type, model: v.visualModel, name: v.displayName,
-        traffic: v.traffic, claimed: v.claimed, controlled: v === vehicle,
+        traffic: v.traffic, claimed: v.claimed,sunk:!!v.sunk,waterTime:v.waterTime??0,visible:v.mesh.visible, controlled: v === vehicle,
         position: v.mesh.position.toArray(), heading: v.heading, speed: v.speed, halfWidth: v.w, halfLength: v.l, height: v.h }));
     },
     get navigation() {
@@ -1532,7 +1539,7 @@ try {
         obstacles: [ ...world.blockers.filter((b) => b.enabled !== false).map(({ x, z, w, d }) => ({ x, z, w, d, heading: 0 })),
           ...world.vehicles.filter((v) => v.mesh.visible && !(v.police && state.wanted < 3)).map((v) => vehicleBox(v)) ] };
     },
-    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,hospital:world.hospital.diagnostics,parkour:world.parkour.diagnostics,orchard:world.orchard.diagnostics,walkways:world.walkways.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,flyers:flyerSellers.diagnostics}));},
+    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,water:world.water.diagnostics,traffic:world.traffic.diagnostics,hospital:world.hospital.diagnostics,yards:world.yards.diagnostics,cables:world.cables.diagnostics,parkour:world.parkour.diagnostics,orchard:world.orchard.diagnostics,walkways:world.walkways.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,flyers:flyerSellers.diagnostics}));},
     get jobs() { return JSON.parse(JSON.stringify(world.jobs.diagnostics)); },
     get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null,
       personType:n.personType,role:n.role,weapon:n.weapon??null,policeIndex:n.policeIndex??null,visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,motion:n.motion?.diagnostics??null,
@@ -1542,7 +1549,7 @@ try {
   // BFCache preserves the page and its GPU resources. Dispose only on a real exit.
   addEventListener("pagehide", (event) => {
     if (!event.persisted) {
-      world.parkour.dispose();world.hospital.dispose();world.orchard.dispose();
+      world.parkour.dispose();world.cables.dispose();world.yards.dispose();world.hospital.dispose();world.orchard.dispose();
       world.homeYard.dispose();
       world.boroughs.dispose();
       world.adventure.dispose();goalFill.geometry.dispose();goalFill.material.dispose();goalRing.geometry.dispose();goalRing.material.dispose();

@@ -9,7 +9,7 @@ export function waterDistance(u,v) {
   for(const [i,river] of RIVERS.entries())for(let n=1;n<river.length;n++)distance=Math.min(distance,segmentDistance(u,v,...river[n-1],...river[n])-(i?10:13));
   return distance;
 }
-export const terrainHeight=(x,z)=>{const p=pixel(x,z);return Math.min(0,Math.max(-1.1,(waterDistance(p.x,p.y)-3)*.14));};
+export const terrainHeight=(x,z)=>{const p=pixel(x,z),distance=waterDistance(p.x,p.y);return distance<0?Math.max(-5,-.42+distance*.23):Math.min(0,(distance-3)*.14);};
 export const ROAD_PROFILES=ROADS.map(([a,b,c,d,width])=>{
   const start=point(a,b),end=point(c,d),length=Math.hypot(end.x-start.x,end.z-start.z),steps=Math.max(1,Math.ceil(length/1.2));
   const crossings=[];for(let i=0;i<=steps;i++){const t=i/steps;if(waterDistance(a+(c-a)*t,b+(d-b)*t)<width/2+3)crossings.push(t*length);}

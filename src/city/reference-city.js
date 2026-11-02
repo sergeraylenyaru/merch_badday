@@ -10,6 +10,7 @@ import { BOROUGHS, LOCAL_SHOPS } from './layout.js';
 import { createUrbanDetails } from './urban-details.js';
 import {createDestructibles} from './destructibles.js';
 import {createHousingFacades,HOUSING_STYLES,housingStyleAt} from './housing-facades.js';
+import {createGarageStyles,GARAGE_STYLES,garageStyleAt} from './garage-styles.js';
 
 // Hand-placed against map_reference.png, rather than the approximate preview GLB.
 export async function createReferenceCity(scene,world,{human,car,label}) {
@@ -17,6 +18,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  let placedCount=0;
  const root=new T.Group(); root.name='uploaded-reference-city';scene.add(root);
  const housing=createHousingFacades();
+ const garageStyles=createGarageStyles();world.garages=[];
  const placements=new Map(), collision=[], animated=[], preparedAssets=[];
  const traced=[];world.roofs=[];world.treeSpots=[];
  const clearShop=(u,v,r=0)=>WORK_STOPS.every(s=>Math.abs(u-s.u)>52+r || Math.abs(v-s.v)>44+r);
@@ -102,6 +104,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
     if(p.traced)traced.push({model:name,u:p.u,v:p.v,width:p.worldWidth/MAP.scale,depth:p.worldDepth/MAP.scale,...(name.startsWith('panel')?{housingStyle:HOUSING_STYLES[housingStyleAt(p.u,p.v)].id}:{})});
     if(name==='tree'){const pos=point(p.u,p.v);world.treeSpots.push({id:`tree:${p.u.toFixed(2)}:${p.v.toFixed(2)}`,...pos,scale:p.scale,height:nativeH*p.scale,fruitHeight:Math.max(.9,(Number.isFinite(leafBottom)?leafBottom:nativeH*.32)*p.scale-.22)});}
     if(name.startsWith('panel')){const pos=point(p.u,p.v);world.roofs.push({id:`roof:${p.u}:${p.v}`,...pos,w:p.worldWidth/2,d:p.worldDepth/2,y:roofHeight*p.scale,model:name});}
+    if(name==='garage'){world.garages.push({id:`garage:${p.u}:${p.v}`,...point(p.u,p.v),w:p.worldWidth/2,d:p.worldDepth/2,y:nativeH*p.scale,style:GARAGE_STYLES[garageStyleAt(p.u,p.v)]});}
     if(p.solid){const pos=point(p.u,p.v),h=(name.startsWith('panel')?roofHeight:nativeH)*p.scale;const proxy=world.box(pos.x,h/2,pos.z,p.worldWidth,h,p.worldDepth,'#70796d',true);proxy.visible=false;collision.push(proxy);p.proxy=proxy;}
     if(name==='bench'){const pos=point(p.u,p.v);p.breakable={key:`city-bench:${p.u}:${p.v}`,id:'bench-wood',x:pos.x,z:pos.z,footprint:{...pos,w:p.worldWidth/2,d:p.worldDepth/2},proxy:p.proxy,instances:[]};}
   }
@@ -110,13 +113,15 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
   for(const p of list){const pos=point(p.u,p.v),key=Math.floor(pos.x/48)+','+Math.floor(pos.z/48);if(!chunks.has(key))chunks.set(key,[]);chunks.get(key).push(p);}
   for(const batch of asset.batches)if(name.startsWith('panel')&&batch.material.name==='panel')housing.prepare(batch.geometry);
   for(const [key,chunk] of chunks)for(const [index,batch]of asset.batches.entries()){
-    const house=name.startsWith('panel'),facade=house&&batch.material.name==='panel';
-    const instances=new T.InstancedMesh(batch.geometry,facade?housing.wall:batch.material,chunk.length);instances.name=`city-pack-${name}-${index}-${key}`;instances.castShadow=true;instances.receiveShadow=true;
+    const house=name.startsWith('panel'),facade=house&&batch.material.name==='panel',garageWall=name==='garage'&&batch.material.name==='cement';
+    const instances=new T.InstancedMesh(batch.geometry,facade?housing.wall:garageWall?garageStyles.wall:batch.material,chunk.length);instances.name=`city-pack-${name}-${index}-${key}`;instances.castShadow=true;instances.receiveShadow=true;
     chunk.forEach((p,i)=>{
       const pos=point(p.u,p.v);q.setFromAxisAngle(new T.Vector3(0,1,0),p.angle);
       const origin=center.clone().multiply(p.scaleVector).applyQuaternion(q).negate().add(new T.Vector3(pos.x,.006,pos.z));
       matrix.compose(origin,q,p.scaleVector);instances.setMatrixAt(i,matrix);
       if(facade)instances.setColorAt(i,new T.Color(housingStyleAt(p.u,p.v)/7,1,1));
+      else if(garageWall)instances.setColorAt(i,new T.Color(garageStyleAt(p.u,p.v)/3,1,1));
+      else if(name==='garage')instances.setColorAt(i,new T.Color(['#aa7964','#b3bbab','#72978a','#c5ad74'][garageStyleAt(p.u,p.v)]));
       else if(house&&['roof','bluepaint','graypaint'].includes(batch.material.name))instances.setColorAt(i,new T.Color(['#b5c5b0','#cfb498','#a0b9c4','#d5c3b0'][housingStyleAt(p.u,p.v)%4]));
       if(p.breakable)p.breakable.instances.push({mesh:instances,index:i});
     });root.add(instances);
@@ -130,7 +135,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  }
  materialPool.finishLoading();
  const urbanDetails=createUrbanDetails(scene,world,point);
- return {diagnostics:{assetRevision:"pbr-2-housing",housingStyles:HOUSING_STYLES,resources:materialPool.diagnostics,boroughs:BOROUGHS,localShops:LOCAL_SHOPS,source:'user-map',modelTypes:placements.size,placements:placedCount,tracedBuildings:traced,urbanDetails:urbanDetails.diagnostics},update(dt){hub.rotation.z+=dt*.09;for(const cabin of animated)cabin.rotation.z=-hub.rotation.z;world.props.update(dt);},dispose(){urbanDetails.dispose();world.props.dispose();preparedAssets.forEach(a=>a.dispose());housing.dispose();materialPool.dispose();root.traverse(n=>{if(n.isInstancedMesh)n.dispose();if(n.isMesh&&!n.isInstancedMesh){n.geometry?.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}});root.removeFromParent();}};
+ return {diagnostics:{assetRevision:"pbr-3-garages",housingStyles:HOUSING_STYLES,garageStyles:GARAGE_STYLES,garages:world.garages,resources:materialPool.diagnostics,boroughs:BOROUGHS,localShops:LOCAL_SHOPS,source:'user-map',modelTypes:placements.size,placements:placedCount,tracedBuildings:traced,urbanDetails:urbanDetails.diagnostics},update(dt){hub.rotation.z+=dt*.09;for(const cabin of animated)cabin.rotation.z=-hub.rotation.z;world.props.update(dt);},dispose(){urbanDetails.dispose();world.props.dispose();preparedAssets.forEach(a=>a.dispose());housing.dispose();garageStyles.dispose();materialPool.dispose();root.traverse(n=>{if(n.isInstancedMesh)n.dispose();if(n.isMesh&&!n.isInstancedMesh){n.geometry?.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}});root.removeFromParent();}};
 }
 
 export function buildReferenceTerrain(world,scene){

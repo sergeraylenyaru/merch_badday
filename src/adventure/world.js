@@ -114,12 +114,15 @@ export function createAdventure(scene,world,state,callbacks){
   if(id==='football'){p=goal;label=`Ворота · ${Math.min(3,a.fun.goals)}/3`;}
   if(id==='hospital'){p=world.hospital.spawn;label='Городская больница №1';}
   if(id==='ladder'){p=world.parkour.nearest();label='Лестница на крышу · Space + E';}
+  if(id==='wire'){p=world.cables.wires.flatMap(w=>[w.a,w.b]).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Столб с проводом · Space + E';}
+  if(id==='garage-yard'){p=world.yards.yards.flatMap(y=>y.props).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Ящики, баки и забор у гаражей';}
   if(id==='van'){p=world.vehicles.find(v=>v.id===a.garage.vanId)?.mesh.position;label='Ваш фургон';}
   if(id.startsWith('guard:')){p=guards[Number(id.split(':')[1])]?.mesh.position;label='Охранник · договориться';}
   return p?{x:p.x,z:p.z,label}:null;
  }
  return {
   target,
+  kickBall(origin,reach,direction,power=1){const p=ballBody.translation(),dx=p.x-origin.x,dz=p.z-origin.z,d=Math.hypot(dx,dz);if(!ballEnabled||d>reach||Math.abs(origin.y-p.y)>1.7||(d>.05&&(dx*direction.x+dz*direction.z)/d<.1))return false;ballBody.setLinvel({x:direction.x*(5+power),y:1.8,z:direction.z*(5+power)},true);ballBody.setAngvel({x:direction.z*12,y:0,z:-direction.x*12},true);flight=true;ballAge=0;return true;},
   nearest(position){
    const candidates=items.filter(i=>i.kind!=='money'&&i.enabled()&&Math.abs(position.y-world.groundHeight(i.x,i.z))<2&&Math.hypot(i.x-position.x,i.z-position.z)<2.5).map(i=>({...i,d:Math.hypot(i.x-position.x,i.z-position.z)}));
    for(const guard of guards)if(guard.stun<=0&&Math.abs(position.y-guard.mesh.position.y)<2&&Math.hypot(guard.mesh.position.x-position.x,guard.mesh.position.z-position.z)<2.8)candidates.push({kind:'guard',guard,d:Math.hypot(guard.mesh.position.x-position.x,guard.mesh.position.z-position.z),label:'E · Охранник · договориться'});

@@ -1,4 +1,4 @@
-import { Box3, Vector3, Group, Mesh, SkinnedMesh, Float32BufferAttribute } from "three";
+import { Box3, Vector3, Group, Mesh, SkinnedMesh, Float32BufferAttribute,BoxGeometry,MeshStandardMaterial } from "three";
 import { AssetLibrary } from "./assets.js";
 import { createDistrictMaterials } from "./materials.js";
 import { createDistrict } from "./district.js";
@@ -31,6 +31,8 @@ export const MODEL_MANIFEST = {
   suv: { url: `${base}models/vehicles/suv.glb`, size: [2.5, 2.4, 4.6] },
   van: { url: `${base}models/vehicles/van.glb`, size: [2.5, 2.8, 5.8] },
   truck: { url: `${base}models/vehicles/truck.glb`, size: [3, 3.7, 6.8] },
+  taxi: {url:`${base}models/vehicles/suv.glb`,size:[2.5,2.4,4.6]},
+  bus: {url:`${base}models/city-pack/bus.glb`,rotationX:-Math.PI/2,size:[2.7,3.4,8.5]},
   bench: { url: vendor("bench"), size: [2.4, 0.8, 1] },
   bush: { url: vendor("bush"), size: [1.7, 1.7, 1.7] },
   streetlight: { url: vendor("streetlight"), size: [2, 7, 0.6] },
@@ -77,6 +79,7 @@ export async function createVisuals(scene, world, shopDecor) {
   const replacements = [];
   const actors = [];
   const actorMaterials = new Set();
+  const vehicleGeometries=new Set();
 
   function replace(entity, id, animate = false, groundOffset = 0) {
     const model = library.instantiate(id, animate ? { height: MODEL_MANIFEST[id]?.size[1]??PLAYER_SHAPE.height } : {});
@@ -134,7 +137,13 @@ export async function createVisuals(scene, world, shopDecor) {
     person.personType=profile??(female?'staff':'hero');
     replace(person, person.kind==='police' ? 'officer' : profile??(female?'staff':'hero'), true);
   });
-  for (const vehicle of world.vehicles) replace(vehicle, vehicle.police ? 'police' : vehicle.visualModel);
+  for (const vehicle of world.vehicles){replace(vehicle, vehicle.police ? 'police' : vehicle.visualModel);
+    if(vehicle.visualModel==='taxi'){
+      vehicle.mesh.traverse(n=>{if(n.isMesh&&n.material.name==='Vehicle_Paint'){n.material=n.material.clone();n.material.color.set('#e6bd35');actorMaterials.add(n.material);}});
+      const black=new MeshStandardMaterial({color:'#202d2c'}),yellow=new MeshStandardMaterial({color:'#f1cf5c'});actorMaterials.add(black);actorMaterials.add(yellow);
+      for(const [w,h,d,x,y,z,material]of [[.7,.22,.3,0,vehicle.h+.13,0,yellow],...[-1,1].flatMap(side=>Array.from({length:5},(_,i)=>[.035,.14,.2,side*(vehicle.w+.02),1.1,-.5+i*.2,i%2?black:yellow]))]){const g=new BoxGeometry(w,h,d);vehicleGeometries.add(g);const mesh=new Mesh(g,material);mesh.position.set(x,y,z);vehicle.mesh.add(mesh);}
+    }
+  }
   // The existing cart collider bottom is local Y=0.05; match that resting
   // plane without changing the rigid body's placement or collision response.
   for (const cart of world.carts) replace(cart, "cart", false, 0);
@@ -331,6 +340,7 @@ export async function createVisuals(scene, world, shopDecor) {
       for (const material of armMaterials.values()) material.dispose();
       for (const district of districts) district.dispose();
       for (const material of actorMaterials) material.dispose();
+      vehicleGeometries.forEach(g=>g.dispose());
       library.dispose();
       materials.dispose();
     },

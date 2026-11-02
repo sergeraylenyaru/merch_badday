@@ -15,6 +15,10 @@ import {policeWeapon} from './npc/police-combat.js';
 import {createHomeYard} from './city/home-yard.js';
 import {createHospital} from './city/hospital.js';
 import {createParkour} from './city/parkour.js';
+import {createWater} from './city/water.js';
+import {createTraffic} from './city/traffic.js';
+import {createServiceYards} from './city/service-yards.js';
+import {createCables} from './city/cables.js';
 export async function createWorld(scene, state) {
   await RAPIER.init();
   const physics = new RAPIER.World({ x: 0, y: -20, z: 0 });
@@ -292,7 +296,11 @@ export async function createWorld(scene, state) {
   for (let i = 0; i < 6; i++) {
     const p = point(70+i*245,340);
     const v = car(p.x, p.z, i % 4, vehicles.length, true);
-    if(i===0){v.visualModel="suv";v.displayName="Кроссовер";}
+    const saved=state.vehicles[v.id];
+    if(!saved?.claimed){v.visualModel=['sedan','taxi','bus','truck','suv','van'][i];v.displayName=['Седан','Такси','Автобус','Грузовик','Кроссовер','Фургон'][i];if(i===1)v.type=0;if(i===2)v.type=2;}
+    else if(saved.model){v.visualModel=saved.model;v.displayName=saved.name??v.displayName;v.type=saved.type??v.type;}
+    else if(i===0){v.visualModel='suv';v.displayName='Кроссовер';}
+    if(v.visualModel==='bus'){v.max=13;v.accel=6;}
     vehicles.push(v);
   }
   for (let i = 0; i < 24; i++) {
@@ -367,16 +375,16 @@ export async function createWorld(scene, state) {
         circleIntersectsBox(x, z, r, vehicleBox(v)),
     );
   }
-  function vehicleBlocked(vehicle, x, z, heading = vehicle.heading) {
+  function vehicleBlocked(vehicle, x, z, heading = vehicle.heading,allowWater=false) {
     const shape = vehicleBox(vehicle, x, z, heading);
     const c = Math.abs(Math.cos(heading)), s = Math.abs(Math.sin(heading));
     const rx = c * shape.w + s * shape.d, rz = s * shape.w + c * shape.d;
-    for(const dx of [-rx,rx])for(const dz of [-rz,rz]){const p=pixel(x+dx,z+dz);if(p.x<8||p.x>1664||p.y<8||p.y>930||isReferenceWater(p.x,p.y))return true;}
+    for(const dx of [-rx,rx])for(const dz of [-rz,rz]){const p=pixel(x+dx,z+dz);if(p.x<8||p.x>1664||p.y<8||p.y>930||(!allowWater&&isReferenceWater(p.x,p.y)))return true;}
     return blockers.some((b) => b.enabled !== false && boxesIntersect(shape, b)) || vehicles.some((v) => v !== vehicle && v.mesh.visible
       && !(v.police && state.wanted < 3) && boxesIntersect(shape, vehicleBox(v)));
   }
   function blockedAt(x,z,r=PLAYER_SHAPE.radius,ignoreCar=null,feetY=player.mesh.position.y){
-    const p=pixel(x,z);if(p.x<8||p.x>1664||p.y<8||p.y>930||isReferenceWater(p.x,p.y))return true;
+    const p=pixel(x,z);if(p.x<8||p.x>1664||p.y<8||p.y>930)return true;
     if(blockers.some(b=>b.enabled!==false&&feetY<(b.y??b.h/2)+b.h/2-.04&&feetY+PLAYER_SHAPE.height>(b.y??b.h/2)-b.h/2+.04&&circleIntersectsBox(x,z,r,b)))return true;
     return vehicles.some(v=>v!==ignoreCar&&v.mesh.visible&&!(v.police&&state.wanted<3)&&feetY<v.mesh.position.y+v.h-.04&&feetY+PLAYER_SHAPE.height>v.mesh.position.y&&circleIntersectsBox(x,z,r,vehicleBox(v)));
   }
@@ -416,9 +424,14 @@ export async function createWorld(scene, state) {
   const savedHomeCar=state.vehicles[homeCar.id];
   if(savedHomeCar){homeCar.mesh.position.set(savedHomeCar.x,groundHeight(savedHomeCar.x,savedHomeCar.z),savedHomeCar.z);homeCar.heading=savedHomeCar.heading;homeCar.mesh.rotation.y=savedHomeCar.heading;}
   world.shopRoofs=SHOPS.map(s=>({x:s.x,z:s.z-3,w:14.5,d:6,y:6.8}));
+  world.water=createWater(world,state);
+  world.yards=createServiceYards(scene,world);
+  world.cables=createCables(scene,world);
+  for(const v of vehicles){const saved=state.vehicles[v.id];if(saved&&(!v.traffic||saved.claimed)){v.claimed=!!saved.claimed;v.mesh.position.set(saved.x,groundHeight(saved.x,saved.z),saved.z);v.heading=saved.heading;v.mesh.rotation.y=v.heading;v.sunk=!!saved.sunk;v.waterTime=saved.waterTime??0;v.waterStartY=saved.waterStartY??0;v.waterDistance=saved.waterDistance??0;if(v.waterTime&&!v.sunk&&Number.isFinite(saved.y))v.mesh.position.y=saved.y;}}
   world.parkour=createParkour(scene,world,state);
   world.visuals = await createVisuals(scene, world, shopDecor);
-  const carLabel=label('ВАША МАШИНА · E',0,0,0,'#ffe5ab',1.2);homeCar.mesh.add(carLabel);carLabel.position.set(0,3,0);
+  world.traffic=createTraffic(world);
+  const carLabel=label('ВАША МАШИНА · E',0,0,0,'#ffe5ab',1.2);homeCar.mesh.add(carLabel);homeCar.nameplate=carLabel;carLabel.position.set(0,3,0);carLabel.visible=!homeCar.sunk&&!homeCar.waterTime;
   for(const employee of people.filter(n=>n.kind==='employee')){const badge=label(employee.role,0,0,0,'#dae9de',.9);employee.mesh.add(badge);badge.position.set(0,3,0);}
   world.jobs = createJobWorld(scene, world, state);
   world.walkways=createWalkways(scene,world,world.boroughs.diagnostics.urbanDetails.placements);

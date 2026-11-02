@@ -31,6 +31,7 @@ function chain(upper, lower, end, contact, entity) {
     direction: new Vector3(), pole: new Vector3(), elbow: new Vector3(), endpoint: new Vector3(),
     from: new Vector3(), to: new Vector3(), contactGoal: new Vector3(), offset: new Vector3(), actual: new Vector3(),
     q: new Quaternion(), parentQ: new Quaternion(), delta: new Quaternion(), endQ: new Quaternion(),
+    weaponBase:new Quaternion(),weaponCandidate:new Quaternion(),weaponBest:new Quaternion(),weaponAxis:new Vector3(),
     freeUpper: new Quaternion(), freeLower: new Quaternion(), freeEnd: new Quaternion(),
     gripUpper: new Quaternion(), gripLower: new Quaternion(), gripEnd: new Quaternion(),
     targetObject: null,
@@ -89,6 +90,23 @@ function solve(chain, contactWorld, endWorldRotation, poleWorld) {
   c.lower.getWorldQuaternion(c.q).premultiply(c.delta);
   worldRotation(c.lower, c.q, c.parentQ);
   worldRotation(c.end, endWorldRotation, c.parentQ);
+}
+
+// A cylindrical handle permits rotation around its axis. Choose the grip
+// that keeps palm and forearm aligned instead of bending the wrist backward.
+function comfortableGrip(c,contactWorld,barAxis,poleWorld){
+ c.weaponBase.copy(c.endQ);c.weaponAxis.copy(barAxis);c.upper.getWorldPosition(c.a);c.lower.getWorldPosition(c.b);c.end.getWorldPosition(c.c);
+ const a=c.a.distanceTo(c.b),b=c.b.distanceTo(c.c);let bestAngle=0,best=Infinity;
+ function sample(angle){
+  c.weaponCandidate.setFromAxisAngle(c.weaponAxis,angle).multiply(c.weaponBase);
+  c.offset.copy(c.contactOffset).multiply(c.endScale).applyQuaternion(c.weaponCandidate);c.endpoint.copy(contactWorld).sub(c.offset);c.direction.subVectors(c.endpoint,c.a);const requested=c.direction.length();c.direction.normalize();const distance=MathUtils.clamp(requested,Math.abs(a-b)+1e-5,a+b-1e-5);
+  c.pole.copy(poleWorld).addScaledVector(c.direction,-poleWorld.dot(c.direction)).normalize();const along=(a*a-b*b+distance*distance)/(2*distance),height=Math.sqrt(Math.max(0,a*a-along*along));c.elbow.copy(c.a).addScaledVector(c.direction,along).addScaledVector(c.pole,height);
+  c.from.subVectors(c.endpoint,c.elbow).normalize();c.to.copy(c.contactOffset).normalize().applyQuaternion(c.weaponCandidate);const cost=1-c.from.dot(c.to);
+  if(cost<best){best=cost;bestAngle=angle;c.weaponBest.copy(c.weaponCandidate);}
+ }
+ for(let i=0;i<12;i++)sample(i*Math.PI/6);
+ for(const step of [Math.PI/12,Math.PI/36,Math.PI/108]){const center=bestAngle;sample(center-step);sample(center+step);}
+ c.endQ.copy(c.weaponBest);
 }
 
 /**
@@ -164,7 +182,7 @@ export function createCharacterMotion(entity, model) {
   }
 
   function recordedPose(dt, input, held, rawSpeed) {
-    let next = input.defeated?'Fall':input.climb?'Idle':input.activity?.clip ?? (input.inVehicle ? "Drive" : !grounded ? lastVertical > 0 ? "Jump" : "Fall"
+    let next = input.defeated?'Fall':input.climb?(input.climb.kind==='vault'?'Jump':'Idle'):input.activity?.clip ?? (input.inVehicle ? "Drive" : !grounded ? lastVertical > 0 ? "Jump" : "Fall"
       : input.attack > 0 && !input.weaponRig ? input.attackKind === "strong" ? "StrongPunch" : "Punch"
         : landing > 0.2 ? "Land" : input.crouch ? rawSpeed > 0.08 ? "CrouchWalk" : "Crouch"
           : locomotionRun && !held ? "Sprint" : rawSpeed > 0.08 ? input.staff ? 'WalkFormal' : "Walk" : input.social ? 'Talk' : "Idle");
@@ -283,7 +301,7 @@ export function createCharacterMotion(entity, model) {
         record.node.quaternion.copy(prior.q);record.node.position.copy(prior.p);
       });
       if (held||input.weaponRig||input.climb) for (const record of records) if (/Index|Middle|Ring|Pinky|Thumb/.test(record.node.name)) {
-        const closed = closedFingers.get(record.node);const closeHand=held||input.climb||input.weaponRig.twoHanded||/Right|\.R$/.test(record.node.name);
+        const closed = closedFingers.get(record.node);const closeHand=held||input.climb||input.weaponRig.twoHanded||/Right|\.?R(?:_end)?$/.test(record.node.name);
         if (closed&&closeHand) record.node.quaternion.slerp(closed, held?gripWeight:1);
       }
     }
@@ -468,14 +486,15 @@ export function createCharacterMotion(entity, model) {
     }
 
     if(input.climb){
-      const cycle=input.climb.phase;
+      const cycle=input.climb.phase,zip=input.climb.kind==='zipline',vault=input.climb.kind==='vault';
+      if(vault&&joints.Spine){joints.Spine.node.quaternion.multiply(tilt.setFromAxisAngle(X,.35));model.updateWorldMatrix(true,true);}
       for(const [i,arm]of arms.entries())if(arm){
-        target.set(arm.side*.25,1.65+Math.sin(cycle+i*Math.PI)*.16,.35);root.localToWorld(target);arm.endQ.copy(entityQ).multiply(arm.gripOrientation||arm.neutralEndRotation);pole.set(arm.side*.6,-.8,.12).applyQuaternion(entityQ);solve(arm,target,arm.endQ,pole);arm.contact.getWorldPosition(arm.actual);climbGripErrors.push(arm.actual.distanceTo(target));
+        target.set(arm.side*(zip?.14:.25),zip?2.12:vault?1.45:1.65+Math.sin(cycle+i*Math.PI)*.16,zip?0:vault?.45:.35);root.localToWorld(target);arm.endQ.copy(entityQ).multiply(arm.gripOrientation||arm.neutralEndRotation);pole.set(arm.side*.6,zip?-.1:-.8,.12).applyQuaternion(entityQ);solve(arm,target,arm.endQ,pole);arm.contact.getWorldPosition(arm.actual);climbGripErrors.push(arm.actual.distanceTo(target));
       }
       for(const [i,leg]of legs.entries())if(leg){
-        target.set(leg.side*.2,.10+Math.max(0,Math.sin(cycle+i*Math.PI))*.3,.25);root.localToWorld(target);leg.endQ.copy(entityQ).multiply(leg.neutralEndRotation);pole.set(0,-.05,1).applyQuaternion(entityQ);solve(leg,target,leg.endQ,pole);
+        target.set(leg.side*.2,vault?.45:.10+Math.max(0,Math.sin(cycle+i*Math.PI))*(zip?.12:.3),vault?.4:.25);root.localToWorld(target);leg.endQ.copy(entityQ).multiply(leg.neutralEndRotation);pole.set(0,-.05,1).applyQuaternion(entityQ);solve(leg,target,leg.endQ,pole);
       }
-      state='climb';model.updateWorldMatrix(true,true);
+      state=zip?'zipline':vault?'vault':'climb';model.updateWorldMatrix(true,true);
     }
 
     for (let i = 0; i < arms.length; i++) {
@@ -515,8 +534,11 @@ export function createCharacterMotion(entity, model) {
       } else if(input.weaponRig&&(i===1||input.weaponRig.twoHanded)){
         const weapon=input.weaponRig;weapon.root.updateWorldMatrix(true,true);
         (i===1?weapon.right:weapon.left).getWorldPosition(arm.contactGoal);
-        weapon.root.getWorldQuaternion(arm.endQ);arm.endQ.multiply(new Quaternion().setFromAxisAngle(UP,weapon.gripRoll??0)).multiply(tilt.setFromAxisAngle(Z,-arm.side*Math.PI/2)).multiply(arm.gripOrientation||arm.neutralEndRotation);
-        pole.set(arm.side*(weapon.phase==='carry'?.35:.75),weapon.phase==='carry'?-1:-.55,.08).applyQuaternion(entityQ);solve(arm,arm.contactGoal,arm.endQ,pole);
+        // Start from the authored cylindrical cart grip. Align its bar axis
+        // with the bat by the shortest turn; never roll the wrist through 180°.
+        weapon.root.getWorldQuaternion(arm.endQ);target.set(0,1,0).applyQuaternion(arm.endQ);pole.set(1,0,0).applyQuaternion(entityQ);if(pole.dot(target)<0)target.negate();
+        tilt.setFromUnitVectors(pole,target);arm.endQ.copy(entityQ).multiply(arm.gripOrientation||arm.neutralEndRotation).premultiply(tilt);
+        pole.set(arm.side*(weapon.phase==='carry'?.4:.75),weapon.phase==='carry'?-1:-.55,weapon.phase==='carry'?-.25:.08).applyQuaternion(entityQ);comfortableGrip(arm,arm.contactGoal,target,pole);solve(arm,arm.contactGoal,arm.endQ,pole);
         model.updateWorldMatrix(true,true);arm.contact.getWorldPosition(arm.actual);arm.error=arm.actual.distanceTo(arm.contactGoal);weaponGripErrors.push(arm.error);
       } else if (input.guard && recorded) {
         target.set(arm.side * 0.19, 1.73, 0.25);
