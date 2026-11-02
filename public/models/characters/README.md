@@ -11,3 +11,12 @@ These are independent CC0 characters and animation clips. No GTA game models or 
 `police-officer.glb`: Quaternius Swat (CC0-1.0), a separate skinned police
 uniform model with 18 recorded animations. Pinned source and rebuild command:
 `art/quaternius/README.md`, `scripts/import-police.py`. The included CC0 license applies.
+
+## Additional people
+
+`civilian-stocky.glb`, `civilian-short.glb`, `civilian-tall.glb`,
+`civilian-elder.glb`, `civilian-bandit.glb`: adaptations of Quaternius Worker,
+Casual, Suit, Farmer and Punk, CC0-1.0. All five have real skinned meshes and the
+18 recorded animation clips used by the game. They have distinct standing
+heights and body shapes. Original assets, exact source commit, license mapping
+and rebuild command are documented in `art/quaternius/README.md`.

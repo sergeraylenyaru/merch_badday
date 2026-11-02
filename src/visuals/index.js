@@ -19,6 +19,11 @@ export const MODEL_MANIFEST = {
   hero: { url: `${base}models/characters/merch-male.glb?rig=4`, size: [1.3, 2.1, 0.9] },
   staff: { url: `${base}models/characters/civilian-female.glb?rig=4`, size: [1.3, 2.1, 0.9] },
   officer: {url: `${base}models/characters/police-officer.glb?rig=1`,size:[1.3,2.1,.9]},
+  stocky:{url:`${base}models/characters/civilian-stocky.glb?rig=1`,size:[1.6,1.95,1]},
+  short:{url:`${base}models/characters/civilian-short.glb?rig=1`,size:[1.15,1.65,.85]},
+  tall:{url:`${base}models/characters/civilian-tall.glb?rig=1`,size:[1.2,2.35,.9]},
+  elder:{url:`${base}models/characters/civilian-elder.glb?rig=1`,size:[1.2,1.8,.9]},
+  bandit:{url:`${base}models/characters/civilian-bandit.glb?rig=1`,size:[1.3,2.05,.9]},
   cart: { url: original("shopping-cart"), size: [1.2, 1.62, 1.75] },
   hatchback: { url: vendor("car_hatchback"), size: [2.5, 2.2, 4.6] },
   sedan: { url: vendor("car_sedan"), size: [2.5, 2.2, 4.6] },
@@ -74,7 +79,7 @@ export async function createVisuals(scene, world, shopDecor) {
   const actorMaterials = new Set();
 
   function replace(entity, id, animate = false, groundOffset = 0) {
-    const model = library.instantiate(id, animate ? { height: PLAYER_SHAPE.height } : {});
+    const model = library.instantiate(id, animate ? { height: MODEL_MANIFEST[id]?.size[1]??PLAYER_SHAPE.height } : {});
     if (!model) return; // Original visual and its working animation stay intact.
     const limbs = animate && ["LeftLeg", "RightLeg", "LeftArm", "RightArm"]
       .map((name) => model.getObjectByName(name));
@@ -125,7 +130,9 @@ export async function createVisuals(scene, world, shopDecor) {
   replace(world.player, "hero", true);
   world.people.forEach((person, index) => {
     const female = person.role === 'elder' || (person.kind === 'staff' ? [0, 2, 6, 8].includes(person.shop) : person.kind !== 'police' && index % 2 === 0);
-    replace(person, person.kind==='police' ? 'officer' : female ? 'staff' : 'hero', true);
+    const profile=person.kind==='guard'?'tall':person.kind==='civilian'?['stocky','short','tall','elder','bandit','staff','hero'][index%7]:person.kind==='resident'?'elder':null;
+    person.personType=profile??(female?'staff':'hero');
+    replace(person, person.kind==='police' ? 'officer' : profile??(female?'staff':'hero'), true);
   });
   for (const vehicle of world.vehicles) replace(vehicle, vehicle.police ? 'police' : vehicle.visualModel);
   // The existing cart collider bottom is local Y=0.05; match that resting

@@ -4,6 +4,7 @@ import { BOROUGHS, boroughFor, LOCAL_SHOPS } from './city/layout.js';
 import { SHOPS } from "./state.js";
 import { JOBS, EXPIRY_BATCHES, PRICE_ITEMS, jobDone, jobProgress, isShopUnlocked } from './jobs/catalog.js';
 import { PRODUCT_NAMES, planogramWon } from './jobs/match3.js';
+import {PACKS,WEAPONS,EVENT_INFO} from './adventure/state.js';
 import { poweredContacts, circuitConnected } from './jobs/circuit.js';
 export function createUI(state, actions) {
   const root = document.createElement("div");
@@ -29,7 +30,8 @@ export function createUI(state, actions) {
     canvas.dataset.mapZoom=String(view.zoom);
     ctx.fillStyle='#132830';ctx.fillRect(0,0,w,h);
     if(mapImage.complete&&mapImage.naturalWidth)ctx.drawImage(mapImage,view.offsetX,view.offsetY,MAP.width*view.zoom,MAP.height*view.zoom);
-    const target=xy(SHOPS[state.selected].x,SHOPS[state.selected].z),me=xy(state.position.x,state.position.z);
+    const destination=world?.adventure?.target()??SHOPS[state.selected];
+    const target=xy(destination.x,destination.z),me=xy(state.position.x,state.position.z);
     ctx.setLineDash([4,5]);ctx.strokeStyle='#ffe18b';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(me.x,me.y);ctx.lineTo(target.x,target.y);ctx.stroke();ctx.setLineDash([]);
     for(const shop of SHOPS){
       const done=state.shops[shop.id].done,selected=shop.id===state.selected,locked=!isShopUnlocked(state,shop.id);
@@ -63,7 +65,8 @@ export function createUI(state, actions) {
             : s.id === 4 && state.carrying ? 'Коробка в руках. Отнесите её в голубую приёмку внутри магазина и нажмите E.'
               : s.id===0 ? !p.job.paid ? 'Возьмите свою машину у дома и припаркуйтесь в голубом месте у первого магазина. Паркомат — рядом с разметкой.' : !p.job.assigned ? 'Парковка оплачена. Зайдите к Нине в зал и получите следующее задание.' : 'Восстановите выкладку чая, сока и крупы: подойдите к каждой отмеченной секции в зале и нажмите E. Затем найдите Нину.' : JOBS[s.id].description;
     $("cartCount").textContent = jobProgress(state, s.id);
-    const goal = world?.jobs?.targetFor(s.id) ?? s;
+    const goal = world?.adventure?.target()??world?.jobs?.targetFor(s.id) ?? s;
+    if(world?.adventure?.target()){$('targetName').textContent=goal.label;$('targetDesc').textContent='Подойдите к подсвеченной зоне · E — действие. Основной маршрут можно снова выбрать в планшете.';}
     $("distance").textContent =
       `${Math.round(Math.hypot(goal.x - state.position.x, goal.z - state.position.z))} М`;
     $("hp").textContent = Math.round(state.health);
@@ -84,7 +87,7 @@ export function createUI(state, actions) {
       const width=Math.round(rect.width*ratio),height=Math.round(rect.height*ratio);
       if(width>0&&height>0&&(canvas.width!==width||canvas.height!==height)){canvas.width=width;canvas.height=height;}
       map(canvas, world);
-      $("tabletGoal").textContent=`${s.code} · ${s.name} · ${Math.round(Math.hypot(s.x-state.position.x,s.z-state.position.z))} м`;
+      $("tabletGoal").textContent=`${goal.label??s.code+' · '+s.name} · ${Math.round(Math.hypot(goal.x-state.position.x,goal.z-state.position.z))} м`;
     }
   }
   function clear() {
@@ -130,7 +133,7 @@ export function createUI(state, actions) {
   }
   function phone(which = tab) {
     tab = which;
-    const tabs = ["Маршрут", "Сообщения", "Карта", "Показатели", "Фото"];
+    const tabs = ["Маршрут", "Город", "Коллекция", "Снаряжение", "Гараж", "Сообщения", "Карта", "Показатели", "Фото"];
     let body = "";
     if (tab === "Маршрут")
       body = [...SHOPS].sort((a,b)=>state.shift.order.indexOf(a.id)-state.shift.order.indexOf(b.id)).map(
@@ -150,6 +153,12 @@ export function createUI(state, actions) {
       body = `<div class="message">Репутация: ${Math.round(state.reputation)} / 100<br>Стресс: ${Math.round(state.stress)} / 100<br>Деньги: ${state.money} ₽<br>Премия: ${state.bonus} ₽<br>Конфликты: ${state.conflicts}<br>Штрафы: ${state.fines} ₽<br>Закрыто: ${state.shops.filter((s) => s.done).length} / ${SHOPS.length}<br>Осталось: ${Math.max(0,Math.ceil((1500 - state.time) / 60))} мин</div><div class="actions"><button id="energy" class="secondary">Энергетик · 70 ₽</button><button id="boots" class="secondary">Обувь для бега · 150 ₽ премии</button><button id="gloves" class="secondary">Перчатки для груза · 120 ₽ премии</button><button id="dimaDeal" class="secondary">Дима: договориться о сроках · 40 ₽</button></div>`;
     if (tab === "Фото")
       body = `<p class="message">Необязательный фотоотчёт: встаньте рядом с магазином. Фото сохраняет текущий вид камеры; задания у каждой точки свои.</p><button class="primary" id="takePhoto">СДЕЛАТЬ ФОТО</button><div id="photoResult"></div>`;
+    const a=state.adventure;
+    if(tab==='Маршрут')body=`<button class="message collection-summary" data-open-collection>Пачки: ${a.cigarettes.length}/10 · посмотреть цвета</button>`+body;
+    if(tab==='Коллекция')body=`<h3>Разноцветные пачки · <span id="collectionCount">${a.cigarettes.length}/10</span></h3><p>Найдите десять разных пачек в трёх районах. E — подобрать. За полную коллекцию — 300 ₽.</p><div class="collection-grid">${PACKS.map(p=>`<div class="collection-card ${a.cigarettes.includes(p.id)?'collected':''}" data-pack="${p.id}" style="--pack-color:${p.color}"><i></i><strong>${p.name}</strong><span>${a.cigarettes.includes(p.id)?'✓ Собрана':'Не найдена'}</span></div>`).join('')}</div>`;
+    if(tab==='Снаряжение')body=`<p>Оружие видно на ярких стойках. E — подобрать, F — использовать, G — сильный удар, 1/2/3 — переключить, 0 — кулаки.</p><button class="shoprow" data-extra="equip" data-value="fists">${a.equipped===null?'✓ ':''}Кулаки</button>${Object.entries(WEAPONS).map(([id,w])=>`<button class="shoprow" data-extra="equip" data-value="${id}" ${!a.inventory.includes(id)?'disabled':''}>${a.equipped===id?'✓ ':''}${w.name} · ${a.inventory.includes(id)?'Подобрано':'Найдите в городе'}</button>`).join('')}`;
+    if(tab==='Город')body=Object.entries(EVENT_INFO).map(([id,info])=>{const e=a.events[id];return `<div class="message"><h3>${info.title}</h3><p>${info.text}</p><strong>${({offered:'Можно принять',active:'Выполняется',done:'✓ Выполнено',declined:'Вы отказались',kept:'Деньги оставлены'})[e.status]}</strong>${id==='spill'&&e.status==='active'?`<p>Коробки ${e.boxes.length}/3</p>`:''}${id==='delivery'&&e.status==='active'?`<p>Груз ${e.integrity}% · до срока ${Math.max(0,Math.ceil(e.due-state.time))} с</p>`:''}<div class="actions">${e.status==='offered'?`<button data-extra="start" data-value="${id}">Принять</button><button data-extra="decline" data-value="${id}">Отказаться</button>`:''}${e.status==='active'?`<button data-extra="track" data-value="${id}">Показать цель</button>`:''}${id==='favor'&&e.status==='active'&&e.found?'<button data-extra="keep">Оставить 80 ₽ себе · −5 репутации</button>':''}</div></div>`;}).join('')+`<div class="message"><h3>Отдых во дворе</h3><p>Мяч в парке: три гола — 30 ₽ и −12 стресса. Найдите столик и сыграйте в пары: 20 ₽ и −10 стресса.</p><button data-extra="track" data-value="football">Показать ворота</button></div><div class="message"><h3>Знакомства</h3><p>${state.career.contacts.includes('seller')?'Продавец помнит помощь: кофе у «У дома» 20 ₽.':'Верните кошелёк продавцу, чтобы заслужить доверие.'}</p><button data-extra="guard">Найти ближайшего охранника</button></div>`;
+    if(tab==='Гараж')body=`<div class="message">Состояние рабочей машины: ${a.garage.condition}%<br>Целый груз приносит больше денег. Сильная авария может выбросить посылку.</div>${[['repair','Ремонт рабочей машины',120],['engine','Тюнинг двигателя · +15% скорости',400],['suspension','Подвеска · защита груза',250],['van','Собственный фургон у дома · перевозка тележек',900]].map(([id,title,cost])=>`<button class="shoprow" data-extra="garage" data-value="${id}" ${state.money<cost||(id==='repair'?a.garage.condition===100:state.career.garage[id])?'disabled':''}>${title} · ${id!=='repair'&&state.career.garage[id]?'✓ Куплено':cost+' ₽'}</button>`).join('')}${state.career.garage.van?'<button data-extra="track" data-value="van">Показать мой фургон</button>':''}`;
     show(
       `<div class="modal tablet-modal"><div class="phone tablet" role="dialog" aria-modal="true" aria-label="Рабочий планшет"><div class="phonebar tabletbar"><span>МЕРЧПЛАНШЕТ · ГОРОДСКОЙ МАРШРУТ</span><button class="close" id="close" aria-label="Закрыть планшет">×</button></div><div class="tablet-layout"><section class="tablet-map" aria-label="Карта города"><div class="tablet-mapbar"><span>ТРИ РАЙОНА · ДЕВЯТЬ ВИЗИТОВ</span><strong id="tabletGoal"></strong></div><div class="tablet-mapstage"><canvas id="bigmap" width="1672" height="941" aria-label="Карта районов и положение игрока"></canvas></div><div class="tablet-mapfooter"><span>↑ СЕВЕР · НАЖМИТЕ НА МАГАЗИН, ЧТОБЫ ВЫБРАТЬ ЦЕЛЬ</span><span>M / ESC — ЗАКРЫТЬ</span></div></section><aside class="tablet-sidebar"><h2>Рабочий день</h2><nav class="tabs" aria-label="Меню планшета">${tabs.map((t) => `<button data-tab="${t}" class="${t === tab ? "active" : ""}" aria-pressed="${t === tab}">${t}</button>`).join("")}</nav><div id="phoneBody" tabindex="0">${body}</div></aside></div></div></div>`,
     );
@@ -157,7 +166,7 @@ export function createUI(state, actions) {
       const canvas=$("bigmap"),rect=canvas.getBoundingClientRect();
       const p=mapViewport(canvas.width,canvas.height,state.position).unproject((event.clientX-rect.left)*canvas.width/rect.width,(event.clientY-rect.top)*canvas.height/rect.height);
       const nearest=SHOPS.map(shop=>({shop,d:Math.min(Math.hypot(pixel(shop.x,shop.z).x-p.u,pixel(shop.x,shop.z).y-p.v),Math.hypot(MAP_MARKERS[shop.id][0]-p.u,MAP_MARKERS[shop.id][1]-p.v))})).sort((a,b)=>a.d-b.d)[0];
-      if(nearest?.d<45){state.selected=nearest.shop.id;phone(tab);}
+      if(nearest?.d<45){state.selected=nearest.shop.id;state.adventure.tracked=null;phone(tab);}
     };
     $("close").onclick = actions.resume;
     document
@@ -167,6 +176,7 @@ export function createUI(state, actions) {
       (b) =>
         (b.onclick = () => {
           state.selected = +b.dataset.shop;
+          state.adventure.tracked=null;
           phone();
         }),
     );
@@ -182,6 +192,17 @@ export function createUI(state, actions) {
     if ($("gloves")) $("gloves").onclick=()=>{actions.equipment("gloves");};
     if ($("dimaDeal")) $("dimaDeal").onclick=actions.dima;
     if ($("energy")) $("energy").onclick = actions.energy;
+    document.querySelectorAll('[data-extra]').forEach(b=>b.onclick=()=>actions.adventure(b.dataset.extra,b.dataset.value==='fists'?null:b.dataset.value,tab));
+    document.querySelector('[data-open-collection]')?.addEventListener('click',()=>phone('Коллекция'));
+  }
+  function adventureDialog(title,text,choices){
+    show(`<div class="modal"><div class="window"><h2 id="extraTitle"></h2><p id="extraText"></p><div class="dialogueoptions">${choices.map(c=>`<button id="extra-${c.id}" ${c.disabled?'disabled':''}>${c.label}</button>`).join('')}</div></div></div>`);
+    $('extraTitle').textContent=title;$('extraText').textContent=text;for(const c of choices)$('extra-'+c.id).onclick=c.run;
+  }
+  function tableGame(){
+    const t=state.adventure.fun.table,deck=['Чай','Сок','Хлеб','Чай','Хлеб','Сок'];
+    show(`<div class="modal"><div class="window"><button class="close" id="close">×</button><h2>Найдите три пары</h2><p>${t.won?'Победа! +20 ₽, стресс −10. Награда уже получена.':'Откройте две одинаковые карточки. После ошибки выберите следующую карточку.'}</p><div class="memory-grid">${deck.map((name,i)=>`<button data-memory="${i}" ${t.won||t.matched.includes(i)?'disabled':''}>${t.matched.includes(i)||t.open.includes(i)?name:'?'}</button>`).join('')}</div></div></div>`);
+    $('close').onclick=actions.resume;document.querySelectorAll('[data-memory]').forEach(b=>b.onclick=()=>actions.adventure('table',Number(b.dataset.memory)));
   }
   function incomingCall() {
     show(`<div class="modal"><div class="window"><div class="eyebrow">08:00 · ВХОДЯЩИЙ ЗВОНОК</div><h2>Региональный менеджер</h2><p>Вы у своего дома. Рабочая машина ждёт рядом. Менеджер звонит с первым заданием на сегодня.</p><button class="primary" id="answerCall">ОТВЕТИТЬ НА ЗВОНОК</button></div></div>`);
@@ -200,6 +221,8 @@ export function createUI(state, actions) {
     $("speech").textContent = p.done
       ? "Спасибо, визит уже закрыт. Удачной смены!"
       : !isShopUnlocked(state, shop.id) ? "Мы ещё закрыты. Возвращайтесь после пяти подтверждённых визитов." : jobDone(state, shop.id) ? "Всё сделано? Отлично, можно подтверждать визит." : shop.id===0 && p.job.paid && !p.job.assigned ? 'Спасибо за парковку! Нужна помощь в зале: восстановите выкладку чая, сока и крупы. Нажмите «Напомните, что нужно сделать», чтобы взять задание.' : shop.description;
+    if(shop.id===0&&state.career.contacts.includes('seller'))$('speech').textContent='Помню, вы вернули кошелёк. Спасибо! '+$('speech').textContent;
+    else if(state.career.loyalty[shop.id]<0)$('speech').textContent='Прошлый конфликт я помню. Давайте сегодня спокойно. '+$('speech').textContent;
     $("close").onclick = actions.resume;
     document
       .querySelectorAll("[data-choice]")
@@ -313,6 +336,7 @@ export function createUI(state, actions) {
     dialogue,
     incomingCall,
     employee,
+    adventureDialog,tableGame,
     shelf,
     parking,
     planogram,

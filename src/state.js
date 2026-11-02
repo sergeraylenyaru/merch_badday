@@ -2,6 +2,7 @@ import { WORK_STOPS, START } from './city/reference-layout.js';
 import {makeShift,urgentReward,career,remember} from './city/shift.js';
 import { JOBS, newJob, jobDone, isShopUnlocked } from './jobs/catalog.js';
 import { newPlanogram } from './jobs/match3.js';
+import {newAdventure,ensureAdventure} from './adventure/state.js';
 export const SHOPS = [
   [
     "У дома",
@@ -136,6 +137,7 @@ export const freshState = () => ({
   carts: [],
   vehicles: [],
   brokenProps: [],
+  adventure:newAdventure(),
   weather: false,
 });
 export function normalize(s) {
@@ -181,6 +183,7 @@ export function finish(s, quit = false) {
   return s.ending;
 }
 export function save(s, storage = localStorage) {
+  ensureAdventure(s);
   storage.setItem("merch-badday-v1", JSON.stringify(s));
 }
 export function load(storage = localStorage) {
@@ -237,7 +240,7 @@ export function load(storage = localStorage) {
       }
       if (v.carrying && (v.carrying.shop !== 4 || ![0, 1, 2].includes(v.carrying.box) || v.shops[4].job.delivered.includes(v.carrying.box))) v.carrying = null;
       if(v.carrying?.extra!==undefined&&(![0,1,2].includes(v.carrying.extra)||v.carrying.extra===v.carrying.box||v.shops[4].job.delivered.includes(v.carrying.extra))) delete v.carrying.extra;
-      normalize(v);
+      normalize(v);ensureAdventure(v);
       return v;
     }
   } catch {}

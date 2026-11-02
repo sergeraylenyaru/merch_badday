@@ -1,6 +1,6 @@
 import {tickWanted,raiseWanted,freeRoam,runningSpeed,SHIFT_DURATION} from './city/gameplay.js';
 import {START,point,pixel} from './city/reference-layout.js';
-import {buyEquipment,dealWithDima} from './city/shift.js';
+import {buyEquipment,dealWithDima,remember} from './city/shift.js';
 import * as T from "three";
 import "@fontsource/manrope/cyrillic-400.css";
 import "@fontsource/manrope/cyrillic-700.css";
@@ -34,7 +34,10 @@ import { createCityLife } from './npc/city-life.js';
 import { createCrossingMarkings } from './npc/crossings.js';
 import {createLocalCrowd} from './npc/local-crowd.js';
 import {collisionInjury,pedestrianContact} from './physics/vehicle-impact.js';
+import {createAdventure} from './adventure/world.js';
+import {ensureAdventure,WEAPONS} from './adventure/state.js';
 const state = load();
+ensureAdventure(state);
 let settings = { sensitivity: 1, volume: 0.25, quality: "high" };
 try {
   settings = {
@@ -376,6 +379,7 @@ try {
   atmosphere = createAtmosphere(scene, renderer);
   applyQuality();
   ui = createUI(state, {
+    adventure(name,value,tab){world.adventure.action(name,value);snapshot();if(name==='table')ui.tableGame();else ui.phone(tab??'Город');},
     settings,
     resume,
     answerCall(){state.onboarding.callReceived=true;state.selected=0;message('Региональный: Доброе утро! Ваша машина у дома. Первое задание — доехать до «У дома», занять голубое место и оплатить парковку. Затем зайдите к Нине за заданием в зале.');snapshot();resume();},
@@ -398,6 +402,10 @@ try {
     dima(){if(dealWithDima(state)){snapshot();notify("Дима договорился с точками: срочные визиты продлены на две минуты.");}else notify("Договор уже заключён или не хватает 40 ₽.");ui.phone("Показатели");},
   });
   world = await createWorld(scene, state);
+  world.adventure=createAdventure(scene,world,state,{notify,crime,changed:snapshot,resume,
+    dialog(title,text,choices){open('adventure');ui.adventureDialog(title,text,choices);},
+    table(){open('adventure');ui.tableGame();},
+  });
   const walkingBlocked=createWalkingBlocker(world);
   const pedestrianNavigator=createPedestrianNavigator(walkingBlocked);
   const cityLife=createCityLife(world);
@@ -446,6 +454,10 @@ try {
     }),
   );
   scene.add(marker);
+  const goalZone=new T.Group();
+  const goalFill=new T.Mesh(new T.CircleGeometry(1.7,40),new T.MeshBasicMaterial({color:'#ffe074',transparent:true,opacity:.17,depthWrite:false,side:T.DoubleSide}));
+  const goalRing=new T.Mesh(new T.RingGeometry(1.7,1.95,40),new T.MeshBasicMaterial({color:'#ffe074',transparent:true,opacity:.8,depthWrite:false,side:T.DoubleSide}));
+  goalFill.rotation.x=goalRing.rotation.x=-Math.PI/2;goalZone.add(goalFill,goalRing);scene.add(goalZone);
   function dist(obj) {
     const player = world.player.mesh.position;
     // Shelves expose an approach point in the aisle. Their raised marker is
@@ -475,6 +487,7 @@ try {
     const task = world.jobs.nearest(pos);
     if (state.carrying) return task?.type === 'drop' ? 'E · Поставить коробку в приёмку' : 'Коробка в руках · R у грузовика — взять вторую; отнесите в голубую приёмку магазина «СуперЦена»';
     if (held) return held.missionCargo ? 'R · Оставить грузовую тележку в голубой приёмке' : 'R · Вернуть в жёлтую зону за бонус';
+    const extra=world.adventure.nearest(pos);if(extra)return extra.label.startsWith('E ·')?extra.label:'E · '+extra.label;
     if (task) return `E · ${task.label}`;
     const employee=nearest(world.people.filter(n=>n.kind==='employee'),2.5);
     if(employee)return `E · ${employee.role}`;
@@ -486,7 +499,7 @@ try {
     const coffee = SHOPS.find(
       (s) => Math.hypot(pos.x - s.x - 17, pos.z - s.z - 4) < 3,
     );
-    if (coffee) return "E · Кофе и аптечка · 40 ₽";
+    if (coffee) return `E · Кофе и аптечка · ${coffee.id===0&&state.career.contacts.includes('seller')?20:40} ₽`;
     const cart = nearest(
       world.carts.filter((c) => !c.delivered || (c.missionCargo && !state.shops[2].job.delivered.includes(c.id))),
       3,
@@ -521,6 +534,8 @@ try {
     }
     const pos = world.player.mesh.position;
     if (world.jobs.activity) return;
+    const extra=world.adventure.nearest(pos);
+    if(extra&&!state.carrying&&!held){world.adventure.interact(extra,{x:-Math.sin(yaw),z:-Math.cos(yaw)});return;}
     const task = world.jobs.nearest(pos);
     if (state.carrying && task?.type !== 'drop') { notify('Сначала отнесите коробку в голубую приёмку «СуперЦены».'); return; }
     if (task) {
@@ -563,15 +578,16 @@ try {
       (s) => Math.hypot(pos.x - s.x - 17, pos.z - s.z - 4) < 3,
     );
     if (coffee) {
-      if (state.money < 40) {
+      const cost=coffee.id===0&&state.career.contacts.includes('seller')?20:40;
+      if (state.money < cost) {
         notify("Кофе стоит 40 ₽.");
         return;
       }
-      state.money -= 40;
+      state.money -= cost;
       state.stress -= 25;
       state.health += 30;
       normalize(state);
-      notify("Кофе, аптечка и пять минут тишины. −25 стресса, +30 здоровья.");
+      notify(`Кофе · ${cost} ₽ · −25 стресса, +30 здоровья`);
       state.time += 10;
       beep(500);
       return;
@@ -583,6 +599,7 @@ try {
         return;
       }
       vehicle = car;
+      if(state.adventure.tracked==='van'&&car.id===state.adventure.garage.vanId)state.adventure.tracked=null;
       if (car.traffic && !car.claimed) {
         car.claimed = true;
         crime(1);
@@ -665,7 +682,7 @@ try {
   }
   function hit(strong = false) {
     if(knockdownTime>.5)return;
-    if (state.carrying || world.jobs.activity) { notify('Руки заняты работой.'); return; }
+    if (state.carrying || world.jobs.activity || state.adventure.events.delivery.carrying) { notify('Руки заняты работой.'); return; }
     if (held) {
       notify("Сначала отпустите ручку тележки: R.");
       return;
@@ -674,12 +691,15 @@ try {
     attackKind = strong ? "strong" : "quick";
     attack = strong ? 0.85 : 0.35;
     beep(strong ? 130 : 200);
-    const target = nearest(world.people, 2.9);
+    const weapon=WEAPONS[state.adventure.equipped];
+    if(state.adventure.equipped==='water'){attack=.35;attackKind='quick';world.adventure.shootWater(world.player.mesh.position,{x:-Math.sin(yaw),z:-Math.cos(yaw)});return;}
+    const target = nearest(world.people, weapon?.reach??2.9);
     if (target && target.stun <= 0) {
-      target.stun = strong ? 5 : 2;
+      target.stun = weapon?(strong?7:4):strong?5:2;
+      world.adventure.dropMoney(target);
       target.anger = 8;
       state.conflicts++;
-      if (target.shop >= 0) state.shops[target.shop].rep--;
+      if (target.shop >= 0){state.shops[target.shop].rep--;state.career.loyalty[target.shop]--;if(target.shop===0)state.career.contacts=state.career.contacts.filter(id=>id!=='seller');remember(state);}
       const witness = world.people.some((n) => n.mesh.visible&&n !== target && dist(n) < 22);
       crime(witness ? 2 : 1);
       state.reputation -= 4;
@@ -689,7 +709,7 @@ try {
           : "Конфликт испортил репутацию.",
       );
     } else {
-      if(world.props.hit(world.player.mesh.position,2.5,strong?2:1,{x:-Math.sin(yaw),z:-Math.cos(yaw)})){beep(160);return;}
+      if(world.props.hit(world.player.mesh.position,weapon?.reach??2.5,weapon?weapon.power+(strong?1:0):strong?2:1,{x:-Math.sin(yaw),z:-Math.cos(yaw)})){beep(160);return;}
       const cart = nearest(world.carts, 3);
       if (cart)
         cart.body.applyImpulse(
@@ -720,6 +740,10 @@ try {
       return;
     }
     if (mode !== "play") return;
+    if(['Digit0','Digit1','Digit2','Digit3'].includes(e.code)){
+      const id=({Digit0:null,Digit1:'bat',Digit2:'stick',Digit3:'water'})[e.code];
+      if(id===null||state.adventure.inventory.includes(id)){world.adventure.action('equip',id);notify(id?WEAPONS[id].name:'Кулаки');}else notify('Сначала найдите и подберите этот предмет');return;
+    }
     keys.add(e.code);
     if (e.code === "KeyE") interact();
     if (e.code === "KeyR") grab();
@@ -776,8 +800,8 @@ try {
       );
       vehicle.speed = T.MathUtils.clamp(
         vehicle.speed,
-        -vehicle.max * 0.45,
-        vehicle.max,
+        -vehicle.max * 0.45*world.adventure.speedMultiplier(vehicle),
+        vehicle.max*world.adventure.speedMultiplier(vehicle),
       );
       vehicle.heading -=
         side *
@@ -794,6 +818,7 @@ try {
       if (world.vehicleBlocked(vehicle, nx, nz)) {
         if (Math.abs(vehicle.speed) > 7&&vehicle.impactCooldown===0) {
           collisionInjury(state,vehicle.speed);vehicle.impactCooldown=1;
+          world.adventure.onCrash(vehicle.speed,vehicle);
           beep(80, 0.2);
         }
         vehicle.speed *= -0.25;
@@ -1168,6 +1193,7 @@ try {
         const driverSpeed=Math.abs(vehicle.speed);
         const impactSpeed=Math.abs(vehicle.speed-v.speed);
         collisionInjury(state,impactSpeed);vehicle.impactCooldown=1;v.impactBrake=1.2;
+        world.adventure.onCrash(impactSpeed,vehicle);
         vehicle.speed *= -0.3;
         if(driverSpeed>4)crime(1);
       }
@@ -1370,7 +1396,8 @@ try {
       ui.context(context());
     } else { world.jobs.update(0, visualTime, false); ui.context(""); }
     const selected = SHOPS[state.selected];
-    const goal = world.jobs.targetFor(selected.id) ?? selected;
+    const sideGoal=world.adventure.target();
+    const goal = sideGoal??world.jobs.targetFor(selected.id) ?? selected;
     const nearby = Math.hypot(goal.x - world.player.mesh.position.x, goal.z - world.player.mesh.position.z) < 25;
     marker.scale.setScalar(nearby ? 0.32 : 1);
     marker.position.set(
@@ -1379,7 +1406,9 @@ try {
       goal.z,
     );
     marker.rotation.z = Math.PI;
-    marker.visible = !state.shops[state.selected].done;
+    marker.visible = !!sideGoal||!state.shops[state.selected].done;
+    goalZone.visible=marker.visible;goalZone.position.set(goal.x,world.groundHeight(goal.x,goal.z)+.045,goal.z);
+    goalRing.scale.setScalar(1+Math.sin(visualTime*3)*.06);
     atmosphere.update({
       day: Math.min(1,state.time / 1500),
       weather: state.weather,
@@ -1389,12 +1418,13 @@ try {
     world.visuals?.setFirstPerson(firstPerson && !vehicle && hasStarted);
     world.visuals?.update?.(dt, visualTime, {
       active: mode === "play", heldCart: held?.mesh ?? null,
-      carriedBox: world.jobs.handObject, activity: world.jobs.activity,
+      carriedBox: world.jobs.handObject, activity: state.adventure.equipped==='water'&&attack>0?{id:'water-spray',clip:'Interact',duration:.35,remaining:attack}:world.jobs.activity,
       grounded: jump <= 0, verticalVelocity: vertical,
       crouch: !held && keys.has("ControlLeft"), guard: !held && keys.has("KeyQ"),
       attack, attackKind, inVehicle: !!vehicle,
       firstPerson,
     });
+    world.adventure.update(mode==='play'?dt:0,visualTime,{inVehicle:!!vehicle,carrying:!!state.carrying||!!held});
     updateCamera(dt);
     ui.update(world, vehicle);
     renderer.render(scene, camera);
@@ -1426,6 +1456,7 @@ try {
         playerVisible: world.player.mesh.visible,
         playerY: world.player.mesh.position.y,
         knockdown:knockdownTime,playerLean:world.player.mesh.rotation.z,
+        goalZone:{visible:goalZone.visible,x:goalZone.position.x,z:goalZone.position.z},
         groundHeight: world.groundHeight(world.player.mesh.position.x, world.player.mesh.position.z),
         collisionRadius: PLAYER_SHAPE.radius,
         firstPersonHandsVisible: world.visuals?.firstPersonHandsVisible ?? false,
@@ -1448,10 +1479,10 @@ try {
         obstacles: [ ...world.blockers.filter((b) => b.enabled !== false).map(({ x, z, w, d }) => ({ x, z, w, d, heading: 0 })),
           ...world.vehicles.filter((v) => v.mesh.visible && !(v.police && state.wanted < 3)).map((v) => vehicleBox(v)) ] };
     },
-    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,walkways:world.walkways.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics}));},
+    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,walkways:world.walkways.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics}));},
     get jobs() { return JSON.parse(JSON.stringify(world.jobs.diagnostics)); },
     get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null,
-      visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,motion:n.motion?.diagnostics??null,
+      personType:n.personType,role:n.role,visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,motion:n.motion?.diagnostics??null,
       dailyRoute:n.dailyRoute?{index:n.dailyRoute.index,wait:n.dailyRoute.wait,visits:n.dailyRoute.visits,stops:n.dailyRoute.stops}:null,
       navigation:n.navigation?{waypoints:n.navigation.path.length,stuck:n.navigation.stuck}:null })); },
   };
@@ -1459,6 +1490,7 @@ try {
   addEventListener("pagehide", (event) => {
     if (!event.persisted) {
       world.boroughs.dispose();
+      world.adventure.dispose();goalFill.geometry.dispose();goalFill.material.dispose();goalRing.geometry.dispose();goalRing.material.dispose();
       crossingMarkings.dispose();
       world.walkways.dispose();
       world.disposeTerrain?.();

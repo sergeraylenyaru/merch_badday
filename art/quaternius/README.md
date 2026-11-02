@@ -38,3 +38,20 @@ normalizes the bone names and reuses the 18 recorded CC0 clips from the existing
 male character to produce `public/models/characters/police-officer.glb`.
 The police character has its own skinned uniform/equipment model; it is no longer
 a civilian with a recolored shirt. All assets remain local at runtime.
+
+## Additional citizens
+
+Five more skinned CC0 models come from the same pinned showcase commit
+`722c39e964360beff2728a8ee4d103e2d11d457c`, paths
+`public/glb/modular_men/{Worker,Casual,Suit,Farmer,Punk}.glb`. The original files
+are retained here; `NEW_PEOPLE_LICENSES.md` records the mapping of this pack to
+the artist's CC0-1.0 license. Source:
+https://github.com/trebeljahr/quaternius-showcase/tree/722c39e964360beff2728a8ee4d103e2d11d457c/public/glb/modular_men
+
+`import-extra-people.py` reuses the existing 18 recorded CC0 clips and adapts
+the rigs. Profiles: stocky (Worker, widened), short (Casual), tall (Suit),
+elder (Farmer, grey hair and beard), bandit (Punk). Runtime standing heights:
+1.95, 1.65, 2.35, 1.8 and 2.05 metres. These are game adaptations; the artist
+did not label the source people with these ages or roles.
+
+Rebuild: `blender --background --threads 2 --python-exit-code 1 --python scripts/import-extra-people.py`.

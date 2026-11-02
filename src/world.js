@@ -300,6 +300,10 @@ export async function createWorld(scene, state) {
     const p = human(loc.x,loc.z,"#577d9a", "police");
     people.push(p);
   }
+  for(const [i,index] of [0,3,4].entries()){
+    const loc=point(...[[548,227],[838,725],[1293,733]][i]);
+    const guard=human(loc.x,loc.z,'#33495b','guard');guard.role=['Виктор','Рустам','Семён'][i];people.push(guard);
+  }
   for (let i = 0; i < 4; i++) {
     const {x,z}=point(...[[200,700],[800,710],[1450,600],[900,150]][i]);
     const m = box(x, 0.8, z, 0.8, 0.8, 0.8, "#e8c568");
