@@ -6,6 +6,7 @@ import { URBAN_ASSET_CATALOG, createUrbanAsset, createUrbanDetails } from '../sr
 import { MAP, ROAD_BOXES, PARK_PATHS, LOCAL_POINTS, WORK_STOPS, HOME, HOME_CAR, point } from '../src/city/reference-layout.js';
 import { MAP_BUILDINGS } from '../src/city/map-buildings.js';
 import { boxesIntersect } from '../src/spatial.js';
+import { NEIGHBORHOODS } from '../src/city/neighborhood-details.js';
 
 test('all 238 catalog assets and their variants construct finite renderable geometry', () => {
   assert.equal(new Set(URBAN_ASSET_CATALOG.map(a=>a.category)).size,19);
@@ -61,6 +62,34 @@ test('real store footprints and existing props remain clear while owned shop apr
     for(const p of layer.diagnostics.placements)assert.equal(blockers.some(b=>boxesIntersect(p.footprint,b)),false,p.id);
     for(let shop=0;shop<LOCAL_POINTS.length;shop++)assert.ok(layer.diagnostics.placements.some(p=>p.category==='store-exterior'&&p.shopIndex===shop),'empty shop '+shop);
   } finally { layer.dispose(); }
+});
+
+test('every street block receives district furniture, clear entrance approaches and local deliveries', () => {
+  const scene=new T.Scene(),layer=createUrbanDetails(scene,{},point);
+  try {
+    const d=layer.diagnostics,placements=d.placements;
+    assert.equal(d.neighborhoods.length,NEIGHBORHOODS.length);
+    for(const block of NEIGHBORHOODS){
+      const props=placements.filter(p=>p.neighborhood===block.id);
+      assert.ok(props.length>=10,block.id+' is empty');
+      assert.ok(props.some(p=>p.cluster!==null),block.id+' has only pavement');
+      for(const p of props){
+        assert.ok(p.footprint.x-p.footprint.w>=point(block.left,0).x);
+        assert.ok(p.footprint.x+p.footprint.w<=point(block.right,0).x);
+        assert.ok(p.footprint.z-p.footprint.d>=point(0,block.top).z);
+        assert.ok(p.footprint.z+p.footprint.d<=point(0,block.bottom).z);
+      }
+      const expected=['bench-wood','bench-wood','bench-metal'][block.district];
+      assert.ok(props.some(p=>p.id===expected),block.id+' lacks seating');
+    }
+    assert.ok(new Set(placements.filter(p=>p.buildingIndex!==null).map(p=>p.buildingIndex)).size>=30);
+    for(const entrance of placements.filter(p=>p.approach)){
+      assert.equal(placements.some(p=>p!==entrance&&boxesIntersect(p.footprint,entrance.approach)),false,'blocked entrance '+entrance.buildingIndex);
+    }
+    for(const shop of d.loadingYards)assert.ok(shop.placed>=3,'empty delivery yard '+shop.shopIndex);
+    // Repetition must add instances rather than one draw call per object.
+    assert.ok(d.uniqueBatches<350,d.uniqueBatches+' batches');
+  } finally {layer.dispose();}
 });
 
 test('removing a layer releases its physics bodies and blockers', async () => {

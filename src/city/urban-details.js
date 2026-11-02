@@ -2,6 +2,7 @@ import * as T from 'three';
 import { MAP_BUILDINGS } from './map-buildings.js';
 import { MAP, HOME, HOME_CAR, ROAD_BOXES, PARK_PATHS, WORK_STOPS, LOCAL_POINTS, isReferenceWater } from './reference-layout.js';
 import { boxesIntersect, vehicleBox } from '../spatial.js';
+import { NEIGHBORHOODS, populateNeighborhoods, populateEntrances } from './neighborhood-details.js';
 
 /**
  * Runtime procedural asset library for the final city pass.
@@ -129,6 +130,8 @@ function createContext() {
       box(parent, w, h, 0.08, x, y, z, background);
       return;
     }
+    const signKey=JSON.stringify(['sign',text,background,foreground]);
+    if(materials.has(signKey))return addMesh(parent,geometry('plane',w,h),materials.get(signKey),x,y,z);
     const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 128;
     const c = canvas.getContext('2d');
     c.fillStyle = background; c.fillRect(0, 0, canvas.width, canvas.height);
@@ -136,7 +139,7 @@ function createContext() {
     c.fillText(String(text).toUpperCase(), 256, 66, 480);
     const texture = new T.CanvasTexture(canvas); texture.colorSpace = T.SRGBColorSpace; texture.anisotropy = 4; textures.add(texture);
     const mat = new T.MeshStandardMaterial({ map: texture, roughness: 0.7, metalness: 0.04, emissive: background, emissiveIntensity: 0.025 });
-    materials.set('sign:' + text + ':' + background, mat);
+    materials.set(signKey, mat);
     const mesh = addMesh(parent, geometry('plane', w, h), mat, x, y, z);
     mesh.userData.urbanTexture = texture;
     return mesh;
@@ -783,6 +786,8 @@ export function createUrbanDetails(sceneRoot, world, point) {
   function occupied(footprint, options={}) {
     const u=(footprint.x-MAP.x)/MAP.scale,v=(footprint.z-MAP.z)/MAP.scale;
     const w=footprint.w/MAP.scale,d=footprint.d/MAP.scale;
+    const region=options.region;
+    if(region&&(u-w<region.left||u+w>region.right||v-d<region.top||v+d>region.bottom))return true;
     if(u-w<22||u+w>1650||v-d<24||v+d>780)return true;
     // Test the full visible footprint, including corners, overhangs and signs.
     for(const dx of [-w,0,w])for(const dz of [-d,0,d])if(isReferenceWater(u+dx,v+dz))return true;
@@ -792,7 +797,7 @@ export function createUrbanDetails(sceneRoot, world, point) {
     if((world?.blockers??[]).some(b=>b.enabled!==false&&boxesIntersect(footprint,b)))return true;
     if((world?.vehicles??[]).some(v=>!v.police&&boxesIntersect(footprint,vehicleBox(v))))return true;
     if(boxesIntersect(footprint,homeApproach))return true;
-    if(placed.some(p=>boxesIntersect(footprint,p.footprint)))return true;
+    if(placed.some(p=>boxesIntersect(footprint,p.footprint)||(p.approach&&boxesIntersect(footprint,p.approach))))return true;
     if(WORK_STOPS.some(s=>{const p=point(s.u,s.v);return boxesIntersect(footprint,{x:p.x,z:p.z,w:50*MAP.scale,d:42*MAP.scale});}))return true;
     // An owned shop apron permits its own furnishings; the shop's actual
     // building collider and a pedestrian approach remain protected.
@@ -808,15 +813,38 @@ export function createUrbanDetails(sceneRoot, world, point) {
   function add(id, u, v, variant=0, rotation=0, options={}) {
     if(!byId.has(id))return false;
     const model=buildAsset(id,variant,context),bounds=new T.Box3(),size=new T.Vector3(),center=new T.Vector3();
+    if(options.entrance){
+      // A shallow vestibule meets the measured wall; the canopy, intercom and
+      // steps belong to it, so their intentional overlaps are checked together.
+      context.box(model,2.4,2.5,.5,0,1.25,-.15,'concrete');
+      for(const [part,x,y,z] of [['entrance-canopy',0,0,0],['entrance-steps',0,0,.35],['intercom',.85,.45,.1],['address-plate',-.85,.85,.1]]){
+        const child=buildAsset(part,variant,context);child.position.set(x,y,z);
+        if(part==='entrance-steps'){child.rotation.y=Math.PI;child.position.z=1.4;}
+        model.add(child);
+      }
+    }
+    if(options.parking){
+      for(const child of model.children)child.position.z-=2.2;
+      context.box(model,2.7,.025,5.2,0,.0125,0,'asphalt');
+      for(const x of [-1.24,1.24])context.box(model,.07,.012,4.9,x,.033,0,'white');
+      context.box(model,2.55,.012,.07,0,.033,-2.48,'white');
+    }
     const candidates=[[u,v]];
     for(let r=4;r<=(options.search??0);r+=4)for(let i=0;i<16;i++)candidates.push([u+Math.cos(i*Math.PI/8)*r,v+Math.sin(i*Math.PI/8)*r]);
     for(const [cu,cv] of candidates){
       const p=point(cu,cv);model.position.set(p.x,options.y??((world?.groundHeight?.(p.x,p.z)??0)+.015),p.z);model.rotation.y=rotation;
       model.updateMatrixWorld(true);bounds.setFromObject(model);bounds.getSize(size);bounds.getCenter(center);
-      const footprint={x:center.x,z:center.z,w:size.x/2+.12,d:size.z/2+.12};
+      const padding=options.entrance?0:.12;
+      const footprint={x:center.x,z:center.z,w:size.x/2+padding,d:size.z/2+padding};
       if(occupied(footprint,options))continue;
+      let approach=null;
+      if(options.entrance){
+        const normal=new T.Vector3(Math.sin(rotation),0,Math.cos(rotation));
+        approach={x:p.x+normal.x*3,z:p.z+normal.z*3,w:1.25,d:1.25};
+        if(occupied(approach))continue;
+      }
       detailRoot.add(model);sourceGroups.push(model);
-      placed.push({id,u:cu,v:cv,category:byId.get(id).category,footprint,shopIndex:options.shopIndex??null,roadSurface:options.roadSurface===true});
+      placed.push({id,u:cu,v:cv,category:byId.get(id).category,footprint,approach,buildingIndex:options.buildingIndex??null,neighborhood:options.neighborhood??null,cluster:options.cluster??null,shopIndex:options.shopIndex??null,loadingShop:options.loadingShop??null,roadSurface:options.roadSurface===true});
       if(options.solid&&world?.box){
         const collider=world.box(center.x,center.y,center.z,size.x,size.y,size.z,'#6c7770',true);
         collider.visible=false;colliders.push(collider);
@@ -902,6 +930,30 @@ export function createUrbanDetails(sceneRoot, world, point) {
     [284, 275, 'rubble-pile', 0], [290, 275, 'waste-skip', 1],
   ]) add(id, u, v, variant, 0, { search: 32, roadSurface: id==='manhole'||id==='drain-grate', solid:id==='transformer-hut'||id==='electrical-cabinet' });
 
+  // Put real entry assemblies against measured facades before filling yards,
+  // and reserve their pedestrian approaches for the remainder of the pass.
+  populateEntrances(MAP_BUILDINGS,add,MAP.scale);
+  populateNeighborhoods(add);
+
+  // Deliveries stay on the backs/sides of local shops. Mission stores and
+  // their task props retain the existing protected footprints.
+  for(const [shopIndex,[u,v]] of LOCAL_POINTS.entries()){
+    for(const [id,dx,dz] of [['loaded-pallet',-14,-24],['wood-pallet',-6,-24],['plastic-crate',3,-24],['hand-truck',12,-24],['recycling-bin',21,-24]]){
+      add(id,u+dx,v+dz,shopIndex%3,0,{shopIndex,loadingShop:shopIndex,search:20,solid:true});
+    }
+  }
+
+  // Short pavement runs give each block a street edge, leaving gaps at drives
+  // and rejecting any segment that touches roads, buildings or existing props.
+  for(const block of NEIGHBORHOODS){
+    for(let u=block.left+8;u<block.right-8;u+=10)for(const v of [block.top+4,block.bottom-4]){
+      add('sidewalk-straight',u,v,block.district,0,{neighborhood:block.id,region:block});
+    }
+    for(let v=block.top+14;v<block.bottom-12;v+=10)for(const u of [block.left+4,block.right-4]){
+      add('curb',u,v,block.district,Math.PI/2,{neighborhood:block.id,region:block});
+    }
+  }
+
   // Final instancing pass: preserve model detail while keeping repeated props draw-call efficient.
   const batches = new Map();
   for (const model of sourceGroups) {
@@ -925,7 +977,7 @@ export function createUrbanDetails(sceneRoot, world, point) {
 
   return {
     root: detailRoot,
-    diagnostics: { categories: CATEGORY_DATA.length, catalogModels: URBAN_ASSET_CATALOG.length, placedModels: placed.length, instances: instanceCount, uniqueBatches: batches.size, publicServices: placed.filter(p=>p.category==='public-buildings').length, colliders: colliders.length, placements:placed.map(p=>({...p,footprint:{...p.footprint}})) },
+    diagnostics: { categories: CATEGORY_DATA.length, catalogModels: URBAN_ASSET_CATALOG.length, placedModels: placed.length, instances: instanceCount, uniqueBatches: batches.size, publicServices: placed.filter(p=>p.category==='public-buildings').length, colliders: colliders.length, neighborhoods:NEIGHBORHOODS.map(b=>({id:b.id,district:b.district,placed:placed.filter(p=>p.neighborhood===b.id).length})), entrances:placed.filter(p=>p.buildingIndex!==null).length, loadingYards:LOCAL_POINTS.map((_,i)=>({shopIndex:i,placed:placed.filter(p=>p.loadingShop===i).length})), placements:placed.map(p=>({...p,footprint:{...p.footprint}})) },
     dispose() {
       detailRoot.removeFromParent();context.dispose();
       for(const mesh of colliders){

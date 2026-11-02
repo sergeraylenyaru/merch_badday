@@ -28,6 +28,10 @@ import { JOBS, PRICE_ITEMS, EXPIRY_BATCHES, jobDone, jobProgress, isShopUnlocked
 import { newPlanogram, swapProducts, planogramWon } from './jobs/match3.js';
 import { rotatePort, circuitConnected } from './jobs/circuit.js';
 import { staffPatrol } from './npc/patrol.js';
+import { policeCombat } from './npc/police-combat.js';
+import { createWalkingBlocker, createPedestrianNavigator, clearSegment } from './npc/navigation.js';
+import { createCityLife } from './npc/city-life.js';
+import { createCrossingMarkings } from './npc/crossings.js';
 const state = load();
 let settings = { sensitivity: 1, volume: 0.25, quality: "high" };
 try {
@@ -54,7 +58,8 @@ let world,
   vertical = 0,
   attack = 0,
   attackKind = "quick",
-  arrest = 0,
+  policeHitCooldown = 0,
+  policeDefeatLevel = 0,
   accumulator = 0,
   lastSave = 0,
   lastMessage = 0,
@@ -390,6 +395,10 @@ try {
     dima(){if(dealWithDima(state)){snapshot();notify("Дима договорился с точками: срочные визиты продлены на две минуты.");}else notify("Договор уже заключён или не хватает 40 ₽.");ui.phone("Показатели");},
   });
   world = await createWorld(scene, state);
+  const walkingBlocked=createWalkingBlocker(world);
+  const pedestrianNavigator=createPedestrianNavigator(walkingBlocked);
+  const cityLife=createCityLife(world);
+  const crossingMarkings=createCrossingMarkings(scene,world.groundHeight);
   world.visuals?.setQuality?.(settings.quality);
   world.player.mesh.rotation.y = yaw + Math.PI;
   ui.$("loading").remove();
@@ -950,44 +959,41 @@ try {
   }
   function ai(dt) {
     const player = world.player.mesh.position;
+    policeHitCooldown=Math.max(0,policeHitCooldown-dt);
+    pedestrianNavigator.beginFrame();
     for (const n of world.people) {
       if (n.seated) continue;
       if (n.stun > 0) {
+        if(n.kind==='police'){policeCombat(n,{stunned:true},dt);n.attack=0;}
         n.stun -= dt;
         n.mesh.rotation.z = 1.25;
         n.mesh.position.y = world.groundHeight(n.mesh.position.x, n.mesh.position.z) + 0.2;
         continue;
       }
       n.mesh.rotation.z = 0;
+      if(n.kind==='civilian'||n.kind==='police'){n.activity=null;n.social=false;}
       n.mesh.position.y = world.groundHeight(n.mesh.position.x, n.mesh.position.z);
       const d = n.mesh.position.distanceTo(player);
       let target = null,
         speed = 1.1;
       if (n.kind === "police") {
+        const fighting=policeCombat(n,{hostile:state.wanted>0,distance:d,
+          clear:d<2.5&&clearSegment(n.mesh.position,player,walkingBlocked,.1),
+          guarding:keys.has('KeyQ'),inVehicle:!!vehicle},dt);
+        n.attack=fighting.attack;n.attackKind='quick';
+        if(fighting.damage&&policeHitCooldown===0){
+          state.health=Math.max(0,state.health-fighting.damage);policeHitCooldown=.45;
+          state.stress+=2;beep(110);
+          ui.$('hud').animate([{boxShadow:'inset 0 0 90px #b62d21aa'},{boxShadow:'inset 0 0 90px #b62d2100'}],{duration:350});
+          if(state.health===0)policeDefeatLevel=state.wanted;
+          notify(`Удар полицейского: −${fighting.damage} здоровья. Q — блок, F — ответный удар.`);
+        }
         if (state.wanted > 0) {
-          target = player;
+          target = n.attack>0||d<1.45 ? null : player;
+          n.lookAt=player;
           speed = vehicle ? 5.5 : state.wanted >= 3 ? 6.5 : 4;
-          if (d < 3.2) {
-            arrest += dt * (keys.has("KeyQ") ? 0.5 : 1);
-            if (arrest > 2) {
-              const fine = 100 + Math.ceil(state.wanted) * 70;
-              state.fines += fine;
-              state.money = Math.max(0, state.money - fine);
-              state.time += 80;
-              state.wanted = 0;
-              state.health = Math.max(40, state.health);
-              if (vehicle) {
-                vehicle.speed = 0;
-                vehicle = null;
-                world.player.mesh.visible = true;
-              }
-              held = null;
-              player.set(-42, 0, 34);
-              arrest = 0;
-              message(`Задержание: штраф ${fine} ₽ и потеря рабочего времени.`);
-            }
-          } else arrest = Math.max(0, arrest - dt * 0.05);
-        } else target = n.home;
+          if(d<20)state.wantedElapsed=0;
+        } else {target = n.home;n.lookAt=null;}
       } else if (n.anger > 0) {
         n.anger -= dt;
         if (n.kind === "staff") {
@@ -1005,10 +1011,9 @@ try {
           speed = 4;
         }
       } else if (n.kind === "civilian") {
-        n.phase += dt * 0.3;
-        target = n.home
-          .clone()
-          .add(new T.Vector3(Math.sin(n.phase) * 3, 0, Math.cos(n.phase) * 7));
+        const intent=cityLife(n,dt);
+        target=intent.target?new T.Vector3(intent.target.x,n.mesh.position.y,intent.target.z):null;
+        speed=intent.speed;n.lookAt=intent.lookAt;n.social=intent.social;n.activity=intent.activity;
         if (vehicle && d < 12) {
           target = n.home
             .clone()
@@ -1025,7 +1030,20 @@ try {
           n.mesh.rotation.y += turn * (1 - Math.exp(-dt * 5));
         }
       } else if (n.mesh.position.distanceTo(n.home) > 1) target = n.home;
+      if(!target&&n.lookAt){
+        const desired=Math.atan2(n.lookAt.x-n.mesh.position.x,n.lookAt.z-n.mesh.position.z);
+        n.mesh.rotation.y+=Math.atan2(Math.sin(desired-n.mesh.rotation.y),Math.cos(desired-n.mesh.rotation.y))*(1-Math.exp(-dt*7));
+      }
       if (target) {
+        if(n.kind==='civilian'||n.kind==='police'){
+          const movement=pedestrianNavigator.step(n,target,speed,dt,state.time);
+          n.mesh.position.y=world.groundHeight(n.mesh.position.x,n.mesh.position.z);
+          if(Math.hypot(movement.x,movement.z)>.00001){
+            const desired=Math.atan2(movement.x,movement.z);
+            n.mesh.rotation.y+=Math.atan2(Math.sin(desired-n.mesh.rotation.y),Math.cos(desired-n.mesh.rotation.y))*(1-Math.exp(-dt*7));
+          }
+          continue;
+        }
         const delta = target.clone().sub(n.mesh.position);
         delta.y = 0;
         if (delta.length() > (n.kind === 'staff' ? 0.12 : 0.5)) {
@@ -1190,10 +1208,12 @@ try {
       }
     }
     if (state.health <= 0) {
+      const arrested=policeDefeatLevel>0;
+      const penalty=arrested?100+Math.ceil(policeDefeatLevel)*70:150;
       state.health = 65;
-      state.money = Math.max(0, state.money - 150);
-      state.fines += 150;
-      state.time += 100;
+      state.money = Math.max(0, state.money - penalty);
+      state.fines += penalty;
+      state.time += arrested?80:100;
       state.wanted = 0;
       if (vehicle) {
         vehicle.speed = 0;
@@ -1202,7 +1222,8 @@ try {
       }
       world.player.mesh.position.set(START.x, 0, START.z);
       held = null;
-      message("Медпункт: −150 ₽ и потеря времени. Можно продолжать смену.");
+      policeDefeatLevel=0;policeHitCooldown=0;
+      message(arrested?`Задержание после потери здоровья: штраф ${penalty} ₽ и потеря рабочего времени. Можно продолжать смену.`:"Медпункт: −150 ₽ и потеря времени. Можно продолжать смену.");
     }
     normalize(state);
     if (state.time >= SHIFT_DURATION && !state.overtime) {
@@ -1409,12 +1430,16 @@ try {
     },
     get city() {return JSON.parse(JSON.stringify(world.boroughs.diagnostics));},
     get jobs() { return JSON.parse(JSON.stringify(world.jobs.diagnostics)); },
-    get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null })); },
+    get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null,
+      attack:n.attack??0,combat:n.combat?{...n.combat}:null,motion:n.motion?.diagnostics??null,
+      dailyRoute:n.dailyRoute?{index:n.dailyRoute.index,wait:n.dailyRoute.wait,visits:n.dailyRoute.visits,stops:n.dailyRoute.stops}:null,
+      navigation:n.navigation?{waypoints:n.navigation.path.length,stuck:n.navigation.stuck}:null })); },
   };
   // BFCache preserves the page and its GPU resources. Dispose only on a real exit.
   addEventListener("pagehide", (event) => {
     if (!event.persisted) {
       world.boroughs.dispose();
+      crossingMarkings.dispose();
       world.disposeTerrain?.();
       world.jobs.dispose();
       world.visuals?.dispose();
