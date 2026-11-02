@@ -35,6 +35,8 @@ import { createCrossingMarkings } from './npc/crossings.js';
 import {createLocalCrowd} from './npc/local-crowd.js';
 import {collisionInjury,pedestrianContact} from './physics/vehicle-impact.js';
 import {createAdventure} from './adventure/world.js';
+import {tickHealth} from './city/vitals.js';
+import {createFlyerSellers} from './npc/flyer-sellers.js';
 import {ensureAdventure,WEAPONS} from './adventure/state.js';
 const state = load();
 ensureAdventure(state);
@@ -410,6 +412,7 @@ try {
   const pedestrianNavigator=createPedestrianNavigator(walkingBlocked);
   const cityLife=createCityLife(world);
   const localCrowd=createLocalCrowd(world,cityLife,walkingBlocked);
+  const flyerSellers=createFlyerSellers(scene,world);
   localCrowd.update(world.player.mesh.position,state.time,yaw);
   const crossingMarkings=createCrossingMarkings(scene,world.groundHeight);
   world.visuals?.setQuality?.(settings.quality);
@@ -735,7 +738,7 @@ try {
     if (e.code === "KeyM" || e.code === "Tab") {
       if (mode === "play") {
         open("phone");
-        ui.phone(e.code === "Tab" ? "Карта" : "Маршрут");
+        ui.phone("Карта");
       } else if (mode === "phone") resume();
       return;
     }
@@ -1062,6 +1065,9 @@ try {
             .add(n.home.clone().sub(player).normalize().multiplyScalar(8));
           speed = 5;
         }
+      } else if(n.promoter){
+        const intent=flyerSellers.intent(n,player,dt,!!vehicle);target=intent.target?new T.Vector3(intent.target.x,n.mesh.position.y,intent.target.z):null;
+        speed=intent.speed;n.lookAt=intent.lookAt;n.social=intent.social;n.activity=intent.activity;
       } else if (n.kind === 'staff' || n.kind === 'employee') {
         const intent = staffPatrol(n, SHOPS[n.shop], player, dt);
         target = intent.target ? new T.Vector3(intent.target.x, n.mesh.position.y, intent.target.z) : null;
@@ -1077,7 +1083,7 @@ try {
         n.mesh.rotation.y+=Math.atan2(Math.sin(desired-n.mesh.rotation.y),Math.cos(desired-n.mesh.rotation.y))*(1-Math.exp(-dt*7));
       }
       if (target) {
-        if(n.kind==='civilian'||n.kind==='police'){
+        if(n.kind==='civilian'||n.kind==='police'||n.promoter){
           const movement=pedestrianNavigator.step(n,target,speed,dt,state.time);
           n.mesh.position.y=world.groundHeight(n.mesh.position.x,n.mesh.position.z);
           if(Math.hypot(movement.x,movement.z)>.00001){
@@ -1209,6 +1215,7 @@ try {
     }
     if (state.energy > 0) state._energyActive = true;
     state.stress += dt * 0.017;
+    tickHealth(state,dt);
     tickWanted(state,dt);
     if (state.time - lastMessage > 120) {
       lastMessage = state.time;
@@ -1424,8 +1431,9 @@ try {
       attack, attackKind, inVehicle: !!vehicle,
       firstPerson,
     });
-    world.adventure.update(mode==='play'?dt:0,visualTime,{inVehicle:!!vehicle,carrying:!!state.carrying||!!held});
     updateCamera(dt);
+    world.adventure.update(mode==='play'?dt:0,visualTime,{inVehicle:!!vehicle,carrying:!!state.carrying||!!held,firstPerson,camera,attack});
+    flyerSellers.update(mode==='play'?dt:0,visualTime);
     ui.update(world, vehicle);
     renderer.render(scene, camera);
   }
@@ -1479,7 +1487,7 @@ try {
         obstacles: [ ...world.blockers.filter((b) => b.enabled !== false).map(({ x, z, w, d }) => ({ x, z, w, d, heading: 0 })),
           ...world.vehicles.filter((v) => v.mesh.visible && !(v.police && state.wanted < 3)).map((v) => vehicleBox(v)) ] };
     },
-    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,walkways:world.walkways.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics}));},
+    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,walkways:world.walkways.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,flyers:flyerSellers.diagnostics}));},
     get jobs() { return JSON.parse(JSON.stringify(world.jobs.diagnostics)); },
     get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null,
       personType:n.personType,role:n.role,visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,motion:n.motion?.diagnostics??null,
@@ -1491,6 +1499,7 @@ try {
     if (!event.persisted) {
       world.boroughs.dispose();
       world.adventure.dispose();goalFill.geometry.dispose();goalFill.material.dispose();goalRing.geometry.dispose();goalRing.material.dispose();
+      flyerSellers.dispose();
       crossingMarkings.dispose();
       world.walkways.dispose();
       world.disposeTerrain?.();

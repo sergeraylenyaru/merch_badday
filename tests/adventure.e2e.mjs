@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {startBrowser,advance} from './job-browser.mjs';
+import {startBrowser,advance,walkTo} from './job-browser.mjs';
 import {freshState,SHOPS} from '../src/state.js';
 import {ensureAdventure,pickupWeapon,startEvent} from '../src/adventure/state.js';
 const app=await startBrowser(5262),only=process.env.ADVENTURE_STAGE;
@@ -51,8 +51,8 @@ try{
   const s=fresh(),guard=city.adventure.guards[0];pickupWeapon(s,'bat');s.position={x:guard.x+1.8,z:guard.z};
   await scenario(s,'cash');await page.keyboard.press('KeyG');await page.waitForFunction(()=>__MERCH__.state.adventure.drops.length>0);
   const drop=await page.evaluate(()=>__MERCH__.state.adventure.drops[0]);await page.screenshot({path:'.playwright/dropped-money.png'});
-  await page.keyboard.press('KeyE');await page.waitForFunction(()=>__MERCH__.state.adventure.drops[0].taken);
-  assert.equal(await page.evaluate(()=>__MERCH__.state.money),300+drop.amount);await close();console.log('PASS knocked-down NPC drops visible money collected through E');
+  await walkTo(page,drop.x,drop.z+1,.2);await page.waitForFunction(()=>__MERCH__.state.adventure.drops[0].taken);
+  assert.equal(await page.evaluate(()=>__MERCH__.state.money),300+drop.amount);await close();console.log('PASS knocked-down NPC drops visible money collected automatically by walking nearby');
  }
 
  if(run('jobs')){

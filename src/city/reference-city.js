@@ -9,12 +9,14 @@ export {isReferenceWater} from './reference-layout.js';
 import { BOROUGHS, LOCAL_SHOPS } from './layout.js';
 import { createUrbanDetails } from './urban-details.js';
 import {createDestructibles} from './destructibles.js';
+import {createHousingFacades,HOUSING_STYLES,housingStyleAt} from './housing-facades.js';
 
 // Hand-placed against map_reference.png, rather than the approximate preview GLB.
 export async function createReferenceCity(scene,world,{human,car,label}) {
  world.props=createDestructibles(scene,world);
  let placedCount=0;
  const root=new T.Group(); root.name='uploaded-reference-city';scene.add(root);
+ const housing=createHousingFacades();
  const placements=new Map(), collision=[], animated=[], preparedAssets=[];
  const traced=[];
  const clearShop=(u,v,r=0)=>WORK_STOPS.every(s=>Math.abs(u-s.u)>52+r || Math.abs(v-s.v)>44+r);
@@ -82,19 +84,23 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
   }).filter(p=>!p.solid||!meetsStreet(point(p.u,p.v).x,point(p.u,p.v).z,p.worldWidth,p.worldDepth));
   placedCount+=list.length;
   for(const p of list){
-    if(p.traced)traced.push({model:name,u:p.u,v:p.v,width:p.worldWidth/MAP.scale,depth:p.worldDepth/MAP.scale});
+    if(p.traced)traced.push({model:name,u:p.u,v:p.v,width:p.worldWidth/MAP.scale,depth:p.worldDepth/MAP.scale,...(name.startsWith('panel')?{housingStyle:HOUSING_STYLES[housingStyleAt(p.u,p.v)].id}:{})});
     if(p.solid){const pos=point(p.u,p.v),h=nativeH*p.scale;const proxy=world.box(pos.x,h/2,pos.z,p.worldWidth,h,p.worldDepth,'#70796d',true);proxy.visible=false;collision.push(proxy);p.proxy=proxy;}
     if(name==='bench'){const pos=point(p.u,p.v);p.breakable={key:`city-bench:${p.u}:${p.v}`,id:'bench-wood',x:pos.x,z:pos.z,footprint:{...pos,w:p.worldWidth/2,d:p.worldDepth/2},proxy:p.proxy,instances:[]};}
   }
   const matrix=new T.Matrix4(),q=new T.Quaternion(),center=b.getCenter(new T.Vector3());center.y=b.min.y;
   const chunks=new Map();
   for(const p of list){const pos=point(p.u,p.v),key=Math.floor(pos.x/48)+','+Math.floor(pos.z/48);if(!chunks.has(key))chunks.set(key,[]);chunks.get(key).push(p);}
+  for(const batch of asset.batches)if(name.startsWith('panel')&&batch.material.name==='panel')housing.prepare(batch.geometry);
   for(const [key,chunk] of chunks)for(const [index,batch]of asset.batches.entries()){
-    const instances=new T.InstancedMesh(batch.geometry,batch.material,chunk.length);instances.name=`city-pack-${name}-${index}-${key}`;instances.castShadow=true;instances.receiveShadow=true;
+    const house=name.startsWith('panel'),facade=house&&batch.material.name==='panel';
+    const instances=new T.InstancedMesh(batch.geometry,facade?housing.wall:batch.material,chunk.length);instances.name=`city-pack-${name}-${index}-${key}`;instances.castShadow=true;instances.receiveShadow=true;
     chunk.forEach((p,i)=>{
       const pos=point(p.u,p.v);q.setFromAxisAngle(new T.Vector3(0,1,0),p.angle);
       const origin=center.clone().multiply(p.scaleVector).applyQuaternion(q).negate().add(new T.Vector3(pos.x,.006,pos.z));
       matrix.compose(origin,q,p.scaleVector);instances.setMatrixAt(i,matrix);
+      if(facade)instances.setColorAt(i,new T.Color(housingStyleAt(p.u,p.v)/7,1,1));
+      else if(house&&['roof','bluepaint','graypaint'].includes(batch.material.name))instances.setColorAt(i,new T.Color(['#b5c5b0','#cfb498','#a0b9c4','#d5c3b0'][housingStyleAt(p.u,p.v)%4]));
       if(p.breakable)p.breakable.instances.push({mesh:instances,index:i});
     });root.add(instances);
     instances.computeBoundingSphere();
@@ -107,7 +113,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  }
  materialPool.finishLoading();
  const urbanDetails=createUrbanDetails(scene,world,point);
- return {diagnostics:{assetRevision:"pbr-1",resources:materialPool.diagnostics,boroughs:BOROUGHS,localShops:LOCAL_SHOPS,source:'user-map',modelTypes:placements.size,placements:placedCount,tracedBuildings:traced,urbanDetails:urbanDetails.diagnostics},update(dt){hub.rotation.z+=dt*.09;for(const cabin of animated)cabin.rotation.z=-hub.rotation.z;world.props.update(dt);},dispose(){urbanDetails.dispose();world.props.dispose();preparedAssets.forEach(a=>a.dispose());materialPool.dispose();root.traverse(n=>{if(n.isInstancedMesh)n.dispose();if(n.isMesh&&!n.isInstancedMesh){n.geometry?.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}});root.removeFromParent();}};
+ return {diagnostics:{assetRevision:"pbr-2-housing",housingStyles:HOUSING_STYLES,resources:materialPool.diagnostics,boroughs:BOROUGHS,localShops:LOCAL_SHOPS,source:'user-map',modelTypes:placements.size,placements:placedCount,tracedBuildings:traced,urbanDetails:urbanDetails.diagnostics},update(dt){hub.rotation.z+=dt*.09;for(const cabin of animated)cabin.rotation.z=-hub.rotation.z;world.props.update(dt);},dispose(){urbanDetails.dispose();world.props.dispose();preparedAssets.forEach(a=>a.dispose());housing.dispose();materialPool.dispose();root.traverse(n=>{if(n.isInstancedMesh)n.dispose();if(n.isMesh&&!n.isInstancedMesh){n.geometry?.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}});root.removeFromParent();}};
 }
 
 export function buildReferenceTerrain(world,scene){

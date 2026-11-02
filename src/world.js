@@ -10,6 +10,7 @@ import { PLAYER_SHAPE, circleIntersectsBox, boxesIntersect, vehicleBox } from ".
 import { createJobWorld } from './jobs/world.js';
 import { createCartBody } from './physics/cart.js';
 import {createWalkways} from './city/walkways.js';
+import {LOCAL_SHOPS} from './city/layout.js';
 export async function createWorld(scene, state) {
   await RAPIER.init();
   const physics = new RAPIER.World({ x: 0, y: -20, z: 0 });
@@ -225,6 +226,7 @@ export async function createWorld(scene, state) {
     for(const [index,offset] of [[0,-4.8],[1,4.8]]) {
       const employee=human(x+offset,z-.8,color,'employee',id);
       employee.role=index?'Продавец-консультант':'Работник зала';
+      employee.promoter=!!index;
       employee.patrol={index:index?7:1,wait:0,inspection:0,duration:1};
       people.push(employee);
     }
@@ -300,9 +302,9 @@ export async function createWorld(scene, state) {
     const p = human(loc.x,loc.z,"#577d9a", "police");
     people.push(p);
   }
-  for(const [i,index] of [0,3,4].entries()){
-    const loc=point(...[[548,227],[838,725],[1293,733]][i]);
-    const guard=human(loc.x,loc.z,'#33495b','guard');guard.role=['Виктор','Рустам','Семён'][i];people.push(guard);
+  for(const [i,shop] of [...SHOPS,...LOCAL_SHOPS].entries()){
+    const loc={x:shop.x+4,z:shop.z+6};
+    const guard=human(loc.x,loc.z,'#33495b','guard');guard.role=['Виктор','Рустам','Семён','Олег','Павел'][i%5];guard.entrance=loc;guard.shopPosition={x:shop.x,z:shop.z};guard.localShop=i>=SHOPS.length;guard.shopName=shop.name;people.push(guard);
   }
   for (let i = 0; i < 4; i++) {
     const {x,z}=point(...[[200,700],[800,710],[1450,600],[900,150]][i]);

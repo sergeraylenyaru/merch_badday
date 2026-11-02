@@ -1,5 +1,5 @@
 import * as T from 'three';
-import {point,HOME_CAR,LOCAL_POINTS} from '../city/reference-layout.js';
+import {point,HOME_CAR} from '../city/reference-layout.js';
 import {clearSegment} from '../npc/navigation.js';
 import {WEAPONS,PACKS,EVENT_INFO,ensureAdventure,collectPack,pickupWeapon,bribeGuard,startEvent,finishEvent,buyGarage,crashCargo,tableCard} from './state.js';
 
@@ -66,8 +66,11 @@ export function createAdventure(scene,world,state,callbacks){
  const walletItem=pickup('wallet',0,wallet,'#f2a8dd','E · Кошелёк продавца',()=>a.events.favor.status==='active'&&!a.events.favor.found,()=>{a.events.favor.found=true;a.tracked='favor';callbacks.notify('Кошелёк найден. Верните продавцу или выберите «Оставить деньги» в планшете.');changed();});box(walletItem.object,.5,.18,.35,0,0,0,'#795346');
  const guards=world.people.filter(n=>n.kind==='guard');
  const guardLabels=[];
- guards.forEach((guard,i)=>{const p=safe(point(LOCAL_POINTS[[0,3,4][i]][0]-12,LOCAL_POINTS[[0,3,4][i]][1]+17));guard.mesh.position.set(p.x,world.groundHeight(p.x,p.z),p.z);guard.home.copy(guard.mesh.position);guard.guardIndex=i;
-  const holder=new T.Group();label(holder,'ОХРАНА · '+guard.role,'#9ed8ff').scale.set(2.8,.52,1);root.add(holder);guardLabels.push({guard,holder});});
+ guards.forEach((guard,i)=>{const footprint=guard.localShop&&world.blockers.find(b=>b.h>2&&Math.hypot(b.x-guard.shopPosition.x,b.z-guard.shopPosition.z)<.05);
+  const p=safe(footprint?{x:footprint.x+Math.min(4,footprint.w*.5),z:footprint.z+footprint.d+2}:guard.entrance);guard.mesh.position.set(p.x,world.groundHeight(p.x,p.z),p.z);guard.home.copy(guard.mesh.position);guard.guardIndex=i;
+  const holder=new T.Group();label(holder,'ОХРАНА · E · '+guard.role,'#ffe877').scale.set(3.8,.65,1);
+  const ring=new T.Mesh(geo('guard-ring',()=>new T.RingGeometry(.75,.86,24)),mat('#ead856',true));ring.rotation.x=-Math.PI/2;ring.position.y=-.46;holder.add(ring);
+  root.add(holder);const vest=new T.Group();box(vest,.63,.5,.42,0,1.4,0,'#cfcc54');box(vest,.65,.07,.44,0,1.42,0,'#e9e5bc');guard.mesh.add(vest);guardLabels.push({guard,holder,vest});});
  function guardDialog(guard){callbacks.dialog('Охранник · '+guard.role,'Договориться за 150 ₽: убрать одну звезду розыска. После сделки до следующей нужно подождать 10 секунд.',[{label:'Дать 150 ₽ · −1 звезда',id:'bribe',disabled:state.wanted<=0||state.money<150||state.time<a.bribeReadyAt,run(){if(bribeGuard(state)){callbacks.notify('Охранник договорился: −1 звезда, −150 ₽');if(a.tracked?.startsWith('guard:'))a.tracked=null;}changed();callbacks.resume();}},{label:'Уйти',id:'leave',run:callbacks.resume}]);}
  const carriedParcel=new T.Group();box(carriedParcel,.55,.4,.4,0,0,0,'#c19a60');world.player.mesh.add(carriedParcel);carriedParcel.position.set(0,1,.7);
  const held=new T.Group();root.add(held);held.matrixAutoUpdate=false;let heldId=null;
@@ -79,7 +82,7 @@ export function createAdventure(scene,world,state,callbacks){
   const length=target?Math.hypot(target.mesh.position.x-origin.x,target.mesh.position.z-origin.z):9;
   const jet=new T.Mesh(geo('jet',()=>new T.CylinderGeometry(.035,.06,1,6)),gunMaterial);jet.position.set(origin.x+direction.x*length/2,origin.y+1.3,origin.z+direction.z*length/2);jet.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),new T.Vector3(direction.x,0,direction.z));jet.scale.y=length;root.add(jet);effects.push({mesh:jet,life:.16});if(effects.length>5)root.remove(effects.shift().mesh);
  }
- function addDrop(drop){const p={x:drop.x,z:drop.z};const item=pickup('money',drop.id,p,'#87f09b',`E · ${drop.amount} ₽`,()=>!drop.taken,()=>{if(drop.taken)return;drop.taken=true;state.money+=drop.amount;callbacks.notify(`Подобрано ${drop.amount} ₽`);changed();});for(let i=0;i<3;i++)box(item.object,.5,.035,.24,i*.035,i*.05,0,'#8ab976');}
+ function addDrop(drop){const p={x:drop.x,z:drop.z};const item=pickup('money',drop.id,p,'#87f09b',`${drop.amount} ₽ · Пройдите рядом`,()=>!drop.taken,()=>{if(drop.taken)return;drop.taken=true;state.money+=drop.amount;callbacks.notify(`Подобрано ${drop.amount} ₽`);changed();});for(let i=0;i<3;i++)box(item.object,.5,.035,.24,i*.035,i*.05,0,'#8ab976');}
  for(const drop of a.drops)addDrop(drop);
  const tables=world.props.diagnostics.props.filter(p=>p.id==='game-table');
  const court=safe(point(900,650)),goal={x:court.x-Math.sin(.25)*3.5,z:court.z-Math.cos(.25)*3.5};
@@ -112,7 +115,7 @@ export function createAdventure(scene,world,state,callbacks){
  return {
   target,
   nearest(position){
-   const candidates=items.filter(i=>i.enabled()&&Math.hypot(i.x-position.x,i.z-position.z)<2.5).map(i=>({...i,d:Math.hypot(i.x-position.x,i.z-position.z)}));
+   const candidates=items.filter(i=>i.kind!=='money'&&i.enabled()&&Math.hypot(i.x-position.x,i.z-position.z)<2.5).map(i=>({...i,d:Math.hypot(i.x-position.x,i.z-position.z)}));
    for(const guard of guards)if(guard.stun<=0&&Math.hypot(guard.mesh.position.x-position.x,guard.mesh.position.z-position.z)<2.8)candidates.push({kind:'guard',guard,d:Math.hypot(guard.mesh.position.x-position.x,guard.mesh.position.z-position.z),label:'E · Охранник · договориться'});
    for(const table of tables)if(Math.hypot(table.x-position.x,table.z-position.z)<2.2&&!world.props.diagnostics.props.find(p=>p.key===table.key)?.broken)candidates.push({kind:'table',d:Math.hypot(table.x-position.x,table.z-position.z),label:'E · Игра за столиком · найти пары'});
    return candidates.sort((p,q)=>p.d-q.d)[0]??null;
@@ -134,18 +137,23 @@ export function createAdventure(scene,world,state,callbacks){
   onCrash(speed,vehicle){const own=vehicle?.homeVehicle||vehicle?.id===a.garage.vanId,condition=a.garage.condition,wasCarrying=a.events.delivery.carrying,p=world.player.mesh.position;
    const drop={x:p.x+3,z:p.z+2};crashCargo(state,speed,world.blocked(drop.x,drop.z,.4)?p:drop);if(!own)a.garage.condition=condition;if(wasCarrying&&!a.events.delivery.carrying){a.tracked='delivery';callbacks.notify('Посылка выпала! Подберите её в подсвеченной зоне.');}changed();},
   speedMultiplier(vehicle){return vehicle.homeVehicle||vehicle.id===a.garage.vanId?(state.career.garage.engine?1.15:1)*(.55+.45*a.garage.condition/100):1;},
-  update(dt,time,{inVehicle=false,carrying=false}={}){
+  update(dt,time,{inVehicle=false,carrying=false,firstPerson=false,camera=null,attack=0}={}){
    const position=world.player.mesh.position,e=a.events.delivery,pp=e.drop??source;parcel.x=pp.x;parcel.z=pp.z;parcel.group.position.set(pp.x,world.groundHeight(pp.x,pp.z),pp.z);
-   for(const item of items){item.group.visible=item.enabled()&&Math.hypot(item.x-position.x,item.z-position.z)<65;if(item.group.visible){const floating=['weapon','pack','money','wallet'].includes(item.kind);if(floating)item.object.rotation.y=time*.8;item.object.position.y=floating?.8+Math.sin(time*2+item.x)*.1:.35;}}
+   for(const item of items){const distance=Math.hypot(item.x-position.x,item.z-position.z);
+    if(dt>0&&!inVehicle&&item.kind==='money'&&item.enabled()&&distance<1.55&&clearSegment(position,{x:item.x,z:item.z},world.blocked,.05))item.interaction();
+    item.group.visible=item.enabled()&&distance<65;if(item.group.visible){const floating=['weapon','pack','money','wallet'].includes(item.kind);if(floating)item.object.rotation.y=time*.8;item.object.position.y=floating?.8+Math.sin(time*2+item.x)*.1:.35;}}
    for(let i=effects.length-1;i>=0;i--){effects[i].life-=dt;if(effects[i].life<=0){root.remove(effects[i].mesh);effects.splice(i,1);}}
    carriedParcel.visible=e.carrying&&!inVehicle;const equipped=a.equipped;setHeld(equipped);
    for(const {guard,holder} of guardLabels){holder.position.copy(guard.mesh.position);holder.position.y+=.5;holder.visible=guard.mesh.visible;}
    held.visible=!!equipped&&!inVehicle&&!carrying&&!e.carrying;
-   if(held.visible){const hand=world.player.mesh.getObjectByName('RightHand');if(hand){hand.updateWorldMatrix(true,false);held.matrix.copy(hand.matrixWorld).multiply(new T.Matrix4().makeTranslation(0,-.1,0));}}
+   if(held.visible){
+    if(firstPerson&&camera){camera.updateMatrixWorld();const swing=attack>0?Math.sin(attack*12)*.55:0;held.matrix.copy(camera.matrixWorld).multiply(new T.Matrix4().compose(new T.Vector3(.36-swing*.2,-.33,-.74),new T.Quaternion().setFromEuler(new T.Euler(-.2+swing,0,-.2-swing)),new T.Vector3(.72,.72,.72)));}
+    else{const hand=world.player.mesh.getObjectByName('RightHand');if(hand){hand.updateWorldMatrix(true,false);const p=new T.Vector3(),q=new T.Quaternion(),scale=new T.Vector3();hand.matrixWorld.decompose(p,q,scale);held.matrix.compose(p,q,new T.Vector3(1,1,1));}}
+   }
    const near=Math.hypot(position.x-court.x,position.z-court.z)<55;if(near!==ballEnabled){ballBody.setEnabled(near);ballEnabled=near;}ball.visible=near;goalRoot.visible=near;
    if(near){ball.position.copy(ballBody.translation());ball.quaternion.copy(ballBody.rotation());if(flight){ballAge+=dt;const p=ballBody.translation();if(Math.hypot(p.x-goal.x,p.z-goal.z)<1.15&&p.y<world.groundHeight(goal.x,goal.z)+1.65){a.fun.goals++;flight=false;if(a.fun.goals>=3&&!a.fun.footballWon){a.fun.footballWon=true;state.money+=30;state.stress=Math.max(0,state.stress-12);callbacks.notify('Три гола! +30 ₽ · стресс −12');}else callbacks.notify(`Гол! ${Math.min(3,a.fun.goals)}/3`);changed();}else if(ballAge>5)flight=false;}}
   },
-  get diagnostics(){return {items:items.map(i=>({kind:i.kind,id:i.id,x:i.x,z:i.z,available:i.enabled(),visible:i.group.visible})),guards:guards.map(g=>({x:g.mesh.position.x,z:g.mesh.position.z,name:g.role})),goal:{...goal},court:{...court},equipped:a.equipped,heldVisible:held.visible,heldY:held.getWorldPosition(new T.Vector3()).y,activeEffects:effects.length};},
-  dispose(){root.removeFromParent();carriedParcel.removeFromParent();world.physics.removeRigidBody(ballBody);for(const g of geometries.values())g.dispose();for(const m of materials.values())m.dispose();for(const t of textures)t.dispose();},
+  get diagnostics(){return {items:items.map(i=>({kind:i.kind,id:i.id,x:i.x,z:i.z,available:i.enabled(),visible:i.group.visible})),guards:guards.map(g=>({x:g.mesh.position.x,z:g.mesh.position.z,name:g.role,shopName:g.shopName})),goal:{...goal},court:{...court},equipped:a.equipped,heldVisible:held.visible,heldY:held.getWorldPosition(new T.Vector3()).y,heldScale:held.getWorldScale(new T.Vector3()).toArray(),heldBounds:new T.Box3().setFromObject(held).getSize(new T.Vector3()).toArray(),activeEffects:effects.length};},
+  dispose(){root.removeFromParent();for(const {vest}of guardLabels)vest.removeFromParent();carriedParcel.removeFromParent();world.physics.removeRigidBody(ballBody);for(const g of geometries.values())g.dispose();for(const m of materials.values())m.dispose();for(const t of textures)t.dispose();},
  };
 }

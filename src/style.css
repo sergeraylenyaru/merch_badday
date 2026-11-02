@@ -627,54 +627,49 @@ button:disabled {
 .circuit-grid::before, .circuit-grid::after { position: absolute; top: calc(50% - 18px); color: #efc96b; font-size: 26px; font-weight: bold; content: '→'; }
 .circuit-grid::before { left: -25px; } .circuit-grid::after { right: -25px; }
 
-/* The tablet always keeps the map visible; the existing menu occupies 20%. */
-.phone.tablet {
-  width: min(1600px, 96vw);
-  height: min(940px, 92dvh);
-  max-height: 92dvh;
-  padding: 0;
-  overflow: hidden;
-  border: 9px solid #101c20;
-  border-radius: 24px;
-  background: #14262c;
-  display: flex;
-  flex-direction: column;
-}
-.tabletbar { flex: 0 0 44px; padding: 0 18px; align-items: center; border-bottom: 1px solid #8ba3aa26; }
-.tabletbar .close { position: static; width: 34px; height: 34px; padding: 0; }
-.tablet-layout { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 1fr); flex: 1; min-height: 0; }
-.tablet-map { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #10262d; }
-.tablet-mapbar { padding: 16px 20px; border-bottom: 1px solid #8ba3aa26; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
-.tablet-mapbar span, .tablet-mapfooter { font-size: 10px; letter-spacing: 1px; color: #a7bbb9; }
-.tablet-mapbar strong { font-size: 14px; color: #f4d28a; margin-left: auto; }
-.tablet-mapstage { flex: 1; min-height: 0; position: relative; }
-.phone.tablet #bigmap { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; display: block; cursor: crosshair; }
-.tablet-mapfooter { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 12px 20px; border-top: 1px solid #8ba3aa26; }
-.tablet-sidebar { min-width: 0; min-height: 0; border-left: 1px solid #8ba3aa26; padding: 12px; display: flex; flex-direction: column; background: #1a302e; }
-.phone.tablet h2 { font-size: 23px; margin: 0 0 10px; }
-.tablet .tabs { flex-direction: column; flex-wrap: nowrap; gap: 4px; }
-.tablet .tabs button { text-align: left; font-size: 12px; padding: 10px; }
-.tablet #phoneBody { min-height: 0; overflow: auto; overscroll-behavior: contain; margin-top: 12px; scrollbar-width: thin; }
-.tablet .shoprow { padding: 10px 8px; overflow-wrap: anywhere; }
-.tablet .shoprow .n { font-size: 17px; margin-right: 6px; }
-.tablet .shoprow strong { font-size: 11px; line-height: 1.5; display: block; }
-.tablet .shoprow small { font-size: 10px; line-height: 1.5; }
-.tablet .message { padding: 10px; font-size: 11px; overflow-wrap: anywhere; margin-top: 0; margin-bottom: 8px; }
-.tablet .actions { flex-direction: column; gap: 6px; }
-.tablet #phoneBody button { max-width: 100%; font-size: 11px; }
-.tablet #phoneBody .photo { width: 100%; }
-@media (max-width: 700px) {
-  .phone.tablet { width: 99vw; height: 96dvh; max-height: 96dvh; border-width: 5px; border-radius: 14px; }
-  .tablet-sidebar { padding: 5px; }
-  .phone.tablet h2 { font-size: 15px; }
-  .tablet .tabs button { padding: 8px 3px; font-size: 10px; overflow-wrap: anywhere; }
-  .tablet .shoprow strong { font-size: 9px; }
-  .tablet .shoprow small { font-size: 8px; }
-  .tablet-mapbar, .tablet-mapfooter { padding: 10px; }
-  .tablet-mapbar strong { margin-left: 0; font-size: 12px; }
-  .tablet-mapfooter { font-size: 8px; }
-}
-
-.collection-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.collection-card{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid #ffffff22;border-radius:8px;background:#1b343b}.collection-card i{width:27px;height:39px;background:var(--pack-color);border:3px solid #e6dfcb;border-radius:3px}.collection-card span{font-size:11px;color:#a9b8b4}.collection-card.collected{border-color:#8be6a1;background:#234333}.collection-summary{width:100%;color:#ffe6a2;text-align:left;cursor:pointer}.memory-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}.memory-grid button{min-height:85px;background:#49717d;color:#fff4ce;font-weight:800;border-radius:8px}.memory-grid button:disabled{opacity:.8;background:#456b45}
-.tablet .tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.tablet .tabs button{padding:8px 3px;font-size:11px;text-align:center}
-.tablet .tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.tablet .tabs button{font-size:10px;white-space:normal;overflow-wrap:anywhere;padding:6px 2px}.collection-grid{grid-template-columns:1fr}.collection-card{display:grid;grid-template-columns:20px minmax(0,1fr) 40px;align-items:center;gap:6px;padding:8px 5px}.collection-card i{width:18px;height:25px;border-width:2px}.collection-card strong{font-size:11px;overflow-wrap:anywhere}.collection-card span{font-size:9px}.tablet #phoneBody:has(.collection-grid)>h3{font-size:14px;line-height:1.3}.tablet #phoneBody:has(.collection-grid)>p{font-size:11px;line-height:1.4}
+/* Map stays behind the selected app; navigation has its own right rail. */
+.phone.tablet{width:min(1600px,96vw);height:min(940px,92dvh);max-height:92dvh;padding:0;overflow:hidden;border:9px solid #101c20;border-radius:24px;background:#14262c;display:flex;flex-direction:column;box-shadow:0 30px 100px #0009}
+.tabletbar{flex:0 0 44px;padding:0 18px;align-items:center;border-bottom:1px solid #8ba3aa26}
+.tabletbar .close{position:static;width:34px;height:34px;padding:0}
+.tablet-layout{display:grid;grid-template-columns:minmax(0,1fr) 176px;flex:1;min-height:0}
+.tablet-map{min-width:0;min-height:0;display:flex;flex-direction:column;background:#10262d}
+.tablet-mapbar{padding:14px 20px;border-bottom:1px solid #8ba3aa26;display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center}
+.tablet-mapbar span,.tablet-mapfooter{font-size:10px;letter-spacing:1px;color:#a7bbb9}
+.tablet-mapbar strong{font-size:14px;color:#f4d28a;margin-left:auto}
+.tablet-mapstage{flex:1;min-height:0;position:relative;isolation:isolate}
+.phone.tablet #bigmap{position:absolute;inset:0;width:100%;height:100%;margin:0;display:block;cursor:crosshair}
+.tablet-mapfooter{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:12px 20px;border-top:1px solid #8ba3aa26}
+.tablet-sidebar{min-width:0;min-height:0;border-left:1px solid #8ba3aa26;padding:16px 10px;display:flex;flex-direction:column;background:#182f33}
+.phone.tablet .tablet-sidebar h2{font-size:18px;margin:0 0 16px;padding:0 8px;color:#96adae}
+.tablet .tabs{display:flex;flex-direction:column;flex-wrap:nowrap;gap:5px;overflow-y:auto;min-height:0}
+.tablet .tabs button{text-align:left;font-size:12px;padding:12px 14px;border-radius:8px;flex-shrink:0;min-height:40px;transition:background .15s,color .15s}
+.tablet .tabs button:hover{background:#436267;color:#fff}
+.tablet .tabs button.active{background:#f0cd7b;color:#233638;box-shadow:0 3px 14px #0002}
+.tablet-sheet{position:absolute;z-index:1;inset:18px;max-width:640px;margin-left:auto;border:1px solid #90aaa94d;border-radius:16px;background:#142d34f5;box-shadow:0 15px 50px #05181eb3;display:flex;flex-direction:column;backdrop-filter:blur(14px);overflow:hidden}
+.tablet-sheet>header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #9fb6b332}
+.tablet-sheet header small{font-size:9px;letter-spacing:2px;color:#8daaaa}
+.phone.tablet .tablet-sheet h2{font:28px Oswald,sans-serif;margin:4px 0 0}
+.tablet-sheet header button{background:#ffffff0d;color:#cbdad6;font-size:26px;border-radius:50%;width:36px;height:36px}
+.tablet #phoneBody{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:20px 22px;scrollbar-width:thin}
+.tablet #phoneBody>p{font-size:13px;line-height:1.8;color:#c8d9d3;margin-top:0}
+.tablet .shoprow{padding:15px;border-radius:8px;overflow-wrap:anywhere}
+.tablet .shoprow .n{font-size:24px;margin-right:12px}
+.tablet .shoprow strong{font-size:13px;line-height:1.6;display:block}
+.tablet .shoprow small{font-size:11px;line-height:1.7}
+.tablet .message{padding:16px;font-size:13px;margin-top:0;margin-bottom:12px}
+.tablet .message h3{font-size:17px;margin:0 0 6px}
+.tablet .actions{gap:8px;flex-wrap:wrap}
+.tablet #phoneBody button{max-width:100%;font-size:12px}
+.tablet #phoneBody .photo{width:100%}
+.collection-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.collection-card{display:grid;grid-template-columns:28px minmax(0,1fr);align-items:center;gap:5px 12px;padding:14px;border:1px solid #ffffff22;border-radius:10px;background:#1b343b}
+.collection-card i{grid-row:span 2;width:26px;height:39px;background:var(--pack-color);border:3px solid #e6dfcb;border-radius:3px}
+.collection-card strong{font-size:13px}.collection-card span{font-size:11px;color:#a9b8b4}
+.collection-card.collected{border-color:#8be6a1;background:#234333}
+.collection-summary{width:100%;color:#ffe6a2;text-align:left;cursor:pointer}
+.memory-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}.memory-grid button{min-height:85px;background:#49717d;color:#fff4ce;font-weight:800;border-radius:8px}.memory-grid button:disabled{opacity:.8;background:#456b45}
+.player-status{display:block!important;margin-top:16px;width:264px;text-align:left;padding:15px 17px;border-radius:10px;min-width:0}
+.player-status>.eyebrow{display:none}.player-status .stat{grid-template-columns:70px minmax(40px,1fr) 26px;gap:8px}
+.hand-status{padding-bottom:10px;margin-bottom:11px;border-bottom:1px solid #d8e2cb26}.hand-status span{display:block;font-size:9px;letter-spacing:1.5px;color:#aab9aa}.hand-status strong{display:block;font-size:17px;letter-spacing:0;color:#ffe2a1;margin-top:5px}
+@media(max-width:800px){.player-status{width:218px;padding:10px 12px}.hand-status strong{font-size:15px}.tablet-layout{grid-template-columns:minmax(0,1fr) 142px}.tablet-sidebar{padding:12px 7px}.tablet .tabs button{font-size:11px;padding:10px}.tablet-mapbar,.tablet-mapfooter{padding:10px}.tablet-mapbar strong{font-size:12px}.tablet-sheet{inset:10px}.tablet #phoneBody{padding:16px}.collection-grid{gap:8px}.collection-card{padding:10px;gap:5px 8px}.collection-card strong{font-size:12px}}
+@media(max-width:600px){.phone.tablet{width:99vw;height:96dvh;max-height:96dvh;border-width:5px;border-radius:14px}.tablet-layout{grid-template-columns:minmax(0,1fr) 110px}.tablet .tabs button{font-size:10px;padding:10px 8px}.phone.tablet .tablet-sidebar h2{font-size:15px;padding:0}.tablet-sheet>header{padding:12px}.tablet #phoneBody{padding:12px}.collection-grid{grid-template-columns:1fr}.tablet-mapfooter{font-size:8px}.tabletbar{padding:0 10px;letter-spacing:1px}.player-status{width:190px}.objective{width:200px}.objective h2{font-size:19px}.objective p{font-size:10px}}
