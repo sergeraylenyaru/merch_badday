@@ -23,14 +23,15 @@ export function createAdventure(scene,world,state,callbacks){
   used.push(p);return {x:p.x,z:p.z};
  }
  function pickup(kind,id,p,color,text,enabled,interaction){
-  const group=new T.Group();group.position.set(p.x,world.groundHeight(p.x,p.z),p.z);root.add(group);
+  const group=new T.Group();group.position.set(p.x,p.y??world.groundHeight(p.x,p.z),p.z);root.add(group);
   const ring=new T.Mesh(geo('pickup-ring',()=>new T.RingGeometry(.55,.73,24)),new T.MeshBasicMaterial({color,transparent:true,opacity:.7,side:T.DoubleSide,depthWrite:false}));materials.set('ring:'+materials.size,ring.material);ring.rotation.x=-Math.PI/2;ring.position.y=.05;group.add(ring);
   const beam=cylinder(group,.035,.035,1.65,0,.85,0,color);beam.material=mat(color,true);
   label(group,text,color);const object=new T.Group();object.position.y=.8;group.add(object);
-  const item={kind,id,group,object,x:p.x,z:p.z,enabled,interaction,label:text};items.push(item);return item;
+  const item={kind,id,group,object,x:p.x,z:p.z,y:p.y??world.groundHeight(p.x,p.z),enabled,interaction,label:text};items.push(item);return item;
  }
  function weaponModel(parent,id){
-  if(id==='water'){
+  if(id==='stone'){const rock=new T.Mesh(geo('held-stone',()=>new T.IcosahedronGeometry(.14,1)),mat('#929786'));rock.name='held-stone';rock.position.y=.07;parent.add(rock);
+  }else if(id==='water'){
    box(parent,.17,.28,.46,0,.2,.08,'#29c7e9');box(parent,.10,.25,.12,0,0,-.02,'#f6ba45');cylinder(parent,.08,.08,.34,0,.33,.08,'#ff6159').rotation.x=Math.PI/2;
    box(parent,.14,.13,.18,0,.25,.37,'#ffe469');
   }else if(id==='baton'){
@@ -46,8 +47,10 @@ export function createAdventure(scene,world,state,callbacks){
   const def=WEAPONS[id],p=safe(point(...uv));const item=pickup('weapon',id,p,def.color,'E · '+def.name,()=>!a.pickedWeapons.includes(id),()=>{pickupWeapon(state,id);callbacks.notify(def.name+' подобрано · 1 — кулаки, 2 — бита, 3 — палка, 4 — пистолет');changed();});weaponModel(item.object,id);item.object.scale.setScalar(1.15);
  }
  const packSites=[[105,200],[300,130],[370,500],[550,650],[740,230],[935,430],[960,690],[1230,140],[1500,460],[1470,730]];
+ const packRoofs=[...world.roofs].filter(r=>r.kind==='residential'&&world.parkour.diagnostics.ladders.some(l=>l.id===r.id)).sort((a,b)=>a.id.localeCompare(b.id));
  for(const pack of PACKS){
-  const p=safe(point(...packSites[pack.id]));const item=pickup('pack',pack.id,p,pack.color,`E · ${pack.name} пачка`,()=>!a.cigarettes.includes(pack.id),()=>{collectPack(state,pack.id);callbacks.notify(`Коллекция: ${pack.name} · ${a.cigarettes.length}/10${a.cigarettes.length===10?' · бонус 300 ₽':''}`);changed();});
+  const roof=pack.id>=10?packRoofs[Math.floor((pack.id-10)*packRoofs.length/10)]:null;
+  const p=roof?{x:roof.x+Math.min(1,roof.w/3),z:roof.z,y:roof.y}:safe(point(...packSites[pack.id]));const item=pickup('pack',pack.id,p,pack.color,`E · ${pack.name} пачка`,()=>!a.cigarettes.includes(pack.id),()=>{collectPack(state,pack.id);callbacks.notify(`Коллекция: ${pack.name} · ${a.cigarettes.length}/${PACKS.length}`);changed();});
   box(item.object,.46,.65,.22,0,.1,0,pack.color);box(item.object,.47,.17,.23,0,-.12,0,'#ecede4');box(item.object,.25,.04,.235,0,.28,0,'#243946');
  }
  const source=safe(point(180,260)),recipient=safe(point(145,545)),vendor=safe(point(550,235)),wallet=safe(point(805,455));
@@ -114,6 +117,7 @@ export function createAdventure(scene,world,state,callbacks){
   if(id==='football'){p=goal;label=`Ворота · ${Math.min(3,a.fun.goals)}/3`;}
   if(id==='hospital'){p=world.hospital.spawn;label='Городская больница №1';}
   if(id==='ladder'){p=world.parkour.nearest();label='Лестница на крышу · Space + E';}
+  if(id==='billboard'){p=world.parkour.diagnostics.ladders.filter(l=>l.id.startsWith('billboard:')).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Рекламный щит · лестница на столбе · Space + E';}
   if(id==='wire'){p=world.cables.wires.flatMap(w=>[w.a,w.b]).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Провод на крыше · Space + E';if(p&&world.player.mesh.position.y<p.roofY-1){p=world.parkour.diagnostics.ladders.find(l=>l.id===p.roofId)??p;label='Поднимитесь по лестнице к проводу';}else if(p)p={...p,y:p.roofY};}
   if(id==='garage-yard'){p=world.yards.yards.flatMap(y=>y.props).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Ящики, баки и забор у гаражей';}
   if(id==='van'){p=world.vehicles.find(v=>v.id===a.garage.vanId)?.mesh.position;label='Ваш фургон';}
@@ -124,7 +128,7 @@ export function createAdventure(scene,world,state,callbacks){
   target,
   kickBall(origin,reach,direction,power=1){const p=ballBody.translation(),dx=p.x-origin.x,dz=p.z-origin.z,d=Math.hypot(dx,dz);if(!ballEnabled||d>reach||Math.abs(origin.y-p.y)>1.7||(d>.05&&(dx*direction.x+dz*direction.z)/d<.1))return false;ballBody.setLinvel({x:direction.x*(5+power),y:1.8,z:direction.z*(5+power)},true);ballBody.setAngvel({x:direction.z*12,y:0,z:-direction.x*12},true);flight=true;ballAge=0;return true;},
   nearest(position){
-   const candidates=items.filter(i=>i.kind!=='money'&&i.enabled()&&Math.abs(position.y-world.groundHeight(i.x,i.z))<2&&Math.hypot(i.x-position.x,i.z-position.z)<2.5).map(i=>({...i,d:Math.hypot(i.x-position.x,i.z-position.z)}));
+   const candidates=items.filter(i=>i.kind!=='money'&&i.enabled()&&Math.abs(position.y-i.y)<2&&Math.hypot(i.x-position.x,i.z-position.z)<2.5).map(i=>({...i,d:Math.hypot(i.x-position.x,i.z-position.z)}));
    for(const guard of guards)if(guard.stun<=0&&Math.abs(position.y-guard.mesh.position.y)<2&&Math.hypot(guard.mesh.position.x-position.x,guard.mesh.position.z-position.z)<2.8)candidates.push({kind:'guard',guard,d:Math.hypot(guard.mesh.position.x-position.x,guard.mesh.position.z-position.z),label:'E · Охранник · договориться'});
    for(const table of tables)if(Math.abs(position.y-world.groundHeight(table.x,table.z))<2&&Math.hypot(table.x-position.x,table.z-position.z)<2.2&&!world.props.diagnostics.props.find(p=>p.key===table.key)?.broken)candidates.push({kind:'table',d:Math.hypot(table.x-position.x,table.z-position.z),label:'E · Игра за столиком · найти пары'});
    return candidates.sort((p,q)=>p.d-q.d)[0]??null;
@@ -148,7 +152,7 @@ export function createAdventure(scene,world,state,callbacks){
   speedMultiplier(vehicle){return vehicle.homeVehicle||vehicle.id===a.garage.vanId?(state.career.garage.engine?1.15:1)*(.55+.45*a.garage.condition/100):1;},
   prepareWeapons({inVehicle=false,carrying=false,firstPerson=false,pitch=0,attack=0,attackKind='quick'}={}){
    setHeld(a.equipped);const visible=!!heldRig&&!inVehicle&&!carrying&&!a.events.delivery.carrying;
-   if(heldRig)heldRig.update({remaining:attack,strong:attackKind==='strong',firstPerson,pitch,visible,gait:(world.player.motion?.diagnostics.stride??0)*Math.PI*2,speed:world.player.motion?.diagnostics.speed??0});world.player.weaponRig=visible?heldRig:null;
+   if(heldRig)heldRig.update({remaining:attack,strong:attackKind==='strong',firstPerson,pitch,visible,gait:(world.player.motion?.diagnostics.stride??0)*Math.PI*2,speed:world.player.motion?.diagnostics.speed??0});world.player.weaponRig=visible?heldRig:null;if(heldRig&&a.equipped==='stone')heldRig.root.traverse(n=>{if(n.name==='held-stone')n.visible=a.stones>0||attack>.38;});
    for(const {person,rig}of policeRigs)rig.update({remaining:person.attack??0,visible:person.mesh.visible&&person.stun<=0&&!person.climb});
   },
   update(dt,time,{inVehicle=false,carrying=false,firstPerson=false,camera=null,attack=0}={}){
@@ -162,7 +166,7 @@ export function createAdventure(scene,world,state,callbacks){
    const near=Math.hypot(position.x-court.x,position.z-court.z)<55;if(near!==ballEnabled){ballBody.setEnabled(near);ballEnabled=near;}ball.visible=near;goalRoot.visible=near;
    if(near){ball.position.copy(ballBody.translation());ball.quaternion.copy(ballBody.rotation());if(flight){ballAge+=dt;const p=ballBody.translation();if(Math.hypot(p.x-goal.x,p.z-goal.z)<1.15&&p.y<world.groundHeight(goal.x,goal.z)+1.65){a.fun.goals++;flight=false;if(a.fun.goals>=3&&!a.fun.footballWon){a.fun.footballWon=true;state.money+=30;state.stress=Math.max(0,state.stress-12);callbacks.notify('Три гола! +30 ₽ · стресс −12');}else callbacks.notify(`Гол! ${Math.min(3,a.fun.goals)}/3`);changed();}else if(ballAge>5)flight=false;}}
   },
-  get diagnostics(){return {items:items.map(i=>({kind:i.kind,id:i.id,x:i.x,z:i.z,available:i.enabled(),visible:i.group.visible})),guards:guards.map(g=>({x:g.mesh.position.x,z:g.mesh.position.z,name:g.role,shopName:g.shopName})),goal:{...goal},court:{...court},equipped:a.equipped,heldVisible:!!heldRig?.root.visible,heldY:heldRig?.root.position.y??0,heldScale:heldRig?.root.scale.toArray()??[1,1,1],heldBounds:heldRig?new T.Box3().setFromObject(heldRig.root).getSize(new T.Vector3()).toArray():[0,0,0],weaponRig:heldRig?.diagnostics??null,policeWeapons:policeRigs.map(({person,rig})=>({officer:person.policeIndex,...rig.diagnostics})),activeEffects:effects.length};},
+  get diagnostics(){return {items:items.map(i=>({kind:i.kind,id:i.id,x:i.x,z:i.z,y:i.y,available:i.enabled(),visible:i.group.visible})),guards:guards.map(g=>({x:g.mesh.position.x,z:g.mesh.position.z,name:g.role,shopName:g.shopName})),goal:{...goal},court:{...court},equipped:a.equipped,heldVisible:!!heldRig?.root.visible,heldY:heldRig?.root.position.y??0,heldScale:heldRig?.root.scale.toArray()??[1,1,1],heldBounds:heldRig?new T.Box3().setFromObject(heldRig.root).getSize(new T.Vector3()).toArray():[0,0,0],weaponRig:heldRig?.diagnostics??null,policeWeapons:policeRigs.map(({person,rig})=>({officer:person.policeIndex,...rig.diagnostics})),activeEffects:effects.length};},
   dispose(){heldRig?.dispose();for(const {rig}of policeRigs)rig.dispose();root.removeFromParent();for(const {vest}of guardLabels)vest.removeFromParent();carriedParcel.removeFromParent();world.physics.removeRigidBody(ballBody);for(const g of geometries.values())g.dispose();for(const m of materials.values())m.dispose();for(const t of textures)t.dispose();},
  };
 }

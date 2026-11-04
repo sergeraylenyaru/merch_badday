@@ -1,5 +1,5 @@
 import * as T from 'three';
-import {point,pixel} from '../city/reference-layout.js';
+import {point,pixel,ROADS,segmentDistance} from '../city/reference-layout.js';
 
 const STREETS=[
   {axis:'v',at:337,from:0,to:1672,width:38,gates:[239,500,850,1168,1340,1440]},
@@ -8,6 +8,8 @@ const STREETS=[
   {axis:'u',at:1168,from:0,to:710,width:27,gates:[180,337,600]},
   {axis:'u',at:1390,from:0,to:941,width:27,gates:[180,480,716]},
 ];
+for(const street of STREETS)street.gates=street.gates.map(gate=>[0,20,-20,32,-32,45,-45].map(offset=>gate+offset).find(g=>g>street.from+5&&g<street.to-5&&ROADS.every(([a,b,c,d,width])=>{const dx=c-a,dz=d-b,len=Math.hypot(dx,dz),parallel=street.axis==='u'?Math.abs(dz)/len:Math.abs(dx)/len;if(parallel>.95)return true;return segmentDistance(street.axis==='u'?street.at:g,street.axis==='u'?g:street.at,a,b,c,d)>width/2+5;}))??gate);
+export const CROSSING_STREETS=STREETS;
 
 export function streetWaypoints(from,to,blocked=()=>false){
   const a=pixel(from.x,from.z),b=pixel(to.x,to.z),crossings=[];
@@ -31,9 +33,7 @@ export function createCrossingMarkings(scene,groundHeight){
   const geometry=new T.BoxGeometry(3.2,.012,.34),material=new T.MeshStandardMaterial({color:'#e8e5dc',roughness:.95});
   const transforms=[],matrix=new T.Matrix4(),rotation=new T.Quaternion(),scale=new T.Vector3(1,1,1);
   for(const street of STREETS)for(const gate of street.gates){
-    // Junctions already have another crossing through their centre; paint
-    // perpendicular stripes on its approach instead of stacking both sets.
-    if(street.axis==='u'&&gate===337)continue;
+    // Use the same approach positions as pedestrian routes, outside junction centres.
     const p=street.axis==='u'?point(street.at,gate):point(gate,street.at);
     rotation.setFromAxisAngle(new T.Vector3(0,1,0),street.axis==='u'?Math.PI/2:0);
     for(let d=-street.width*.2+.4;d<street.width*.2;d+=.8){

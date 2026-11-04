@@ -34,8 +34,25 @@ for name,action in actions:
  track=armature.animation_data.nla_tracks.new();track.name=name;track.strips.new(name,0,action);track.mute=True
 armature['artist']='Quaternius';armature['license']='CC0-1.0';armature['role']='Police officer · Swat';armature['rigVersion']=4
 for obj in original:bpy.data.objects.remove(obj,do_unlink=True)
+for obj in objects:
+ if obj.name.startswith(('PalmGrip','FootContact')):obj.name=obj.name.split('.')[0]
 bpy.context.scene.frame_set(0);bpy.ops.object.select_all(action='DESELECT')
 for obj in objects:obj.select_set(True)
 bpy.context.view_layer.objects.active=armature
 bpy.ops.export_scene.gltf(filepath=str(ROOT/'public/models/characters/police-officer.glb'),export_format='GLB',use_selection=True,export_animations=True,export_animation_mode='NLA_TRACKS',export_skins=True,export_cameras=False,export_lights=False,export_extras=True,export_rest_position_armature=True)
 print('POLICE_EXPORTED',len(actions),'clips')
+
+# Bone parenting can add the new bone length to copied empties. Restore the
+# authored local contact transforms after export; retain all mesh/skin bytes.
+import json,struct
+hero_bytes=(ROOT/'public/models/characters/merch-male.glb').read_bytes()
+hero_json=json.loads(hero_bytes[20:20+struct.unpack_from('<I',hero_bytes,12)[0]])
+anchors={n['name']:n for n in hero_json['nodes'] if n.get('name','').startswith(('PalmGrip','FootContact'))}
+path=ROOT/'public/models/characters/police-officer.glb';raw=path.read_bytes();size,kind=struct.unpack_from('<II',raw,12);data=json.loads(raw[20:20+size])
+for node in data['nodes']:
+ name=node.get('name','').split('.')[0]
+ if name in anchors:
+  node['name']=name
+  for key in ['translation','rotation','scale']:node[key]=anchors[name][key]
+chunk=json.dumps(data,separators=(',',':')).encode();chunk+=b' '*((-len(chunk))%4);tail=raw[20+size:]
+path.write_bytes(struct.pack('<III',0x46546c67,2,20+len(chunk)+len(tail))+struct.pack('<II',len(chunk),kind)+chunk+tail)

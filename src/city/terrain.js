@@ -1,4 +1,4 @@
-import { MAP, ROADS, RIVERS, COAST, point, pixel, segmentDistance, PIER } from './reference-layout.js';
+import { MAP, ROADS, ROAD_JOINS,RIVERS, COAST, point, pixel, segmentDistance, PIER } from './reference-layout.js';
 export const WATER_LEVEL = -0.45;
 export const BRIDGE_HEIGHT = 0.55;
 export function waterDistance(u,v) {
@@ -22,6 +22,7 @@ export function roadHeight(x,z) {
     if(along<-.08||along>road.length+.08)continue;
     const across=Math.abs((x-road.start.x)*road.dz-(z-road.start.z)*road.dx);
     if(across<=road.width/2+.02)height=Math.max(height,road.heightAt(Math.max(0,Math.min(road.length,along))));}
+  for(const j of ROAD_JOINS)if(Math.hypot(x-j.x,z-j.z)<=j.radius+.02)for(const {index,end}of j.roads){const r=ROAD_PROFILES[index];height=Math.max(height,r.heightAt(end?r.length:0));}
   const p=pixel(x,z);if(segmentDistance(p.x,p.y,...PIER.slice(0,4))<=PIER[4]/2 || (p.x>837.5&&p.x<892.5&&p.y>870&&p.y<882))height=Math.max(height,.12);
   return height;
 }

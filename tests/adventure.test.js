@@ -4,7 +4,7 @@ import {freshState,save,load} from '../src/state.js';
 import {ensureAdventure,collectPack,pickupWeapon,bribeGuard,bribePrice,startEvent,finishEvent,buyGarage,crashCargo,tableCard} from '../src/adventure/state.js';
 const fresh=()=>{const s=freshState();ensureAdventure(s);return s;};
 test('all ten distinct cigarette colours persist and award the collection exactly once',()=>{
- const s=fresh(),before=s.money;for(let i=0;i<10;i++){assert.equal(collectPack(s,i),true);assert.equal(collectPack(s,i),false);}assert.equal(collectPack(s,10),false);assert.equal(s.money,before+300);
+ const s=fresh(),before=s.money;for(let i=0;i<10;i++){assert.equal(collectPack(s,i),true);assert.equal(collectPack(s,i),false);}assert.equal(collectPack(s,20),false);assert.equal(s.money,before+300);
  const storage={value:null,setItem(k,v){this.value=v;},getItem(){return this.value;}};save(s,storage);const restored=load(storage);assert.equal(restored.adventure.cigarettes.length,10);assert.equal(collectPack(restored,9),false);assert.equal(restored.money,s.money);
 });
 test('weapons equip on pickup and a guard bribe removes precisely one star',()=>{

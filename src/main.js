@@ -1,4 +1,5 @@
-import {tickWanted,raiseWanted,freeRoam,runningSpeed,SHIFT_DURATION} from './city/gameplay.js';
+import {createStones} from './adventure/stones.js';
+import {tickWanted,raiseWanted,freeRoam,runningSpeed,policeRunningSpeed,SHIFT_DURATION} from './city/gameplay.js';
 import {START,point,pixel} from './city/reference-layout.js';
 import {buyEquipment,dealWithDima,remember} from './city/shift.js';
 import * as T from "three";
@@ -424,6 +425,7 @@ try {
     dialog(title,text,choices){open('adventure');ui.adventureDialog(title,text,choices);},
     table(){open('adventure');ui.tableGame();},
   });
+  world.stones=createStones(scene,world,state,{notify,changed:snapshot,impact(person){person.stun=3;person.anger=8;world.adventure.dropMoney(person);state.conflicts++;state.reputation-=4;crime(2);notify('Попадание камнем!');}});
   world.orchard=createOrchard(scene,world,state,{notify,changed:snapshot});
   world.sideWork=createSideWork(scene,world,state,{notify,changed:snapshot,resume,dialog(title,text,choices){open('side-work');ui.adventureDialog(title,text,choices);}});
   const walkingBlocked=createWalkingBlocker(world);
@@ -513,6 +515,7 @@ try {
     const task = world.jobs.nearest(pos);
     if (state.carrying) return task?.type === 'drop' ? 'E · Поставить коробку в приёмку' : 'Коробка в руках · R у грузовика — взять вторую; отнесите в голубую приёмку магазина «СуперЦена»';
     if (held) return held.missionCargo ? 'R · Оставить грузовую тележку в голубой приёмке' : 'R · Вернуть в жёлтую зону за бонус';
+    const stone=world.stones.nearest(pos);if(stone)return `E · Подобрать камень · ${state.adventure.stones}/5`;
     const side=world.sideWork.nearest(pos);if(side)return side.label;
     const extra=world.adventure.nearest(pos);if(extra)return extra.label.startsWith('E ·')?extra.label:'E · '+extra.label;
     if (task) return `E · ${task.label}`;
@@ -565,6 +568,7 @@ try {
     }
     const pos = world.player.mesh.position;
     if (world.jobs.activity) return;
+    const stone=world.stones.nearest(pos);if(stone&&!state.carrying&&!held){world.stones.pickup(stone);return;}
     const side=world.sideWork.nearest(pos);if(side&&!state.carrying&&!held){world.sideWork.interact(side);return;}
     const extra=world.adventure.nearest(pos);
     if(extra&&!state.carrying&&!held){world.adventure.interact(extra,{x:-Math.sin(yaw),z:-Math.cos(yaw)});return;}
@@ -725,6 +729,7 @@ try {
     attack = strong ? 0.85 : 0.35;
     beep(strong ? 130 : 200);
     const weapon=WEAPONS[state.adventure.equipped];
+    if(state.adventure.equipped==='stone'){if(cameraNeedsSnap)updateCamera(0);camera.updateMatrixWorld(true);attack=.6;attackKind='quick';if(!world.stones.throw(camera))attack=0;return;}
     if(state.adventure.equipped==='water'){attack=.35;attackKind='quick';world.adventure.shootWater(world.player.mesh.position,{x:-Math.sin(yaw),z:-Math.cos(yaw)});return;}
     if(MELEE_TIMING[state.adventure.equipped]){
       const timing=MELEE_TIMING[state.adventure.equipped][strong?'strong':'quick'];attack=timing.duration;
@@ -786,7 +791,7 @@ try {
       return;
     }
     if (mode !== "play") return;
-    if(/^(Digit|Numpad)[0-4]$/.test(e.code)){
+    if(/^(Digit|Numpad)[0-5]$/.test(e.code)){
       const slot=Number(e.code.at(-1))||1;
       if(equipSlot(state,slot)){pendingSwing=null;attack=0;world.adventure.action('equip',state.adventure.equipped);notify(state.adventure.equipped?WEAPONS[state.adventure.equipped].name:'Кулаки');}else notify('Сначала найдите и подберите этот предмет');return;
     }
@@ -1068,8 +1073,8 @@ try {
         n.stun -= dt;
         n.mesh.rotation.z = 1.25;
         const p=n.mesh.position,roof=world.roofs.find(r=>p.y>=r.y-.2&&Math.abs(p.x-r.x)<r.w&&Math.abs(p.z-r.z)<r.d),floor=roof?.y??world.groundHeight(p.x,p.z);
-        if(n.climb){n.climb=null;n.roofPursuit=null;}
-        n.fallSpeed=(n.fallSpeed??0)+18*dt;p.y=Math.max(floor+.2,p.y-n.fallSpeed*dt);if(p.y<=floor+.2)n.fallSpeed=0;
+        if(n.climb){n.climb=null;n.roofPursuit=null;n.airborne={speed:0};}
+        n.fallSpeed=(n.fallSpeed??0)+18*dt;p.y=Math.max(floor+.2,p.y-n.fallSpeed*dt);if(n.airborne)n.airborne.speed=-n.fallSpeed;if(p.y<=floor+.2){n.fallSpeed=0;n.airborne=null;}
         continue;
       }
       n.mesh.rotation.z = 0;
@@ -1095,7 +1100,7 @@ try {
         if (state.wanted > 0) {
           target = pursuit.approach??(n.attack>0||d<1.45 ? null : player);
           n.lookAt=player;
-          speed = vehicle ? 5.5 : state.wanted >= 3 ? 6.5 : 4;
+          speed = policeRunningSpeed(state);
           if(d<20)state.wantedElapsed=0;
         } else {target = n.home;n.lookAt=null;}
       } else if (n.anger > 0) {
@@ -1177,7 +1182,7 @@ try {
         }
       }
     }
-    separatePeople(world.people,(x,z,r,y)=>world.blockedAt(x,z,r,null,y),vehicle?null:player);
+    separatePeople(world.people,(x,z,r,y)=>world.blockedAt(x,z,r,null,y)||(y>world.groundHeight(x,z)+.5&&world.parkour.floorAt(x,z,y+.1)<y-.3),vehicle?null:player);
     for (const [i, v] of world.policeVehicles.entries()) {
       v.mesh.visible = state.wanted >= 3;
       if (!v.mesh.visible) continue;
@@ -1498,6 +1503,7 @@ try {
     });
     updateCamera(dt);
     world.adventure.update(mode==='play'?dt:0,visualTime,{inVehicle:!!vehicle,carrying:!!state.carrying||!!held,firstPerson,camera,attack});
+    world.stones.update(mode==='play'?dt:0);
     flyerSellers.update(mode==='play'?dt:0,visualTime);
     ui.update(world, vehicle);
     illustrated.render();
@@ -1553,7 +1559,7 @@ try {
         obstacles: [ ...world.blockers.filter((b) => b.enabled !== false).map(({ x, z, w, d }) => ({ x, z, w, d, heading: 0 })),
           ...world.vehicles.filter((v) => v.mesh.visible && !(v.police && state.wanted < 3)).map((v) => vehicleBox(v)) ] };
     },
-    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,water:world.water.diagnostics,traffic:world.traffic.diagnostics,hospital:world.hospital.diagnostics,yards:world.yards.diagnostics,enclosures:world.enclosures.diagnostics,cables:world.cables.diagnostics,parkour:world.parkour.diagnostics,orchard:world.orchard.diagnostics,walkways:world.walkways.diagnostics,roadWear:world.roadWear.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,sideWork:world.sideWork.diagnostics,flyers:flyerSellers.diagnostics}));},
+    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,water:world.water.diagnostics,traffic:world.traffic.diagnostics,hospital:world.hospital.diagnostics,yards:world.yards.diagnostics,enclosures:world.enclosures.diagnostics,cables:world.cables.diagnostics,billboards:world.billboards.diagnostics,parkour:world.parkour.diagnostics,orchard:world.orchard.diagnostics,walkways:world.walkways.diagnostics,roadWear:world.roadWear.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,stones:world.stones.diagnostics,sideWork:world.sideWork.diagnostics,flyers:flyerSellers.diagnostics}));},
     get jobs() { return JSON.parse(JSON.stringify(world.jobs.diagnostics)); },
     get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null,
       personType:n.personType,role:n.role,weapon:n.weapon??null,policeIndex:n.policeIndex??null,visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,roofPursuit:n.roofPursuit?{...n.roofPursuit}:null,climb:n.climb??null,motion:n.motion?.diagnostics??null,
@@ -1563,7 +1569,7 @@ try {
   // BFCache preserves the page and its GPU resources. Dispose only on a real exit.
   addEventListener("pagehide", (event) => {
     if (!event.persisted) {
-      world.parkour.dispose();world.cables.dispose();world.enclosures.dispose();world.yards.dispose();world.hospital.dispose();world.orchard.dispose();world.roadWear.dispose();
+      world.parkour.dispose();world.cables.dispose();world.enclosures.dispose();world.yards.dispose();world.hospital.dispose();world.orchard.dispose();world.roadWear.dispose();world.billboards.dispose();world.stones.dispose();
       world.homeYard.dispose();
       world.boroughs.dispose();
       world.adventure.dispose();world.sideWork.dispose();goalFill.geometry.dispose();goalFill.material.dispose();goalRing.geometry.dispose();goalRing.material.dispose();

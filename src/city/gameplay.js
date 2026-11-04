@@ -21,3 +21,4 @@ export function raiseWanted(state,amount=1){
 }
 export function freeRoam(state){state.ending=null;state.overtime=true;}
 export function runningSpeed(state,walking){return walking?2.8:state.energy>0?10:state.shift.upgrades.boots?7.5:6.8;}
+export const policeRunningSpeed=state=>runningSpeed(state,false)*.95;

@@ -1,6 +1,6 @@
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 export function createRoofPursuit(world){
- const ladders=world.parkour.diagnostics.ladders.map(l=>({...l,nx:(l.x-l.exit.x)/1.55,nz:(l.z-l.exit.z)/1.55})),roofs=world.roofs;
+ const ladders=world.parkour.diagnostics.ladders.map(l=>({...l,nx:l.nx??(l.x-l.exit.x)/1.55,nz:l.nz??(l.z-l.exit.z)/1.55})),roofs=world.roofs;
  const ladderFor=id=>ladders.find(l=>l.id===id);
  const facing=l=>Math.atan2(-l.nx,-l.nz);
  function moveRoof(n,target,speed,dt,roof){
@@ -13,12 +13,15 @@ export function createRoofPursuit(world){
  return {
   update(n,player,dt,hostile){
    n.climb=null;let route=n.roofPursuit,p=n.mesh.position;
+   const support=roofs.find(r=>Math.abs(p.x-r.x)<r.w-.08&&Math.abs(p.z-r.z)<r.d-.08&&Math.abs(p.y-r.y)<.3);
+   if(route?.phase==='roof'&&!support){n.roofPursuit=null;route=null;n.airborne={speed:0};}
+   if(n.airborne){const floor=world.parkour.floorAt?.(p.x,p.z,p.y+.1)??world.groundHeight(p.x,p.z);n.airborne.speed-=18*dt;p.y=Math.max(floor,p.y+n.airborne.speed*dt);if(p.y<=floor+.01)n.airborne=null;return {handled:true};}
    const climbing=world.parkour.motion?.ladder;
    const targetRoof=hostile?roofs.find(r=>r.id===climbing&&player.y>world.groundHeight(player.x,player.z)+2.5||player.y>=r.y-.5&&Math.abs(player.x-r.x)<r.w+.8&&Math.abs(player.z-r.z)<r.d+.8):null;
    if(!route&&targetRoof){const l=ladderFor(targetRoof.id);if(l)route=n.roofPursuit={id:l.id,phase:'approach',travel:0};}
    if(!route)return {};
    const l=ladderFor(route.id),roof=roofs.find(r=>r.id===route.id);if(!l||!roof){n.roofPursuit=null;return {};}
-   const base={x:l.x+l.nx*.35,z:l.z+l.nz*.35};
+   const base={x:l.x+l.nx*.30,z:l.z+l.nz*.30};
    if(route.phase==='approach'){
     if(!targetRoof||targetRoof.id!==route.id){n.roofPursuit=null;return {};}
     if(distance(p,base)>.85)return {approach:base};
@@ -27,9 +30,9 @@ export function createRoofPursuit(world){
    }
    if(route.phase==='climb'){
     n.mesh.rotation.y=facing(l);const direction=route.direction;
-    const occupied=world.people.some(o=>o!==n&&o.roofPursuit?.id===l.id&&distance(p,o.mesh.position)<.9&&(o.mesh.position.y-p.y)*direction>0&&Math.abs(o.mesh.position.y-p.y)<2.45);
+    const occupied=distance(p,player)<.9&&(player.y-p.y)*direction>0&&Math.abs(player.y-p.y)<2.45||world.people.some(o=>o!==n&&o.roofPursuit?.id===l.id&&distance(p,o.mesh.position)<.9&&(o.mesh.position.y-p.y)*direction>0&&Math.abs(o.mesh.position.y-p.y)<2.45);
     const step=occupied?0:direction*2.15*dt;p.y=Math.max(l.y0+.1,Math.min(l.top,p.y+step));route.travel+=Math.abs(step);
-    n.climb={phase:route.travel*5.5,moving:!occupied,ladder:l.id};
+    n.climb={phase:route.travel*5.5,moving:!occupied,reach:.30,ladder:l.id};
     if(direction>0&&p.y>=l.top-.2){route.phase='mantle';route.elapsed=0;route.from={x:p.x,y:p.y,z:p.z};route.to=l.exit;}
     if(direction<0&&p.y<=l.y0+.11){p.y=world.groundHeight(p.x,p.z);n.roofPursuit=null;n.climb=null;}
     return {handled:true};
@@ -37,7 +40,7 @@ export function createRoofPursuit(world){
    if(route.phase==='mantle'){
     route.elapsed+=dt;const t=Math.min(1,route.elapsed/.55),u=t*t*(3-2*t);
     p.set(route.from.x+(route.to.x-route.from.x)*u,route.from.y+(route.to.y-route.from.y)*u,route.from.z+(route.to.z-route.from.z)*u);
-    n.mesh.rotation.y=facing(l);n.climb={phase:route.travel*5.5,moving:true,ladder:l.id};
+    n.mesh.rotation.y=facing(l);n.climb={phase:route.travel*5.5,moving:true,reach:.30,ladder:l.id};
     if(t===1){route.phase=route.direction>0?'roof':'climb';n.climb=null;}
     return {handled:true};
    }

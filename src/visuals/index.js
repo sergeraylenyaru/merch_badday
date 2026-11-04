@@ -18,7 +18,7 @@ const original = (file) => `${base}models/original/${file}.glb?rig=2`;
 export const MODEL_MANIFEST = {
   hero: { url: `${base}models/characters/merch-male.glb?rig=6`, size: [1.3, 2.1, 0.9] },
   staff: { url: `${base}models/characters/civilian-female.glb?rig=4`, size: [1.3, 2.1, 0.9] },
-  officer: {url: `${base}models/characters/police-officer.glb?rig=1`,size:[1.3,2.1,.9]},
+  officer: {url: `${base}models/characters/police-officer.glb?rig=2`,size:[1.3,2.1,.9]},
   stocky:{url:`${base}models/characters/civilian-stocky.glb?rig=1`,size:[1.6,1.95,1]},
   short:{url:`${base}models/characters/civilian-short.glb?rig=1`,size:[1.15,1.65,.85]},
   tall:{url:`${base}models/characters/civilian-tall.glb?rig=1`,size:[1.2,2.35,.9]},
@@ -32,7 +32,7 @@ export const MODEL_MANIFEST = {
   van: { url: `${base}models/vehicles/van.glb`, size: [2.5, 2.8, 5.8] },
   truck: { url: `${base}models/vehicles/truck.glb`, size: [3, 3.7, 6.8] },
   taxi: {url:`${base}models/vehicles/suv.glb`,size:[2.5,2.4,4.6]},
-  bus: {url:`${base}models/city-pack/bus.glb`,rotationX:-Math.PI/2,size:[2.7,3.4,8.5]},
+  bus: {url:`${base}models/vehicles/bus.glb?rig=1`,size:[2.7,3.4,8.5]},
   bench: { url: vendor("bench"), size: [2.4, 0.8, 1] },
   bush: { url: vendor("bush"), size: [1.7, 1.7, 1.7] },
   streetlight: { url: vendor("streetlight"), size: [2, 7, 0.6] },

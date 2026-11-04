@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { MAP_BUILDINGS } from './map-buildings.js';
-import { MAP, HOME, HOME_CAR, ROAD_BOXES, PARK_PATHS, WORK_STOPS, LOCAL_POINTS, isReferenceWater } from './reference-layout.js';
+import { MAP, HOME, HOME_CAR, ROAD_BOXES, PARK_PATHS, WORK_STOPS, LOCAL_POINTS, isReferenceWater,meetsStreet } from './reference-layout.js';
 import { boxesIntersect, vehicleBox } from '../spatial.js';
 import { NEIGHBORHOODS, populateNeighborhoods, populateEntrances } from './neighborhood-details.js';
 import {BREAKABLE_IDS,createDestructibles} from './destructibles.js';
@@ -205,7 +205,7 @@ function buildAsset(id, variant, c) {
     } else sign(RU_LABELS[id] || id.replaceAll('-', ' '), Math.min(w - 0.8, 5.4), 0.45, 0, h - 0.42, d / 2 + 0.11, PALETTE.navy);
   } else if (record.archetype === 'building-detail') {
     if (id === 'entry-door') {
-      box(g, 1.25, 2.35, 0.16, 0, 1.18, 0, 'darkMetal'); box(g, 1.05, 2.15, 0.06, 0, 1.18, 0.12, 'blue');
+      box(g, 1.25, 2.35, 0.16, 0, 1.18, 0, 'darkMetal'); box(g, 1.05, 2.15, 0.06, 0, 1.18, 0.12, ['#38566e','#386350','#854b43','#795b3e','#45827c','#676a73'][v%6]);
       box(g, 0.06, 0.06, 0.07, 0.39, 1.05, 0.18, 'yellow');
     } else if (id === 'intercom') {
       box(g, 0.35, 0.68, 0.09, 0, 0.82, 0, 'darkMetal');
@@ -785,6 +785,8 @@ export function createUrbanDetails(sceneRoot, world, point) {
   const byId = new Map(URBAN_ASSET_CATALOG.map((item) => [item.id, item]));
   const pathBoxes=PARK_PATHS.map(([u,v,w,d])=>{const p=point(u,v);return {x:p.x,z:p.z,w:w*MAP.scale/2,d:d*MAP.scale/2};});
   const buildingBoxes=MAP_BUILDINGS.map(([,u,v,w,d])=>{const p=point(u,v);return {x:p.x,z:p.z,w:w*MAP.scale/2,d:d*MAP.scale/2};});
+  const facadeMeshes=[];sceneRoot.traverse(n=>{if(n.isInstancedMesh&&n.name.startsWith('city-pack-')&&!/roof|glass/.test(n.material?.name??''))facadeMeshes.push(n);});
+  const wallRay=new T.Raycaster();wallRay.far=6;
   const homeApproach={x:(HOME.x+HOME_CAR.x)/2,z:(HOME.z+HOME_CAR.z)/2,w:Math.abs(HOME.x-HOME_CAR.x)/2+3,d:Math.abs(HOME.z-HOME_CAR.z)/2+3};
   function occupied(footprint, options={}) {
     const u=(footprint.x-MAP.x)/MAP.scale,v=(footprint.z-MAP.z)/MAP.scale;
@@ -794,10 +796,11 @@ export function createUrbanDetails(sceneRoot, world, point) {
     if(u-w<22||u+w>1650||v-d<24||v+d>780)return true;
     // Test the full visible footprint, including corners, overhangs and signs.
     for(const dx of [-w,0,w])for(const dz of [-d,0,d])if(isReferenceWater(u+dx,v+dz))return true;
-    if(!options.roadSurface && ROAD_BOXES.some(road=>boxesIntersect(footprint,road)))return true;
+    if(!options.roadSurface && meetsStreet(footprint.x,footprint.z,footprint.w*2,footprint.d*2))return true;
     if(pathBoxes.some(path=>boxesIntersect(footprint,path)))return true;
-    if(buildingBoxes.some(building=>boxesIntersect(footprint,building)))return true;
-    if((world?.blockers??[]).some(b=>b.enabled!==false&&boxesIntersect(footprint,b)))return true;
+    if(buildingBoxes.some((building,i)=>i!==options.buildingIndex&&boxesIntersect(footprint,building)))return true;
+    const own=buildingBoxes[options.buildingIndex];
+    if((world?.blockers??[]).some(b=>b.enabled!==false&&!(own&&(b.buildingIndex===options.buildingIndex||Math.hypot(b.x-own.x,b.z-own.z)<.05))&&boxesIntersect(footprint,b)))return true;
     if((world?.vehicles??[]).some(v=>!v.police&&boxesIntersect(footprint,vehicleBox(v))))return true;
     if(boxesIntersect(footprint,homeApproach))return true;
     if(placed.some(p=>boxesIntersect(footprint,p.footprint)||(p.approach&&boxesIntersect(footprint,p.approach))))return true;
@@ -837,6 +840,8 @@ export function createUrbanDetails(sceneRoot, world, point) {
     for(let r=4;r<=(options.search??0);r+=4)for(let i=0;i<16;i++)candidates.push([u+Math.cos(i*Math.PI/8)*r,v+Math.sin(i*Math.PI/8)*r]);
     for(const [cu,cv] of candidates){
       const p=point(cu,cv);model.position.set(p.x,options.y??((world?.groundHeight?.(p.x,p.z)??0)+.015),p.z);model.rotation.y=rotation;
+      let wallGap=null;
+      if(options.entrance&&facadeMeshes.length){const n=new T.Vector3(Math.sin(rotation),0,Math.cos(rotation));wallRay.set(new T.Vector3(p.x+n.x*2.5,1.3,p.z+n.z*2.5),n.clone().negate());const hit=wallRay.intersectObjects(facadeMeshes,false)[0];if(hit){model.position.x=hit.point.x+n.x*.39;model.position.z=hit.point.z+n.z*.39;p.x=model.position.x;p.z=model.position.z;wallGap=-.01;}}
       model.updateMatrixWorld(true);bounds.setFromObject(model);bounds.getSize(size);bounds.getCenter(center);
       const padding=options.entrance?0:.12;
       const footprint={x:center.x,z:center.z,w:size.x/2+padding,d:size.z/2+padding};
@@ -850,7 +855,7 @@ export function createUrbanDetails(sceneRoot, world, point) {
       detailRoot.add(model);sourceGroups.push(model);
       const prop=BREAKABLE_IDS.has(id)?{key:`urban:${id}:${cu.toFixed(2)}:${cv.toFixed(2)}`,id,x:center.x,z:center.z,footprint,instances:[],proxy:null}:null;
       if(prop){model.userData.breakable=prop;breakables.push(prop);}
-      placed.push({id,u:cu,v:cv,category:byId.get(id).category,footprint,approach,buildingIndex:options.buildingIndex??null,neighborhood:options.neighborhood??null,cluster:options.cluster??null,shopIndex:options.shopIndex??null,loadingShop:options.loadingShop??null,roadSurface:options.roadSurface===true});
+      placed.push({id,u:(p.x-MAP.x)/MAP.scale,v:(p.z-MAP.z)/MAP.scale,variant,rotation,wallGap,category:byId.get(id).category,footprint,approach,buildingIndex:options.buildingIndex??null,neighborhood:options.neighborhood??null,cluster:options.cluster??null,shopIndex:options.shopIndex??null,loadingShop:options.loadingShop??null,roadSurface:options.roadSurface===true});
       if(options.solid&&world?.box){
         const collider=world.box(center.x,center.y,center.z,size.x,size.y,size.z,'#6c7770',true);
         collider.visible=false;colliders.push(collider);

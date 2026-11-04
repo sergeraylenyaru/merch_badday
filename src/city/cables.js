@@ -25,7 +25,7 @@ export function planRoofCables(roofs,blockers=[]){
  return wires;
 }
 export function createCables(scene,world){
- const root=new T.Group();root.name='rooftop-cables';scene.add(root);const wires=planRoofCables(world.roofs,world.blockers),posts=[],metal=[],owned=[];
+ const root=new T.Group();root.name='rooftop-cables';scene.add(root);const wires=planRoofCables(world.roofs.filter(r=>!r.kind||r.kind==='residential'),world.blockers),posts=[],metal=[],owned=[];
  for(const wire of wires){
   for(const p of [wire.a,wire.b]){
    const proxy=world.box(p.x,p.roofY+ROOF_POST_HEIGHT/2,p.z,.25,ROOF_POST_HEIGHT,.25,'#776d55',true);proxy.visible=false;

@@ -1,4 +1,4 @@
-import {boxesIntersect} from '../spatial.js';
+import {boxesIntersect,circleIntersectsBox} from '../spatial.js';
 // Coordinates measured on the user's 1672 × 941 map. Z increases south.
 export const MAP = {width:1672,height:941,scale:0.4,x:-334,z:-188};
 export const point = (u,v) => ({x:MAP.x+u*MAP.scale,z:MAP.z+v*MAP.scale});
@@ -34,6 +34,9 @@ export const ROADS = [
  ...Array.from({length:32},(_,i)=>{const a=i*Math.PI/16,b=(i+1)*Math.PI/16;return [1390+Math.cos(a)*37,337+Math.sin(a)*37,1390+Math.cos(b)*37,337+Math.sin(b)*37,25];}),
 ];
 export const PARK_PATHS=[[850,560,14,360],[850,400,340,14],[850,748,420,14],[775,110,14,80]];
+const joinMap=new Map();
+ROADS.forEach(([a,b,c,d,width],index)=>{for(const [u,v,end]of [[a,b,0],[c,d,1]]){const key=u.toFixed(3)+':'+v.toFixed(3),j=joinMap.get(key)??{...point(u,v),radius:0,roads:[]};j.radius=Math.max(j.radius,width*MAP.scale/2);j.roads.push({index,end});joinMap.set(key,j);}});
+export const ROAD_JOINS=[...joinMap.values()].filter(j=>j.roads.length>1);
 export const PIER=[865,810,865,880,22];
 export const RIVERS=[
  [[710,-20],[660,25],[640,70],[635,120],[637,200],[640,280],[641,340],[640,410],[623,480],[618,560],[608,625],[601,670],[585,710],[578,750],[593,800]],
@@ -55,7 +58,7 @@ export function nearRoad(u,v,margin=0) {
 }
 
 export const ROAD_BOXES=ROADS.map(([a,b,c,d,width])=>{const start=point(a,b),end=point(c,d);return {x:(start.x+end.x)/2,z:(start.z+end.z)/2,w:width*MAP.scale/2,d:Math.hypot(end.x-start.x,end.z-start.z)/2,heading:Math.atan2(end.x-start.x,end.z-start.z)};});
-export const meetsStreet=(x,z,w,d,heading=0)=>ROAD_BOXES.some(road=>boxesIntersect({x,z,w:w/2,d:d/2,heading},road));
+export const meetsStreet=(x,z,w,d,heading=0)=>{const box={x,z,w:w/2,d:d/2,heading};return ROAD_BOXES.some(road=>boxesIntersect(box,road))||ROAD_JOINS.some(j=>circleIntersectsBox(j.x,j.z,j.radius,box));};
 
 // Centres of the pins already printed on the supplied image. Doors remain
 // separate navigation targets, so the tablet does not draw duplicate labels.

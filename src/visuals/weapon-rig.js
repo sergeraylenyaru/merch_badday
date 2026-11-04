@@ -1,6 +1,6 @@
 import * as T from 'three';
 
-export const MELEE_TIMING={bat:{quick:{duration:.68,impact:.34},strong:{duration:1,impact:.53}},stick:{quick:{duration:.58,impact:.29},strong:{duration:.88,impact:.46}},baton:{quick:{duration:.64,impact:.32},strong:{duration:.64,impact:.32}}};
+export const MELEE_TIMING={stone:{quick:{duration:.6,impact:.22},strong:{duration:.6,impact:.22}},bat:{quick:{duration:.68,impact:.34},strong:{duration:1,impact:.53}},stick:{quick:{duration:.58,impact:.29},strong:{duration:.88,impact:.46}},baton:{quick:{duration:.64,impact:.32},strong:{duration:.64,impact:.32}}};
 const smooth=t=>T.MathUtils.smoothstep(t,0,1);
 const poses={
  carry:{p:[.36,1.35,.3],r:[.15,0,-2.7]},

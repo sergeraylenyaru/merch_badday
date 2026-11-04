@@ -34,7 +34,7 @@ try{
    await scenario(at(progress,items.find(i=>i.kind==='pack'&&i.id===id)),'pack-'+id);await page.keyboard.press('KeyE');
    await page.waitForFunction(id=>__MERCH__.state.adventure.cigarettes.includes(id),id);
    progress=await page.evaluate(()=>__MERCH__.state);
-   if(id===9){assert.equal(progress.money,600);await page.keyboard.press('KeyM');await page.locator('[data-tab="Коллекция"]').click();assert.equal(await page.locator('#collectionCount').textContent(),'10/10');assert.equal(await page.locator('.collection-card.collected').count(),10);await page.screenshot({path:'.playwright/collection-complete.png'});}
+   if(id===9){assert.equal(progress.money,600);await page.keyboard.press('KeyM');await page.locator('[data-tab="Коллекция"]').click();assert.equal(await page.locator('#collectionCount').textContent(),'10/20');assert.equal(await page.locator('.collection-card.collected').count(),10);await page.screenshot({path:'.playwright/collection-complete.png'});}
    await close();
   }
   console.log('PASS ten physical cigarette pickups, saved progress, all colours in M and one completion reward');

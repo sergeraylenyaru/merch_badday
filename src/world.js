@@ -1,7 +1,7 @@
 import {createTerrainMaterials,tileBoxUV} from './city/terrain-materials.js';
 import {createReferenceCity, buildReferenceTerrain, isReferenceWater} from './city/reference-city.js';
 import {roadHeight} from './city/terrain.js';
-import {MAP, point, pixel, START, HOME_CAR, HOME_CAR_HEADING, ROADS,ROAD_BOXES} from './city/reference-layout.js';
+import {MAP, point, pixel, START, HOME_CAR, HOME_CAR_HEADING, ROADS,ROAD_BOXES,ROAD_JOINS} from './city/reference-layout.js';
 import {clipSurface,appendSurface,rectanglePolygon} from './city/planar-surfaces.js';
 import * as T from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
@@ -22,6 +22,7 @@ import {createServiceYards} from './city/service-yards.js';
 import {createCables} from './city/cables.js';
 import {createEnclosures} from './city/enclosures.js';
 import {createRoadWear} from './city/road-wear.js';
+import {createBillboards} from './city/billboards.js';
 export async function createWorld(scene, state) {
   await RAPIER.init();
   const physics = new RAPIER.World({ x: 0, y: -20, z: 0 });
@@ -94,7 +95,7 @@ export async function createWorld(scene, state) {
   }
   function groundHeight(x, z) {
     let height = roadHeight(x,z);
-    if(ROAD_BOXES.some(r=>circleIntersectsBox(x,z,0,r)))return height;
+    if(ROAD_BOXES.some(r=>circleIntersectsBox(x,z,0,r))||ROAD_JOINS.some(j=>Math.hypot(x-j.x,z-j.z)<=j.radius))return height;
     for (const surface of surfaces) if (Math.abs(x - surface.x) <= surface.w && Math.abs(z - surface.z) <= surface.d)
       height = Math.max(height, surface.height);
     return height;
@@ -433,6 +434,8 @@ export async function createWorld(scene, state) {
   world.water=createWater(world,state);
   world.yards=createServiceYards(scene,world);
   world.cables=createCables(scene,world);
+  world.roofs.push(...world.shopRoofs.map((r,i)=>({...r,id:'shop-work:'+i,kind:'shop',wallBounds:{x:r.x,z:r.z,w:r.w,d:5.5}})));
+  world.billboards=createBillboards(scene,world);
   for(const v of vehicles){const saved=state.vehicles[v.id];if(saved&&(!v.traffic||saved.claimed)){v.claimed=!!saved.claimed;v.mesh.position.set(saved.x,groundHeight(saved.x,saved.z),saved.z);v.heading=saved.heading;v.mesh.rotation.y=v.heading;v.sunk=!!saved.sunk;v.waterTime=saved.waterTime??0;v.waterStartY=saved.waterStartY??0;v.waterDistance=saved.waterDistance??0;if(v.waterTime&&!v.sunk&&Number.isFinite(saved.y))v.mesh.position.y=saved.y;}}
   world.parkour=createParkour(scene,world,state);
   world.visuals = await createVisuals(scene, world, shopDecor);

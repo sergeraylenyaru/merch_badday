@@ -52,7 +52,7 @@ export function populateEntrances(buildings, add, scale) {
       for (const offset of span>85?[-span*.25,span*.25]:[0]) {
         if(add('entry-door',u+nx*(half+.42/scale)+Math.cos(angle)*offset,
           v+nz*(half+.42/scale)-Math.sin(angle)*offset,
-          buildingIndex%3,angle,{entrance:true,buildingIndex}))count++;
+          buildingIndex%6,angle,{entrance:true,buildingIndex}))count++;
       }
       if(count)break;
     }

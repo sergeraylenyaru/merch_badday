@@ -20,7 +20,7 @@ try{
  }
  if(run('police')){
   const options=city.parkour.ladders.map(l=>({l,d:Math.min(...people.filter(n=>n.kind==='police').map(n=>Math.hypot(n.position[0]-l.x,n.position[2]-l.z)))})).sort((a,b)=>a.d-b.d),l=options[0].l,roof=city.parkour.roofs.find(r=>r.id===l.id),s=fresh();s.position={x:roof.x,z:roof.z};s.parkour.feetY=roof.y;s.wanted=1;
-  ({page,context}=await app.scenario(s,'side-police-roof'));await page.waitForFunction(()=>__MERCH__.people.some(n=>n.kind==='police'&&n.climb&&n.position[1]>3),null,{timeout:150000});const climbing=await page.evaluate(()=>__MERCH__.people.find(n=>n.kind==='police'&&n.climb&&n.position[1]>3));assert.ok(climbing.motion.climbGripErrors.every(e=>e<.003));await page.screenshot({path:'.playwright/side-police-ladder.png'});
+  ({page,context}=await app.scenario(s,'side-police-roof'));await page.waitForFunction(()=>__MERCH__.people.some(n=>n.kind==='police'&&n.climb&&n.position[1]>3),null,{timeout:150000});const climbing=await page.evaluate(()=>__MERCH__.people.find(n=>n.kind==='police'&&n.climb&&n.position[1]>3));assert.equal(climbing.motion.climbGripErrors.length,2);assert.ok(climbing.motion.climbGripErrors.every(e=>e<.003));await page.screenshot({path:'.playwright/side-police-ladder.png'});
   await page.waitForFunction(y=>__MERCH__.people.some(n=>n.kind==='police'&&n.roofPursuit?.phase==='roof'&&Math.abs(n.position[1]-y)<.1),roof.y,{timeout:150000});await page.waitForFunction(()=>__MERCH__.state.health<100);assert.equal(await page.evaluate(()=>__MERCH__.mode),'play');await page.screenshot({path:'.playwright/side-police-roof.png'});await context.close();console.log('PASS police actual path to ladder, animated ascent, roof walk and melee damage');
  }
  if(run('delivery')){

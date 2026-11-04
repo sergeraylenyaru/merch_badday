@@ -489,7 +489,7 @@ export function createCharacterMotion(entity, model) {
       const cycle=input.climb.phase,zip=input.climb.kind==='zipline',vault=input.climb.kind==='vault';
       if(vault&&joints.Spine){joints.Spine.node.quaternion.multiply(tilt.setFromAxisAngle(X,.35));model.updateWorldMatrix(true,true);}
       for(const [i,arm]of arms.entries())if(arm){
-        target.set(arm.side*(zip?.14:.25),zip?2.12:vault?1.45:1.65+Math.sin(cycle+i*Math.PI)*.16,zip?0:vault?.45:.35);root.localToWorld(target);arm.endQ.copy(entityQ).multiply(arm.gripOrientation||arm.neutralEndRotation);pole.set(arm.side*.6,zip?-.1:-.8,.12).applyQuaternion(entityQ);solve(arm,target,arm.endQ,pole);arm.contact.getWorldPosition(arm.actual);climbGripErrors.push(arm.actual.distanceTo(target));
+        target.set(arm.side*(zip?.14:.25),zip?2.12:vault?1.45:1.65+Math.sin(cycle+i*Math.PI)*.16,zip?0:vault?.45:input.climb.reach??.35);root.localToWorld(target);arm.endQ.copy(entityQ).multiply(arm.gripOrientation||arm.neutralEndRotation);pole.set(arm.side*.6,zip?-.1:-.8,.12).applyQuaternion(entityQ);solve(arm,target,arm.endQ,pole);arm.contact.getWorldPosition(arm.actual);climbGripErrors.push(arm.actual.distanceTo(target));
       }
       for(const [i,leg]of legs.entries())if(leg){
         target.set(leg.side*.2,vault?.45:.10+Math.max(0,Math.sin(cycle+i*Math.PI))*(zip?.12:.3),vault?.4:.25);root.localToWorld(target);leg.endQ.copy(entityQ).multiply(leg.neutralEndRotation);pole.set(0,-.05,1).applyQuaternion(entityQ);solve(leg,target,leg.endQ,pole);

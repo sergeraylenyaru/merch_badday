@@ -11,17 +11,18 @@ export function createParkour(scene,world,state){
  const metal=new T.MeshStandardMaterial({color:'#8a8372',roughness:.72,metalness:.35});
  function box(x,y,z,w,h,d,angle,key){const g=new T.BoxGeometry(w,h,d);g.rotateY(angle);g.translate(x,y,z);if(!chunks.has(key))chunks.set(key,[]);chunks.get(key).push(g);}
  for(const roof of roofs){
+  const wall=roof.wallBounds??roof;
   const options=[];
   for(const side of [-1,1])for(const along of [0,-.45,.45]){
-   options.push({x:roof.x+along*roof.w,z:roof.z+side*(roof.d+.68),nx:0,nz:side});
-   options.push({x:roof.x+side*(roof.w+.68),z:roof.z+along*roof.d,nx:side,nz:0});
+   options.push({x:wall.x+along*wall.w,z:wall.z+side*(wall.d+.08),nx:0,nz:side});
+   options.push({x:wall.x+side*(wall.w+.08),z:wall.z+along*wall.d,nx:side,nz:0});
   }
   // Vehicles can move between saves; ladder anchors belong to the building.
   const baseFree=(x,z)=>!world.blockers.some(b=>b.h>.04&&circleIntersectsBox(x,z,.36,b));
-  const base=options.find(p=>baseFree(p.x,p.z)&&baseFree(p.x+p.nx*1.4,p.z+p.nz*1.4));
-  if(!base)continue;const y0=world.groundHeight(base.x,base.z),height=roof.y-y0;if(height<3)continue;
+  const base=roof.ladder??options.find(p=>baseFree(p.x+p.nx*.5,p.z+p.nz*.5)&&baseFree(p.x+p.nx*1.4,p.z+p.nz*1.4));
+  if(!base)continue;const y0=world.groundHeight(base.x,base.z),height=roof.y-y0;if(height<1.8)continue;
   const angle=Math.atan2(base.nx,base.nz),tx=base.nz,tz=-base.nx,key=Math.floor(base.x/48)+','+Math.floor(base.z/48);
-  const ladder={id:roof.id,...base,y0,top:roof.y,angle,roof,exit:{x:base.x-base.nx*1.55,z:base.z-base.nz*1.55,y:roof.y}};ladders.push(ladder);
+  const ladder={id:roof.id,...base,y0,top:roof.y,angle,roof,exit:base.exit??{x:base.x-base.nx*1.55,z:base.z-base.nz*1.55,y:roof.y}};ladders.push(ladder);
   for(const side of [-1,1])box(base.x+tx*.43*side,y0+height/2+.8,base.z+tz*.43*side,.065,height+1.6,.09,angle,key);
   for(let y=.28;y<height+1.53;y+=.32)box(base.x,y0+y,base.z,.85,.055,.09,angle,key);
  }
@@ -29,7 +30,7 @@ export function createParkour(scene,world,state){
  const pos=world.player.mesh.position;let grounded=true,extraUsed=state.parkour?.extraUsed===true,airKick=0,climb=null,climbDistance=0;
  const traversal=createTraversal(scene,world,state);
  const stored=state.parkour?.feetY;if(Number.isFinite(stored)&&stored>=world.groundHeight(pos.x,pos.z))pos.y=stored;
- const savedLadder=ladders.find(l=>l.id===state.parkour?.ladder);if(savedLadder){climb={ladder:savedLadder,mantle:null};grounded=false;}
+ const savedLadder=ladders.find(l=>l.id===state.parkour?.ladder);if(savedLadder){climb={ladder:savedLadder,mantle:null};pos.x=savedLadder.x+savedLadder.nx*.35;pos.z=savedLadder.z+savedLadder.nz*.35;grounded=false;}
  function floorAt(x,z,ceiling=pos.y+.12){
   let floor=world.groundHeight(x,z);
   for(const b of world.blockers)if(b.enabled!==false&&b.h>2.5&&b.w>2&&b.d>2){const top=(b.y??b.h/2)+b.h/2;if(top<=ceiling+.03&&Math.abs(x-b.x)<b.w-.08&&Math.abs(z-b.z)<b.d-.08)floor=Math.max(floor,top);}
@@ -68,7 +69,7 @@ export function createParkour(scene,world,state){
   reset(feetY=world.groundHeight(pos.x,pos.z)){traversal.detach(true);climb=null;grounded=Math.abs(feetY-floorAt(pos.x,pos.z,feetY+.12))<.1;extraUsed=false;airKick=0;pos.y=feetY;saveHeight();},
   context(){const special=traversal.context();if(special)return special;const l=nearest();if(climb)return 'W / S · Лезть вверх / вниз · E — отпустить';return l&&Math.hypot(pos.x-l.x,pos.z-l.z)<2.6&&pos.y<=l.top+.9?'Space + E · Зацепиться за лестницу':'';},
   get motion(){return traversal.motion??(climb?{phase:climbDistance*5.5,moving:!climb.mantle,ladder:climb.ladder.id}:null);},
-  get diagnostics(){return {grounded,extraUsed,doubleJumpHeight:DOUBLE_JUMP_HEIGHT,heightAboveGround:pos.y-world.groundHeight(pos.x,pos.z),climbing:climb?.ladder.id??traversal.saved?.id??null,traversal:traversal.saved,airKick,ladders:ladders.map(({id,x,z,y0,top,exit})=>({id,x,z,y0,top,exit})),roofs:roofs.map(r=>({...r}))};},
+  get diagnostics(){return {grounded,extraUsed,doubleJumpHeight:DOUBLE_JUMP_HEIGHT,heightAboveGround:pos.y-world.groundHeight(pos.x,pos.z),climbing:climb?.ladder.id??traversal.saved?.id??null,traversal:traversal.saved,airKick,ladders:ladders.map(({id,x,z,nx,nz,y0,top,exit})=>({id,x,z,nx,nz,y0,top,exit})),roofs:roofs.map(r=>({...r}))};},
   dispose(){traversal.dispose();root.removeFromParent();owned.forEach(g=>g.dispose());metal.dispose();},
  };
 }

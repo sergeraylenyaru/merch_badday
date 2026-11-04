@@ -12,6 +12,12 @@ async function load(name) {
   return new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), "");
 }
 
+test('the actual police skin has all four contact anchors and visibly moves both hands and knees when climbing',async()=>{
+ const source=await load('police-officer'),library=new AssetLibrary({human:{url:'fixture:police-climb'}},{loader:{loadAsync:async()=>source},logger:{info(){},warn(){}}});await library.preload();const mesh=new Group(),model=library.instantiate('human',{height:2.1});mesh.add(model);mesh.position.y=5;const motion=createCharacterMotion({mesh},model),hands=[],knees=[];
+ for(const phase of [0,Math.PI/2,Math.PI,Math.PI*1.5]){motion.update(1/60,{climb:{phase,moving:true,reach:.30},grounded:false,velocity:new Vector3(0,2.15,0)});assert.equal(motion.diagnostics.climbGripErrors.length,2);assert.ok(motion.diagnostics.climbGripErrors.every(e=>e<.003));hands.push(model.getObjectByName('PalmGripRight').getWorldPosition(new Vector3()).y);knees.push(model.getObjectByName('RightKnee').quaternion.clone());}
+ assert.ok(Math.max(...hands)-Math.min(...hands)>.25);assert.ok(knees[0].angleTo(knees[1])>.05);for(let i=0;i<60;i++)motion.update(1/60,{grounded:true,velocity:new Vector3(0,0,3)});assert.ok(motion.diagnostics.soleClearance>=-.02&&motion.diagnostics.soleClearance<.05);motion.dispose();library.dispose();
+});
+
 test('the real hero closes both unarmed hands into fists during idle and walking',async()=>{
  const asset=await load('merch-male'),library=new AssetLibrary({human:{url:'fixture:fists'}},{loader:{loadAsync:async()=>asset},logger:{info(){},warn(){}}});await library.preload();
  const mesh=new Group(),model=library.instantiate('human',{height:2.1});mesh.add(model);const rest=['Index3L','Index3R'].map(n=>model.getObjectByName(n).quaternion.clone()),motion=createCharacterMotion({mesh},model);
