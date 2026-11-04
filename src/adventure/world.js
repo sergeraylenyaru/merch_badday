@@ -84,7 +84,7 @@ export function createAdventure(scene,world,state,callbacks){
  const policeRigs=world.people.filter(n=>n.kind==='police'&&n.weapon==='baton').map(person=>{const rig=createWeaponRig(scene,person.mesh,'baton',weaponModel);person.weaponRig=rig;return {person,rig};});
  const gunMaterial=new T.MeshBasicMaterial({color:'#42d7ff',transparent:true,opacity:.65});materials.set('water-jet',gunMaterial);
  function shootWater(origin,direction){
-  const target=world.people.filter(n=>n.mesh.visible&&n.stun<=0).map(n=>({n,dx:n.mesh.position.x-origin.x,dz:n.mesh.position.z-origin.z})).filter(v=>{const d=Math.hypot(v.dx,v.dz);return d<10&&d>.1&&(v.dx*direction.x+v.dz*direction.z)/d>.94&&clearSegment(origin,v.n.mesh.position,world.blocked,.05);}).sort((p,q)=>Math.hypot(p.dx,p.dz)-Math.hypot(q.dx,q.dz))[0]?.n;
+  const target=world.people.filter(n=>n.mesh.visible&&!n.dead&&n.stun<=0).map(n=>({n,dx:n.mesh.position.x-origin.x,dz:n.mesh.position.z-origin.z})).filter(v=>{const d=Math.hypot(v.dx,v.dz);return d<10&&d>.1&&(v.dx*direction.x+v.dz*direction.z)/d>.94&&clearSegment(origin,v.n.mesh.position,world.blocked,.05);}).sort((p,q)=>Math.hypot(p.dx,p.dz)-Math.hypot(q.dx,q.dz))[0]?.n;
   if(target){target.stun=.3;target.anger=2;if(target.kind==='police')callbacks.crime(1);callbacks.notify('Прямое попадание водой!');}
   const length=target?Math.hypot(target.mesh.position.x-origin.x,target.mesh.position.z-origin.z):9;
   const jet=new T.Mesh(geo('jet',()=>new T.CylinderGeometry(.035,.06,1,6)),gunMaterial);jet.position.set(origin.x+direction.x*length/2,origin.y+1.3,origin.z+direction.z*length/2);jet.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),new T.Vector3(direction.x,0,direction.z));jet.scale.y=length;root.add(jet);effects.push({mesh:jet,life:.16});if(effects.length>5)root.remove(effects.shift().mesh);
@@ -117,6 +117,7 @@ export function createAdventure(scene,world,state,callbacks){
   if(id==='football'){p=goal;label=`Ворота · ${Math.min(3,a.fun.goals)}/3`;}
   if(id==='hospital'){p=world.hospital.spawn;label='Городская больница №1';}
   if(id==='ladder'){p=world.parkour.nearest();label='Лестница на крышу · Space + E';}
+  if(id==='scaffold'){p=world.parkour.diagnostics.ladders.filter(l=>l.id.startsWith('scaffold:')).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Строительные леса · Space + E';}
   if(id==='billboard'){p=world.parkour.diagnostics.ladders.filter(l=>l.id.startsWith('billboard:')).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Рекламный щит · лестница на столбе · Space + E';}
   if(id==='wire'){p=world.cables.wires.flatMap(w=>[w.a,w.b]).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Провод на крыше · Space + E';if(p&&world.player.mesh.position.y<p.roofY-1){p=world.parkour.diagnostics.ladders.find(l=>l.id===p.roofId)??p;label='Поднимитесь по лестнице к проводу';}else if(p)p={...p,y:p.roofY};}
   if(id==='garage-yard'){p=world.yards.yards.flatMap(y=>y.props).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Ящики, баки и забор у гаражей';}
@@ -153,7 +154,7 @@ export function createAdventure(scene,world,state,callbacks){
   prepareWeapons({inVehicle=false,carrying=false,firstPerson=false,pitch=0,attack=0,attackKind='quick'}={}){
    setHeld(a.equipped);const visible=!!heldRig&&!inVehicle&&!carrying&&!a.events.delivery.carrying;
    if(heldRig)heldRig.update({remaining:attack,strong:attackKind==='strong',firstPerson,pitch,visible,gait:(world.player.motion?.diagnostics.stride??0)*Math.PI*2,speed:world.player.motion?.diagnostics.speed??0});world.player.weaponRig=visible?heldRig:null;if(heldRig&&a.equipped==='stone')heldRig.root.traverse(n=>{if(n.name==='held-stone')n.visible=a.stones>0||attack>.38;});
-   for(const {person,rig}of policeRigs)rig.update({remaining:person.attack??0,visible:person.mesh.visible&&person.stun<=0&&!person.climb});
+   for(const {person,rig}of policeRigs)rig.update({remaining:person.attack??0,visible:person.mesh.visible&&!person.dead&&person.stun<=0&&!person.climb});
   },
   update(dt,time,{inVehicle=false,carrying=false,firstPerson=false,camera=null,attack=0}={}){
    const position=world.player.mesh.position,e=a.events.delivery,pp=e.drop??source;parcel.x=pp.x;parcel.z=pp.z;parcel.group.position.set(pp.x,world.groundHeight(pp.x,pp.z),pp.z);

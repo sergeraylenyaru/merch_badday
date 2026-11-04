@@ -6,7 +6,7 @@ export const policeWeapon=index=>(index+1)%5===0?'baton':null;
 export function policeCombat(person, {hostile, distance, clear, guarding=false, inVehicle=false, stunned=false}, dt) {
   const combat=person.combat??={remaining:0,cooldown:0,struck:false,sequence:0};
   const profile=person.weapon==='baton'?BATON_ATTACK:POLICE_ATTACK;
-  if(!hostile||inVehicle||stunned){combat.remaining=0;combat.cooldown=0;combat.struck=false;return {attack:0,damage:0};}
+  if(person.dead||!hostile||inVehicle||stunned){combat.remaining=0;combat.cooldown=0;combat.struck=false;return {attack:0,damage:0};}
   combat.cooldown=Math.max(0,combat.cooldown-dt);
   let damage=0;
   if(combat.remaining>0){

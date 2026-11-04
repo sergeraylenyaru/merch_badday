@@ -1,3 +1,4 @@
+import {createScaffolding} from './city/scaffolding.js';
 import {createTerrainMaterials,tileBoxUV} from './city/terrain-materials.js';
 import {createReferenceCity, buildReferenceTerrain, isReferenceWater} from './city/reference-city.js';
 import {roadHeight} from './city/terrain.js';
@@ -421,7 +422,7 @@ export async function createWorld(scene, state) {
   // interaction targets and physical bodies remain owned by the world.
   world.boroughs = await createReferenceCity(scene,world,{human,car,label});
   world.hospital=createHospital(scene,world);
-  for(const [i,uv]of [[3,[570,380]],[4,[1070,380]]]){
+  for(const [i,uv]of [[3,[570,380]],[4,[1070,380]],[5,[300,380]],[6,[460,380]],[7,[800,380]],[8,[1190,380]],[9,[1390,380]],[10,[1000,380]],[11,[200,380]]]){
     const p=point(...uv),officer=human(p.x,p.z,'#577d9a','police');officer.policeIndex=i;officer.weapon=policeWeapon(i);people.push(officer);
   }
   const homeCar=car(HOME_CAR.x,HOME_CAR.z,0,vehicles.length);
@@ -436,6 +437,7 @@ export async function createWorld(scene, state) {
   world.cables=createCables(scene,world);
   world.roofs.push(...world.shopRoofs.map((r,i)=>({...r,id:'shop-work:'+i,kind:'shop',wallBounds:{x:r.x,z:r.z,w:r.w,d:5.5}})));
   world.billboards=createBillboards(scene,world);
+  world.scaffolding=createScaffolding(scene,world);
   for(const v of vehicles){const saved=state.vehicles[v.id];if(saved&&(!v.traffic||saved.claimed)){v.claimed=!!saved.claimed;v.mesh.position.set(saved.x,groundHeight(saved.x,saved.z),saved.z);v.heading=saved.heading;v.mesh.rotation.y=v.heading;v.sunk=!!saved.sunk;v.waterTime=saved.waterTime??0;v.waterStartY=saved.waterStartY??0;v.waterDistance=saved.waterDistance??0;if(v.waterTime&&!v.sunk&&Number.isFinite(saved.y))v.mesh.position.y=saved.y;}}
   world.parkour=createParkour(scene,world,state);
   world.visuals = await createVisuals(scene, world, shopDecor);

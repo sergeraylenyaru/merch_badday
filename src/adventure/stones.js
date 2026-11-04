@@ -9,11 +9,17 @@ export function createStones(scene,world,state,callbacks){
  for(const f of world.yards.fences){candidates.push({x:f.x+f.nx*1.1,z:f.z+f.nz*1.1,kind:'fence'});}
  for(const p of world.boroughs.diagnostics.urbanDetails.placements.filter(p=>/trash-bin|recycling-bin/.test(p.id)))candidates.push({x:p.footprint.x+1.5,z:p.footprint.z,kind:'bin'});
  for(const r of world.roofs.filter(r=>r.kind==='residential').filter((_,i)=>i%4===0))candidates.push({x:r.x-1,z:r.z,y:r.y,kind:'roof'});
- function add(p,id,drop=null){const y=p.y??world.groundHeight(p.x,p.z);if(world.blockedAt(p.x,p.z,.2,null,y+.05)||world.water.isWater(p.x,p.z))return;const mesh=new T.Mesh(geometry,material);mesh.position.set(p.x,y+.16,p.z);mesh.rotation.set(.3,items.length*.9,.2);mesh.scale.set(1.2,.8,1);mesh.updateMatrixWorld(true);mesh.position.y+=y+.005-new T.Box3().setFromObject(mesh).min.y;root.add(mesh);items.push({id,mesh,x:p.x,z:p.z,y,kind:p.kind??'dropped',drop});}
- candidates.forEach((p,i)=>add(p,'stone:'+i));for(const p of a.stoneDrops)add(p,p.id,p);
+ // Keep the original IDs first, then add small groups throughout the same areas.
+ for(const river of RIVERS)for(let i=1;i<river.length;i++){const p=point(...river[i]);for(const side of [-1,1])for(const along of [-2,0,2])candidates.push({x:p.x+side*(8+Math.abs(along)),z:p.z+along,kind:'river'});}
+ for(const f of world.yards.fences){const nx=f.nx??0,nz=f.nz??1;for(let along=-(f.span??f.w)+1;along<(f.span??f.w);along+=6)for(const side of [-1,1])candidates.push({x:f.x+nz*along+nx*side*1.25,z:f.z-nx*along+nz*side*1.25,kind:'fence'});}
+ for(const p of world.boroughs.diagnostics.urbanDetails.placements.filter(p=>/trash-bin|recycling-bin|dumpster/.test(p.id)))for(const [dx,dz]of [[1.2,1],[-1.3,.6],[1.8,-.5]])candidates.push({x:p.footprint.x+dx,z:p.footprint.z+dz,kind:'bin'});
+ for(const r of world.roofs.filter(r=>r.kind==='residential').filter((_,i)=>i%2===0))for(const dx of [-2,0,2])candidates.push({x:r.x+dx,z:r.z+1,y:r.y,kind:'roof'});
+ const used=new Set(),pose=new T.Object3D(),bounds=new T.Box3();geometry.computeBoundingBox();
+ function add(p,id,drop=null){const y=p.y??world.groundHeight(p.x,p.z),key=[p.x,p.z,y].map(n=>Math.round(n*2)).join(':');if(!drop&&used.has(key))return;if(world.blockedAt(p.x,p.z,.2,null,y+.05)||world.water.isWater(p.x,p.z))return;used.add(key);pose.position.set(p.x,0,p.z);pose.rotation.set(.3,items.length*.9,.2);pose.scale.set(1.2,.8,1);pose.updateMatrix();bounds.copy(geometry.boundingBox).applyMatrix4(pose.matrix);pose.position.y=y+.005-bounds.min.y;pose.updateMatrix();const mesh=drop?new T.Mesh(geometry,material):null;if(mesh){mesh.matrixAutoUpdate=false;mesh.matrix.copy(pose.matrix);root.add(mesh);}items.push({id,mesh,matrix:pose.matrix.clone(),x:p.x,z:p.z,y,kind:p.kind??'dropped',drop,shown:null});}
+ candidates.forEach((p,i)=>add(p,'stone:'+i));const staticItems=[...items],batch=new T.InstancedMesh(geometry,material,staticItems.length),hidden=new T.Matrix4().makeScale(0,0,0);batch.name='nearby-stone-groups';batch.frustumCulled=false;staticItems.forEach((item,index)=>{item.instance=index;batch.setMatrixAt(index,hidden);});root.add(batch);for(const p of a.stoneDrops)add(p,p.id,p);
  const sphere=new T.Sphere(),box=new T.Box3(),ray=new T.Ray(),hit=new T.Vector3();
  function rayTarget(origin,direction,max,people=true){let best=null,dist=max;ray.set(origin,direction);
-  if(people)for(const n of world.people)if(n.mesh.visible&&n.stun<=0){sphere.center.copy(n.mesh.position).y+=1.05;sphere.radius=.48;if(ray.intersectSphere(sphere,hit)){const d=hit.distanceTo(origin);if(d<dist){dist=d;best={point:hit.clone(),person:n};}}}
+  if(people)for(const n of world.people)if(n.mesh.visible&&!n.dead&&n.stun<=0){sphere.center.copy(n.mesh.position).y+=1.05;sphere.radius=.48;if(ray.intersectSphere(sphere,hit)){const d=hit.distanceTo(origin);if(d<dist){dist=d;best={point:hit.clone(),person:n};}}}
   for(const b of world.blockers)if(b.enabled!==false){const y=b.y??b.h/2;box.min.set(b.x-b.w,y-b.h/2,b.z-b.d);box.max.set(b.x+b.w,y+b.h/2,b.z+b.d);if(ray.intersectBox(box,hit)){const d=hit.distanceTo(origin);if(d<dist){dist=d;best={point:hit.clone()};}}}
   return best;
  }
@@ -22,7 +28,7 @@ export function createStones(scene,world,state,callbacks){
   nearest(p){if(a.stones>=5)return null;return items.filter(i=>!a.pickedStoneSites.includes(i.id)&&!i.drop?.taken&&Math.abs(p.y-i.y)<1.8&&Math.hypot(p.x-i.x,p.z-i.z)<1.6).sort((a,b)=>Math.hypot(p.x-a.x,p.z-a.z)-Math.hypot(p.x-b.x,p.z-b.z))[0]??null;},
   pickup(item){if(pickupStone(state,item.id)){if(item.drop){item.drop.taken=true;root.remove(item.mesh);const i=items.indexOf(item);if(i>=0)items.splice(i,1);a.stoneDrops=a.stoneDrops.filter(d=>!d.taken);}callbacks.notify(`Камни: ${a.stones}/5 · 5 — выбрать, F или ЛКМ — бросить`);callbacks.changed();}else callbacks.notify('Запас камней полон · 5/5');},
   throw(camera){if(!consumeStone(state)){callbacks.notify('Нет камней. Поищите у воды, оград и мусорных баков.');return false;}const aim=new T.Raycaster();aim.setFromCamera(new T.Vector2(0,0),camera);const selected=rayTarget(aim.ray.origin,aim.ray.direction,45),target=selected?.point??aim.ray.at(32,new T.Vector3());lastAim={point:target.toArray(),person:selected?.person?world.people.indexOf(selected.person):null};const mesh=new T.Mesh(geometry,material);mesh.visible=false;root.add(mesh);shots.push({mesh,target,delay:.22,age:0,velocity:null});callbacks.changed();return true;},
-  update(dt){const player=world.player.mesh.position;for(const i of items)i.mesh.visible=!a.pickedStoneSites.includes(i.id)&&!i.drop?.taken&&Math.hypot(i.x-player.x,i.z-player.z)<60;
+  update(dt){const player=world.player.mesh.position;let changed=false;for(const i of items){const visible=!a.pickedStoneSites.includes(i.id)&&!i.drop?.taken&&Math.hypot(i.x-player.x,i.z-player.z)<60;if(i.mesh)i.mesh.visible=visible;else if(visible!==i.shown){batch.setMatrixAt(i.instance,visible?i.matrix:hidden);i.shown=visible;changed=true;}}if(changed)batch.instanceMatrix.needsUpdate=true;
    for(let index=shots.length-1;index>=0;index--){const s=shots[index];s.age+=dt;if(s.delay>0){s.delay-=dt;if(s.delay>0)continue;const hand=world.player.mesh.getObjectByName('PalmGripRight');s.mesh.position.copy(hand?hand.getWorldPosition(new T.Vector3()):new T.Vector3(player.x,player.y+1.4,player.z));s.velocity=throwVelocity(s.mesh.position,s.target);s.mesh.visible=true;}
     const from=s.mesh.position.clone(),next=from.clone().addScaledVector(s.velocity,dt);next.y-=5*dt*dt;s.velocity.y-=10*dt;const delta=next.clone().sub(from),length=delta.length(),contact=length?rayTarget(from,delta.normalize(),length+.12):null;
     if(contact){if(contact.person)callbacks.impact(contact.person);const p=contact.point.clone().addScaledVector(delta,-.3);land(s,p);shots.splice(index,1);continue;}
@@ -30,6 +36,6 @@ export function createStones(scene,world,state,callbacks){
    }
   },
   get diagnostics(){return {count:a.stones,lastAim,sites:items.map(i=>({id:i.id,x:i.x,z:i.z,y:i.y,kind:i.kind,available:!a.pickedStoneSites.includes(i.id)&&!i.drop?.taken})),flying:shots.map(s=>({position:s.mesh.position.toArray(),target:s.target.toArray(),delay:s.delay}))};},
-  dispose(){root.removeFromParent();geometry.dispose();material.dispose();},
+  dispose(){root.removeFromParent();batch.dispose();geometry.dispose();material.dispose();},
  };
 }

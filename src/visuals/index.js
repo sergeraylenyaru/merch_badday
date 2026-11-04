@@ -278,6 +278,7 @@ export async function createVisuals(scene, world, shopDecor) {
       for (const actor of actors) {
         const { entity, last, velocity } = actor;
         if(entity!==world.player&&!entity.mesh.visible)continue;
+        if(entity.dead)continue;
         velocity.copy(entity.mesh.position).sub(last);
         const teleported = velocity.length() > 2;
         last.copy(entity.mesh.position);

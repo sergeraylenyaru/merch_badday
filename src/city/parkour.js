@@ -4,6 +4,7 @@ import {PLAYER_SHAPE,circleIntersectsBox,vehicleBox} from '../spatial.js';
 import {clearSegment} from '../npc/navigation.js';
 import {jumpImpulse,verticalStep,DOUBLE_JUMP_HEIGHT} from './parkour-physics.js';
 import {createTraversal} from './traversal.js';
+import {rewardParkour} from './gameplay.js';
 
 export function createParkour(scene,world,state){
  const root=new T.Group();root.name='roof-ladders';scene.add(root);
@@ -28,9 +29,11 @@ export function createParkour(scene,world,state){
  }
  for(const list of chunks.values()){const geometry=mergeGeometries(list);list.forEach(g=>g.dispose());owned.push(geometry);const mesh=new T.Mesh(geometry,metal);mesh.castShadow=mesh.receiveShadow=true;root.add(mesh);}
  const pos=world.player.mesh.position;let grounded=true,extraUsed=state.parkour?.extraUsed===true,airKick=0,climb=null,climbDistance=0;
- const traversal=createTraversal(scene,world,state);
+ let completed=0,lastCompleted=null;
+ const complete=kind=>{completed++;lastCompleted=kind;rewardParkour(state);};
+ const traversal=createTraversal(scene,world,state,complete);
  const stored=state.parkour?.feetY;if(Number.isFinite(stored)&&stored>=world.groundHeight(pos.x,pos.z))pos.y=stored;
- const savedLadder=ladders.find(l=>l.id===state.parkour?.ladder);if(savedLadder){climb={ladder:savedLadder,mantle:null};pos.x=savedLadder.x+savedLadder.nx*.35;pos.z=savedLadder.z+savedLadder.nz*.35;grounded=false;}
+ const savedLadder=ladders.find(l=>l.id===state.parkour?.ladder);if(savedLadder){climb={ladder:savedLadder,mantle:null,startY:state.parkour.ladderStartY??pos.y};pos.x=savedLadder.x+savedLadder.nx*.35;pos.z=savedLadder.z+savedLadder.nz*.35;grounded=false;}
  function floorAt(x,z,ceiling=pos.y+.12){
   let floor=world.groundHeight(x,z);
   for(const b of world.blockers)if(b.enabled!==false&&b.h>2.5&&b.w>2&&b.d>2){const top=(b.y??b.h/2)+b.h/2;if(top<=ceiling+.03&&Math.abs(x-b.x)<b.w-.08&&Math.abs(z-b.z)<b.d-.08)floor=Math.max(floor,top);}
@@ -41,7 +44,7 @@ export function createParkour(scene,world,state){
   return floor;
  }
  grounded=Math.abs(pos.y-floorAt(pos.x,pos.z))<.1;
- function saveHeight(){state.parkour={feetY:pos.y,ladder:climb?.ladder.id??null,traversal:traversal.saved,extraUsed};}
+ function saveHeight(){state.parkour={feetY:pos.y,ladder:climb?.ladder.id??null,ladderStartY:climb?.startY??null,traversal:traversal.saved,extraUsed};}
  function nearest(position=pos){return ladders.map(l=>({ladder:l,d:Math.hypot(position.x-l.x,position.z-l.z)})).sort((a,b)=>a.d-b.d)[0]?.ladder??null;}
  function detach(force=false){if(traversal.active){const released=traversal.detach(force);if(released){grounded=false;saveHeight();}return released;}if(!climb)return false;const l=climb.ladder;pos.x+=l.nx*.35;pos.z+=l.nz*.35;climb=null;grounded=false;saveHeight();return true;}
  return {
@@ -53,23 +56,23 @@ export function createParkour(scene,world,state){
    if(traversal.grab()){grounded=false;airKick=0;saveHeight();return true;}
    const l=nearest();if(!l||Math.hypot(pos.x-l.x,pos.z-l.z)>1.9||pos.y<l.y0-.1||pos.y>l.top+.9)return false;
    if(!clearSegment(pos,l,(x,z,r)=>world.blockedAt(x,z,r,null,pos.y),.05))return false;
-   climb={ladder:l,mantle:null};grounded=false;airKick=0;pos.x=l.x+l.nx*.35;pos.z=l.z+l.nz*.35;pos.y=Math.min(l.top-.25,Math.max(l.y0+.15,pos.y));world.player.mesh.rotation.y=Math.atan2(-l.nx,-l.nz);saveHeight();return true;
+   climb={ladder:l,mantle:null,startY:pos.y};grounded=false;airKick=0;pos.x=l.x+l.nx*.35;pos.z=l.z+l.nz*.35;pos.y=Math.min(l.top-.25,Math.max(l.y0+.15,pos.y));world.player.mesh.rotation.y=Math.atan2(-l.nx,-l.nz);saveHeight();return true;
   },
   detach,
   advanceClimb(dt,keys){
    if(traversal.active){const result=traversal.advance(dt);grounded=result?.grounded===true;if(grounded)extraUsed=false;saveHeight();return true;}
    if(!climb)return false;const l=climb.ladder;
-   if(climb.mantle){const m=climb.mantle;m.t=Math.min(1,m.t+dt/.45);const t=T.MathUtils.smoothstep(m.t,0,1);pos.lerpVectors(m.from,m.to,t);if(m.t===1){climb=null;grounded=true;extraUsed=false;}saveHeight();return true;}
+   if(climb.mantle){const m=climb.mantle;m.t=Math.min(1,m.t+dt/.45);const t=T.MathUtils.smoothstep(m.t,0,1);pos.lerpVectors(m.from,m.to,t);if(m.t===1){if(l.top-(climb.startY??l.y0)>1.5)complete('ladder');climb=null;grounded=true;extraUsed=false;}saveHeight();return true;}
    const move=(keys.has('KeyW')?1:0)-(keys.has('KeyS')?1:0),step=move*1.85*dt;climbDistance+=Math.abs(step);pos.y=T.MathUtils.clamp(pos.y+step,l.y0+.1,l.top+.05);world.player.mesh.rotation.y=Math.atan2(-l.nx,-l.nz);
    if(pos.y>=l.top-.2&&move>0)climb.mantle={t:0,from:pos.clone(),to:new T.Vector3(l.exit.x,l.top,l.exit.z)};
    if(pos.y<=l.y0+.11&&move<0){climb=null;grounded=true;pos.y=world.groundHeight(pos.x,pos.z);extraUsed=false;}
    saveHeight();return true;
   },
-  advance(dt,velocity){airKick=Math.max(0,airKick-dt);const floor=floorAt(pos.x,pos.z),next=verticalStep(pos.y,velocity,floor,dt);pos.y=next.y;grounded=next.grounded;if(grounded)extraUsed=false;saveHeight();return next;},
+  advance(dt,velocity){airKick=Math.max(0,airKick-dt);const floor=floorAt(pos.x,pos.z),next=verticalStep(pos.y,velocity,floor,dt);pos.y=next.y;grounded=next.grounded;if(grounded){if(extraUsed)complete('double-jump');extraUsed=false;}saveHeight();return next;},
   reset(feetY=world.groundHeight(pos.x,pos.z)){traversal.detach(true);climb=null;grounded=Math.abs(feetY-floorAt(pos.x,pos.z,feetY+.12))<.1;extraUsed=false;airKick=0;pos.y=feetY;saveHeight();},
   context(){const special=traversal.context();if(special)return special;const l=nearest();if(climb)return 'W / S · Лезть вверх / вниз · E — отпустить';return l&&Math.hypot(pos.x-l.x,pos.z-l.z)<2.6&&pos.y<=l.top+.9?'Space + E · Зацепиться за лестницу':'';},
   get motion(){return traversal.motion??(climb?{phase:climbDistance*5.5,moving:!climb.mantle,ladder:climb.ladder.id}:null);},
-  get diagnostics(){return {grounded,extraUsed,doubleJumpHeight:DOUBLE_JUMP_HEIGHT,heightAboveGround:pos.y-world.groundHeight(pos.x,pos.z),climbing:climb?.ladder.id??traversal.saved?.id??null,traversal:traversal.saved,airKick,ladders:ladders.map(({id,x,z,nx,nz,y0,top,exit})=>({id,x,z,nx,nz,y0,top,exit})),roofs:roofs.map(r=>({...r}))};},
+  get diagnostics(){return {grounded,extraUsed,completed,lastCompleted,doubleJumpHeight:DOUBLE_JUMP_HEIGHT,heightAboveGround:pos.y-world.groundHeight(pos.x,pos.z),climbing:climb?.ladder.id??traversal.saved?.id??null,traversal:traversal.saved,airKick,ladders:ladders.map(({id,x,z,nx,nz,y0,top,exit})=>({id,x,z,nx,nz,y0,top,exit})),roofs:roofs.map(r=>({...r}))};},
   dispose(){traversal.dispose();root.removeFromParent();owned.forEach(g=>g.dispose());metal.dispose();},
  };
 }

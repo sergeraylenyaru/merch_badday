@@ -5,7 +5,7 @@ import {point,START} from '../src/city/reference-layout.js';
 
 const app=await startBrowser(5254);
 const fightState=(health=100)=>{
-  const s=freshState();s.onboarding.callReceived=true;s.wanted=2;s.health=health;s.position=point(220,384);return s;
+  const s=freshState();s.onboarding.callReceived=true;s.wanted=2;s.health=health;s.position=point(220,384);s.policeResponse={officers:{},roster:[0,1,2],lastLevel:2,nextAt:18,extra:0};return s;
 };
 try{
   let {page,context}=await app.scenario(fightState(),'police-real-combat');
@@ -20,7 +20,7 @@ try{
   assert.ok(fight.people.some(n=>n.kind==='police'&&n.combat?.sequence>=2));
   await page.keyboard.press('KeyG');
   const stunnedHealth=await page.evaluate(()=>__MERCH__.state.health);
-  await advance(page,1.2);
+  await advance(page,.3);
   assert.equal(await page.evaluate(()=>__MERCH__.state.health),stunnedHealth,'stunned officer must not finish an attack');
   console.log('PASS police Punch clip, repeated health damage, no proximity respawn and interrupted attacks');
   await context.close();

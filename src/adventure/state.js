@@ -28,7 +28,7 @@ export function pickupWeapon(state,id){const a=state.adventure;if(!WEAPONS[id])r
 export function pickupStone(state,id){const a=state.adventure;if((a.stones??0)>=5||a.pickedStoneSites?.includes(id))return false;a.stones=(a.stones??0)+1;a.pickedStoneSites??=[];if(!id.startsWith('thrown:'))a.pickedStoneSites.push(id);if(!a.inventory.includes('stone'))a.inventory.push('stone');a.equipped='stone';return true;}
 export function consumeStone(state){if(!(state.adventure.stones>0))return false;state.adventure.stones--;return true;}
 export function bribePrice(state){const b=state.adventure.bribes,elapsed=state.time-(b?.lastAt??-Infinity);return 50*(1+(elapsed>=0&&elapsed<BRIBE_RESET_SECONDS?(b?.count??0):0));}
-export function bribeGuard(state){const price=bribePrice(state);if(state.wanted<=0||state.money<price)return false;state.money-=price;state.wanted=Math.max(0,Math.ceil(state.wanted)-1);state.wantedElapsed=0;state.adventure.bribes={count:price/50,lastAt:state.time};return true;}
+export function bribeGuard(state){const price=bribePrice(state);if(state.wanted<=0||state.money<price)return false;state.money-=price;state.wanted=Math.max(0,Math.ceil(state.wanted)-1);state.wantedElapsed=0;state.wantedParkourCredit=0;state.adventure.bribes={count:price/50,lastAt:state.time};return true;}
 export function startEvent(state,id){const e=state.adventure.events[id];if(!e||e.status!=='offered')return false;e.status='active';if(id==='delivery')e.due=state.time+240;state.adventure.tracked=id;return true;}
 export function finishEvent(state,id,keep=false){const a=state.adventure,e=a.events[id];if(!e||e.status!=='active')return 0;let amount=0;
  if(id==='spill'&&e.boxes.length===3)amount=80+(state.career.contacts.includes('seller')?20:0);

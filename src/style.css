@@ -677,3 +677,8 @@ button:disabled {
 .failure-screen{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:linear-gradient(transparent,#0e182029);text-align:center}.failure-content{display:flex;flex-direction:column;align-items:center;gap:16px;padding:30px}.failure-title{font:clamp(54px,9vw,112px) Oswald,sans-serif;letter-spacing:.13em;color:#c65048;text-shadow:0 3px 24px #000b;opacity:0;transform:translateY(18px);transition:opacity .7s,transform .7s}.failure-content p,.failure-content small{opacity:0;color:#e5dcc6;margin:0;text-shadow:0 2px 8px #000;transition:opacity .7s}.failure-content p{font-size:18px}.failure-content small{font-size:12px}.failure-screen.revealed .failure-title,.failure-screen.revealed p,.failure-screen.revealed small{opacity:1;transform:none}.failure-content button{margin-top:15px;padding:16px 36px;border:1px solid #ddc183;border-radius:8px;background:#e0c284;color:#21353c;font-weight:800;font-size:17px;opacity:0;pointer-events:none;transition:opacity .5s,background .2s}.failure-screen.ready button{opacity:1;pointer-events:auto}.failure-content button:hover{background:#f0d9a6}
 
 .weapon-keys{display:block;font-size:8px;color:#b5c4ac;margin-top:7px;letter-spacing:0;white-space:nowrap}
+
+.wanted-timer {font-size:12px;letter-spacing:.5px;color:#e7d5a6;margin:4px 0 8px;padding:5px 8px;background:#173a32c9;border-radius:4px;}
+.wanted-timer.soon {animation:wanted-countdown 1s ease-in-out infinite;color:#fff1ba;}
+@keyframes wanted-countdown {50% {opacity:.3;}}
+@media(prefers-reduced-motion:reduce){.wanted-timer.soon{animation:none;text-decoration:underline;}}

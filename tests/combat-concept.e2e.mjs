@@ -8,7 +8,7 @@ const fresh=()=>{const s=freshState();s.onboarding.callReceived=true;return s;};
 let page,context,city;
 try{
  ({page,context}=await app.scenario(fresh(),'concept-catalog'));await advance(page,.1);city=await page.evaluate(()=>__MERCH__.city);
- const cops=await page.evaluate(()=>__MERCH__.people.filter(n=>n.kind==='police'));assert.equal(cops.length,5);assert.equal(cops.filter(n=>n.weapon==='baton').length,1);assert.equal(cops.find(n=>n.weapon==='baton').policeIndex,4);
+ const cops=await page.evaluate(()=>__MERCH__.people.filter(n=>n.kind==='police'));assert.equal(cops.length,12);assert.deepEqual(cops.filter(n=>n.weapon==='baton').map(n=>n.policeIndex),[4,9]);
  assert.equal(await page.evaluate(()=>__MERCH__.renderer.art.passes),2);assert.equal(await page.evaluate(()=>__MERCH__.visuals.assets.failed),0);
  if(run('home')){
   const car=await page.evaluate(()=>__MERCH__.vehicles.find(v=>v.claimed&&Math.hypot(v.position[0]-__MERCH__.state.position.x,v.position[2]-__MERCH__.state.position.z)<5));assert.ok(car,'owned car beside the home');
@@ -29,7 +29,7 @@ try{
   await page.keyboard.press('KeyC');await advance(page,.1);assert.ok(await page.evaluate(()=>__MERCH__.motion.player.weaponGripErrors.every(e=>e<.003)));await page.screenshot({path:'.playwright/concept-bat-first.png'});await context.close();console.log('PASS closed two-palm bat grip, dedicated swing, damage at contact and real first-person hands');
  }
  if(run('police')){
-  const p=cops.find(n=>n.weapon==='baton').position,s=fresh();s.position={x:p[0],z:p[2]+2.1};s.wanted=1;s.stress=40;s.onboarding.carTaken=true;({page,context}=await app.scenario(s,'concept-baton'));
+  const p=cops.find(n=>n.weapon==='baton').position,s=fresh();s.position={x:p[0],z:p[2]+2.1};s.wanted=1;s.stress=40;s.onboarding.carTaken=true;s.policeResponse={officers:{},roster:[4,0],lastLevel:1,nextAt:18,extra:0};({page,context}=await app.scenario(s,'concept-baton'));
   await page.waitForFunction(()=>__MERCH__.people.some(n=>n.weapon==='baton'&&n.attack>0&&n.motion?.state==='baton-swing'));assert.ok(await page.evaluate(()=>__MERCH__.people.find(n=>n.weapon==='baton').motion.weaponGripErrors.every(e=>e<.003)));await page.waitForFunction(()=>__MERCH__.state.health<100);assert.equal(await page.evaluate(()=>__MERCH__.state.fines),0);await page.screenshot({path:'.playwright/concept-police-baton.png'});await context.close();console.log('PASS every fifth police officer visibly holds a baton, swings and damages HP without an instant respawn');
  }
  assert.deepEqual(app.errors,[]);

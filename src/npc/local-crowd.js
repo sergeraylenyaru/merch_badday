@@ -23,11 +23,7 @@ export function createLocalCrowd(world,life,blocked=world.blocked){
         life.assign(person,pool.indexOf(person));count++;spawned++;
       }
       initialized=true;
-      if(world.state?.wanted>0)for(const officer of world.people.filter(n=>n.kind==='police')){
-        if(Math.hypot(officer.mesh.position.x-player.x,officer.mesh.position.z-player.z)<90)continue;
-        const p=candidates.find(p=>Math.hypot(p.x-player.x,p.z-player.z)>30&&!blocked(p.x,p.z,.4));
-        if(p){officer.mesh.position.set(p.x,world.groundHeight(p.x,p.z),p.z);officer.home.copy(officer.mesh.position);officer.navigation=null;}
-      }
+
     },
     get diagnostics(){return {active:pool.filter(n=>n.activePedestrian).length,total:pool.length,limit:CROWD_LIMIT,radius:CROWD_RADIUS};},
   };

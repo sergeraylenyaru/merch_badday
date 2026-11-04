@@ -6,7 +6,7 @@ export function vehicleHitsPerson(vehicle,position){
  return position.y<p.y+(vehicle.h??2)+.15&&position.y+1.9>p.y&&circleIntersectsBox(position.x,position.z,PERSON_RADIUS,vehicleBox(vehicle));
 }
 export function separatePeople(people,blocked,player=null){
- const active=people.filter(n=>n.mesh.visible&&!n.seated&&n.stun<=0&&!n.climb);
+ const active=people.filter(n=>n.mesh.visible&&!n.dead&&!n.seated&&n.stun<=0&&!n.climb);
  const climbing=people.filter(n=>n.mesh.visible&&n.climb);
  const move=(n,dx,dz)=>{const p=n.mesh.position;if(!blocked(p.x+dx,p.z+dz,PERSON_RADIUS,p.y)){p.x+=dx;p.z+=dz;return true;}return false;};
  for(let pass=0;pass<4;pass++)for(let i=0;i<active.length;i++){

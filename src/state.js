@@ -103,6 +103,7 @@ export const freshState = () => ({
   cityVersion: 3,
   overtime: false,
   wantedElapsed: 0,
+  wantedParkourCredit:0,
   lastWantedGainAt:null,
   shift: {...makeShift(),upgrades:{...career().upgrades}},
   career: career(),
@@ -212,6 +213,7 @@ export function load(storage = localStorage) {
         v.cityVersion = 3; v.position = {...START}; v.carts=[]; v.vehicles=[]; v.carrying=null;
       }
       v.wantedElapsed = Number.isFinite(v.wantedElapsed) ? v.wantedElapsed : 0;
+      v.wantedParkourCredit=Number.isFinite(v.wantedParkourCredit)?Math.max(0,Math.min(45,v.wantedParkourCredit)):0;
       if (!v.shift?.order || v.shift.order.length !== 9) v.shift = makeShift();
       if (!v.career?.loyalty || v.career.loyalty.length !== 9) v.career=career();
       v.shift.upgrades={...v.shift.upgrades,...v.career.upgrades};
