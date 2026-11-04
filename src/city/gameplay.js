@@ -1,7 +1,8 @@
 export const SHIFT_DURATION = 1500;
 export const wantedInterval=stress=>10+.35*Math.max(0,Math.min(100,Number(stress)||0));
 export const wantedRemaining=state=>state.wanted>0?Math.max(0,wantedInterval(state.stress)-(state.wantedElapsed||0)-(state.wantedParkourCredit||0)):0;
-export function rewardParkour(state){if(!(state.wanted>0))return false;state.wantedParkourCredit=(state.wantedParkourCredit||0)+10;tickWanted(state,0);return true;}
+export function rewardParkour(state){if(!(state.wanted>0)||Number.isFinite(state.lastParkourBonusAt)&&state.time-state.lastParkourBonusAt<5)return false;state.lastParkourBonusAt=state.time;state.wantedParkourCredit=(state.wantedParkourCredit||0)+10;tickWanted(state,0);return true;}
+export function wantedFeedback(state){const remaining=wantedRemaining(state);return {pulse:state.wanted>0?(remaining<=10?'fast':remaining<=20?'slow':'none'):'none',parkour:Number.isFinite(state.lastParkourBonusAt)&&state.time>=state.lastParkourBonusAt&&state.time-state.lastParkourBonusAt<2};}
 export function tickWanted(state,dt) {
  if(!Number.isFinite(dt)||dt<0)return;
  if(state.wanted<=0){state.wantedElapsed=0;state.wantedParkourCredit=0;return;}

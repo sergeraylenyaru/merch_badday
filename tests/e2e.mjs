@@ -43,7 +43,7 @@ try{
  await director();await page.locator('[data-choice="job"]').click();assert.equal(await page.evaluate(()=>__MERCH__.state.shops[0].job.assigned),true);
  for(const [section,x] of [[0,-8],[1,-5.8],[2,8]]){console.log('CHECK stocking',section);await navigate(page,s0.x+x,s0.z-.3,.3);await page.keyboard.press('KeyE');await page.waitForFunction(i=>__MERCH__.state.shops[0].job.stocked.includes(i),section,{timeout:60000});}
  await director();await page.locator('[data-choice="polite"]').click();assert.equal(await page.evaluate(()=>__MERCH__.state.shops[0].done),true);
- await page.keyboard.press('KeyM');await page.locator('#bigmap').waitFor();await page.reload();await page.locator('#begin').click();await page.waitForFunction(()=>__MERCH__.view.pointerLocked);assert.equal(await page.evaluate(()=>__MERCH__.state.shops[0].done),true);
+ await page.locator('#bigmap').waitFor();assert.equal(await page.evaluate(()=>__MERCH__.state.awaitingShopChoice),true);await page.locator('.tablet-active-tasks [data-shop="3"]').click();await page.reload();await page.locator('#begin').click();await page.waitForFunction(()=>__MERCH__.view.pointerLocked);assert.equal(await page.evaluate(()=>__MERCH__.state.shops[0].done),true);assert.equal(await page.evaluate(()=>__MERCH__.state.selected),3);
  await context.close();console.log('PASS parking payment, director assignment, three physical shelf sections, confirmed visit and persistence');
  // Real walking over each bridge checks collision heights and continuity.
  for(const [name,u,v,keys] of [['west-bridge',615,337,['KeyD']],['east-bridge',1100,337,['KeyD']]]){

@@ -1,3 +1,4 @@
+import {createParkDetails} from './city/park-details.js';
 import {createScaffolding} from './city/scaffolding.js';
 import {createTerrainMaterials,tileBoxUV} from './city/terrain-materials.js';
 import {createReferenceCity, buildReferenceTerrain, isReferenceWater} from './city/reference-city.js';
@@ -398,6 +399,8 @@ export async function createWorld(scene, state) {
   const world = {
     terrain,
     physics,
+    terrainCollider,
+    parkourSurfaces:[],
     disposeTerrain:()=>terrainMaterials.dispose(),
     RAPIER,
     box,
@@ -433,6 +436,7 @@ export async function createWorld(scene, state) {
   if(savedHomeCar){homeCar.mesh.position.set(savedHomeCar.x,groundHeight(savedHomeCar.x,savedHomeCar.z),savedHomeCar.z);homeCar.heading=savedHomeCar.heading;homeCar.mesh.rotation.y=savedHomeCar.heading;}
   world.shopRoofs=SHOPS.map(s=>({x:s.x,z:s.z-3,w:14.5,d:6,y:6.8}));
   world.water=createWater(world,state);
+  world.park=await createParkDetails(scene,world);
   world.yards=createServiceYards(scene,world);
   world.cables=createCables(scene,world);
   world.roofs.push(...world.shopRoofs.map((r,i)=>({...r,id:'shop-work:'+i,kind:'shop',wallBounds:{x:r.x,z:r.z,w:r.w,d:5.5}})));

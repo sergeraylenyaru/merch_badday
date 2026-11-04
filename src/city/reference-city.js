@@ -1,3 +1,4 @@
+import {PARK_RIDES} from './park-details.js';
 import {gridTerrain,ROAD_PROFILES,WATER_LEVEL,roadHeight} from './terrain.js';
 import {clipSurface,appendSurface,roadPolygon,rectanglePolygon,SurfaceIndex} from './planar-surfaces.js';
 import {createCityMaterialPool} from './shared-materials.js';
@@ -5,7 +6,7 @@ import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {prepareCityAsset} from './city-assets.js';
 import {MAP_BUILDINGS} from './map-buildings.js';
-import { MAP, point, WORK_STOPS, ROADS,ROAD_JOINS, nearRoad, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT, COAST, PARK_PATHS,HOSPITAL } from './reference-layout.js';
+import { MAP, point, WORK_STOPS, ROADS,ROAD_JOINS, nearRoad, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT, COAST, PARK_PATHS,HOSPITAL,PARK_BRIDGES,parkBridgeHeight } from './reference-layout.js';
 export {isReferenceWater} from './reference-layout.js';
 import { BOROUGHS, LOCAL_SHOPS } from './layout.js';
 import { createUrbanDetails } from './urban-details.js';
@@ -38,7 +39,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  for(const [u,v] of [[150,470],[355,520]])add('sandbox',u,v,1,0,true);
  for(const [u,v] of [[90,735],[180,735],[70,85],[175,85]])add('garage',u,v,1,0,true);
  // Park: paths, rides, a civic waterfront pavilion and fountain.
- for(const [name,u,v,scale] of [['carousel',850,175,1.4],['carousel',875,285,1.2],['circus_tent',870,210,1.3],['ride_round',953,242,1.5],['ride_round',720,260,1.2],['fountain_large',850,490,1],['park_stage',860,710,1.5],['kiosk',1000,588,1],['public_toilet',990,680,1]])add(name,u,v,scale,0,true);
+ for(const [name,u,v,scale] of [['carousel',850,95,1.4],['carousel',875,285,1.2],['circus_tent',870,210,1.3],['ride_round',953,242,1.5],['fountain_large',850,490,1],['park_stage',860,710,1.5],['kiosk',1000,588,1],['public_toilet',990,680,1]])add(name,u,v,scale,0,true);
  // The uploaded wheel is horizontal. The existing authored vertical wheel is
  // retained here as a recognisable animated Ferris wheel at the map landmark.
  const wheel=new T.Group(),hub=new T.Group();const wp=point(970,110);wheel.position.set(wp.x,0,wp.z);root.add(wheel);hub.position.y=9;wheel.add(hub);wheel.scale.setScalar(4);
@@ -46,6 +47,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  const rim=new T.Mesh(new T.TorusGeometry(8,.13,6,48),metal);hub.add(rim);
  for(let i=0;i<12;i++){const a=i*Math.PI/6;const spoke=new T.Mesh(new T.CylinderGeometry(.05,.05,8,5),metal);spoke.position.set(Math.cos(a)*4,Math.sin(a)*4,0);spoke.rotation.z=a-Math.PI/2;hub.add(spoke);const c=new T.Mesh(new T.BoxGeometry(1.25,1.2,1),new T.MeshStandardMaterial({color:['#cf6250','#e5be5e','#699bb9'][i%3]}));c.position.set(Math.cos(a)*8,Math.sin(a)*8,0);hub.add(c);animated.push(c);}
  for(const x of [-3,3]){const leg=new T.Mesh(new T.CylinderGeometry(.2,.3,10,8),metal);leg.position.set(x,4.5,0);leg.rotation.z=x<0?-.3:.3;wheel.add(leg);}
+ add('tree',1046,475,.8,0,false,true);
  // Street furniture follows the main boulevard and residential streets.
  for(let u=80;u<1660;u+=120){add('streetlight',u,310,1,0,false,true);add('streetlight',u+45,370,1,0,false,true);}
  for(const u of [215,520,1130,1410])add('bus_stop',u,305,1,0,true,true);
@@ -57,7 +59,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  for(let i=0;i<1400;i++){
   const u=35+random()*1600,v=30+random()*740;
   const p=point(u,v);if(Math.abs(p.x-HOSPITAL.x)<HOSPITAL.w+4&&Math.abs(p.z-HOSPITAL.z)<HOSPITAL.d+4)continue;
-  if(!clearShop(u,v,8)||nearRoad(u,v,20)||isReferenceWater(u,v))continue;
+  if(!clearShop(u,v,8)||nearRoad(u,v,20)||isReferenceWater(u,v)||parkBridgeHeight(p.x,p.z)>-Infinity||PARK_RIDES.some(r=>Math.abs(u-r.u)<r.w/MAP.scale+10&&Math.abs(v-r.v)<r.d/MAP.scale+10)||PARK_PATHS.some(([x,y,w,d])=>Math.abs(u-x)<w/2+6&&Math.abs(v-y)<d/2+6))continue;
   if([...placements].some(([n,list])=>!['tree','shrub','bench','trash_bin','streetlight','bus_stop'].includes(n)&&list.some(p=>(p.width?Math.abs(u-p.u)<p.width/2+12&&Math.abs(v-p.v)<p.depth/2+12:Math.hypot(u-p.u,v-p.v)<45))))continue;
   add(i%5?'tree':'shrub',u,v,.85+random()*.45);
  }
@@ -189,6 +191,7 @@ export function buildReferenceTerrain(world,scene){
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();
   const mesh=new T.Mesh(g,world.terrainMaterials.byColor.get(color));mesh.receiveShadow=true;scene.add(mesh);
  }
+ for(const b of PARK_BRIDGES)roadCuts.push([[-1,-1],[1,-1],[1,1],[-1,1]].map(([along,side])=>({x:b.x+Math.cos(b.angle)*along*(b.length/2+4)-Math.sin(b.angle)*side*(b.width/2+.5),z:b.z+Math.sin(b.angle)*along*(b.length/2+4)+Math.cos(b.angle)*side*(b.width/2+.5)})));
  // Footpaths connect the park entrances to the fountain and promenade.
  const pathData={positions:[],uv:[]};
  for(const [u,v,w,d] of PARK_PATHS){const p=point(u,v),poly=rectanglePolygon(p.x,p.z,w*MAP.scale,d*MAP.scale);for(const part of clipSurface(poly,[...roadCuts,...pavingIndex.at(poly)])){appendSurface(pathData,part,()=>.035);paving.push(part);}pavingIndex.add(poly);}

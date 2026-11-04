@@ -5,7 +5,7 @@ import {clearSegment} from '../npc/navigation.js';
 export function eatApple(state,id){
  if(state.health<=0)return false;
  const orchard=state.adventure.orchard??={fallen:[],picked:[]};if(orchard.picked.includes(id))return false;
- orchard.picked.push(id);state.health=Math.min(100,state.health+30);state.stress=Math.max(0,state.stress-50);return true;
+ orchard.picked.push(id);state.health=Math.min(100,state.health+30);state.stress=Math.max(0,state.stress-50);if(state.adventure.inventory.includes('slingshot'))state.adventure.apples=Math.min(30,(state.adventure.apples??0)+1);return true;
 }
 export function createOrchard(scene,world,state,{notify,changed}){
  const saved=state.adventure.orchard??={fallen:[],picked:[]};saved.fallen??=[];saved.picked??=[];
@@ -26,7 +26,7 @@ export function createOrchard(scene,world,state,{notify,changed}){
   },
   update(dt){let dirty=false;const player=world.player.mesh.position;
    for(const a of apples){if(a.status==='falling'&&dt>0){a.age+=dt;a.velocity-=14*dt;a.y+=a.velocity*dt;const ground=world.groundHeight(a.x,a.z)+.23;if(a.y<=ground){a.y=ground;a.status='ground';}dirty=true;}
-    if(a.status==='ground'&&dt>0&&Math.abs(player.y-world.groundHeight(a.x,a.z))<1.5&&Math.hypot(player.x-a.x-.65,player.z-a.z-.15)<1.65){if(eatApple(state,a.id)){a.status='picked';changed();notify('Яблоко съедено · +30 HP · стресс −50');dirty=true;}}
+    if(a.status==='ground'&&dt>0&&Math.abs(player.y-world.groundHeight(a.x,a.z))<1.5&&Math.hypot(player.x-a.x-.65,player.z-a.z-.15)<1.65){if(eatApple(state,a.id)){a.status='picked';changed();notify('Яблоко · +30 HP · стресс −50'+(state.adventure.inventory.includes('slingshot')?` · заряд ${state.adventure.apples}/30`:''));dirty=true;}}
     if(dirty)place(a);
    }
    if(dirty){fruits.instanceMatrix.needsUpdate=stems.instanceMatrix.needsUpdate=true;}

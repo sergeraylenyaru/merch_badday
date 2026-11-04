@@ -1,3 +1,4 @@
+import {rollPoliceLoot} from './police-loot.js';
 import * as T from 'three';
 import {createWeaponRig} from '../visuals/weapon-rig.js';
 import {point,HOME_CAR} from '../city/reference-layout.js';
@@ -30,7 +31,9 @@ export function createAdventure(scene,world,state,callbacks){
   const item={kind,id,group,object,x:p.x,z:p.z,y:p.y??world.groundHeight(p.x,p.z),enabled,interaction,label:text};items.push(item);return item;
  }
  function weaponModel(parent,id){
-  if(id==='stone'){const rock=new T.Mesh(geo('held-stone',()=>new T.IcosahedronGeometry(.14,1)),mat('#929786'));rock.name='held-stone';rock.position.y=.07;parent.add(rock);
+  if(id==='slingshot'){
+   cylinder(parent,.035,.045,.25,0,0,0,'#a57840');for(const side of [-1,1]){const fork=cylinder(parent,.025,.035,.24,side*.07,.2,0,'#c39552');fork.rotation.z=-side*.6;const band=cylinder(parent,.008,.008,.18,side*.05,.31,-.04,'#ce9b51');band.rotation.z=side*.9;}box(parent,.07,.04,.025,0,.25,-.1,'#4b3d31');
+  }else if(id==='stone'){if(!materials.has('held-stone-material'))materials.set('held-stone-material',new T.MeshStandardMaterial({vertexColors:true,roughness:1}));const rock=new T.Mesh(geo('held-stone',()=>world.stones.heldGeometry()),materials.get('held-stone-material'));rock.name='held-stone';parent.add(rock);
   }else if(id==='water'){
    box(parent,.17,.28,.46,0,.2,.08,'#29c7e9');box(parent,.10,.25,.12,0,0,-.02,'#f6ba45');cylinder(parent,.08,.08,.34,0,.33,.08,'#ff6159').rotation.x=Math.PI/2;
    box(parent,.14,.13,.18,0,.25,.37,'#ffe469');
@@ -42,12 +45,14 @@ export function createAdventure(scene,world,state,callbacks){
    if(id==='stick'){const branch=cylinder(parent,.022,.03,.25,.08,.72,0,'#906b43');branch.rotation.z=-.6;}
   }
  }
- const positions={bat:[195,185],stick:[770,440],water:[1450,610]};
+ const positions={bat:[195,185],stick:[770,440],water:[1450,610],slingshot:[995,135]};
  for(const [id,uv] of Object.entries(positions)){
-  const def=WEAPONS[id],p=safe(point(...uv));const item=pickup('weapon',id,p,def.color,'E · '+def.name,()=>!a.pickedWeapons.includes(id),()=>{pickupWeapon(state,id);callbacks.notify(def.name+' подобрано · 1 — кулаки, 2 — бита, 3 — палка, 4 — пистолет');changed();});weaponModel(item.object,id);item.object.scale.setScalar(1.15);
+  const def=WEAPONS[id],p=safe(point(...uv));const item=pickup('weapon',id,p,def.color,'E · '+def.name,()=>!a.pickedWeapons.includes(id),()=>{pickupWeapon(state,id);callbacks.notify(def.name+' подобрано · 1 — кулаки, 2 — бита, 3 — палка, 4 — пистолет, 6 — рогатка');changed();});weaponModel(item.object,id);item.object.scale.setScalar(1.15);
  }
+ function addWeaponDrop(drop){const item=pickup('weapon-drop',drop.id,drop,WEAPONS[drop.weapon].color,'E · '+WEAPONS[drop.weapon].name,()=>!drop.taken,()=>{drop.taken=true;pickupWeapon(state,drop.weapon);callbacks.notify('Дубинка подобрана · 7 — выбрать');changed();});weaponModel(item.object,drop.weapon);}
+ for(const drop of a.weaponDrops)addWeaponDrop(drop);
  const packSites=[[105,200],[300,130],[370,500],[550,650],[740,230],[935,430],[960,690],[1230,140],[1500,460],[1470,730]];
- const packRoofs=[...world.roofs].filter(r=>r.kind==='residential'&&world.parkour.diagnostics.ladders.some(l=>l.id===r.id)).sort((a,b)=>a.id.localeCompare(b.id));
+ const packRoofs=[...world.roofs].filter(r=>r.kind==='residential'&&world.parkour.diagnostics.ladders.some(l=>l.id===r.id||l.id===r.scaffoldAccess)).sort((a,b)=>a.id.localeCompare(b.id));
  for(const pack of PACKS){
   const roof=pack.id>=10?packRoofs[Math.floor((pack.id-10)*packRoofs.length/10)]:null;
   const p=roof?{x:roof.x+Math.min(1,roof.w/3),z:roof.z,y:roof.y}:safe(point(...packSites[pack.id]));const item=pickup('pack',pack.id,p,pack.color,`E · ${pack.name} пачка`,()=>!a.cigarettes.includes(pack.id),()=>{collectPack(state,pack.id);callbacks.notify(`Коллекция: ${pack.name} · ${a.cigarettes.length}/${PACKS.length}`);changed();});
@@ -115,11 +120,12 @@ export function createAdventure(scene,world,state,callbacks){
   if(id==='delivery'&&e.status==='active'){p=e.carrying?recipient:e.drop??source;label=e.carrying?`Доставка · груз ${e.integrity}%`:'Забрать посылку';}
   if(id==='favor'&&e.status==='active'){p=e.found?vendor:wallet;label=e.found?'Вернуть кошелёк продавцу':'Найти потерянный кошелёк';}
   if(id==='football'){p=goal;label=`Ворота · ${Math.min(3,a.fun.goals)}/3`;}
+  if(id==='weapon:slingshot'){p=items.find(i=>i.kind==='weapon'&&i.id==='slingshot');label='Рогатка у колеса обозрения · E';}
   if(id==='hospital'){p=world.hospital.spawn;label='Городская больница №1';}
   if(id==='ladder'){p=world.parkour.nearest();label='Лестница на крышу · Space + E';}
   if(id==='scaffold'){p=world.parkour.diagnostics.ladders.filter(l=>l.id.startsWith('scaffold:')).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Строительные леса · Space + E';}
   if(id==='billboard'){p=world.parkour.diagnostics.ladders.filter(l=>l.id.startsWith('billboard:')).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Рекламный щит · лестница на столбе · Space + E';}
-  if(id==='wire'){p=world.cables.wires.flatMap(w=>[w.a,w.b]).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Провод на крыше · Space + E';if(p&&world.player.mesh.position.y<p.roofY-1){p=world.parkour.diagnostics.ladders.find(l=>l.id===p.roofId)??p;label='Поднимитесь по лестнице к проводу';}else if(p)p={...p,y:p.roofY};}
+  if(id==='wire'){p=world.cables.wires.flatMap(w=>[w.a,w.b]).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Провод на крыше · Space + E';if(p&&world.player.mesh.position.y<p.roofY-1){p=world.parkour.diagnostics.ladders.find(l=>l.id===p.roofId||l.id===world.roofs.find(r=>r.id===p.roofId)?.scaffoldAccess)??p;label='Поднимитесь по лестнице к проводу';}else if(p)p={...p,y:p.roofY};}
   if(id==='garage-yard'){p=world.yards.yards.flatMap(y=>y.props).sort((p,q)=>Math.hypot(p.x-world.player.mesh.position.x,p.z-world.player.mesh.position.z)-Math.hypot(q.x-world.player.mesh.position.x,q.z-world.player.mesh.position.z))[0];label='Ящики, баки и забор у гаражей';}
   if(id==='van'){p=world.vehicles.find(v=>v.id===a.garage.vanId)?.mesh.position;label='Ваш фургон';}
   if(id.startsWith('guard:')){p=guards[Number(id.split(':')[1])]?.mesh.position;label='Охранник · договориться';}
@@ -157,6 +163,7 @@ export function createAdventure(scene,world,state,callbacks){
    for(const {person,rig}of policeRigs)rig.update({remaining:person.attack??0,visible:person.mesh.visible&&!person.dead&&person.stun<=0&&!person.climb});
   },
   update(dt,time,{inVehicle=false,carrying=false,firstPerson=false,camera=null,attack=0}={}){
+   for(const [index,person]of world.people.entries())if(person.dead){const drop=rollPoliceLoot(state,person,index);if(drop){drop.y=world.parkour.floorAt(drop.x,drop.z,drop.y+.2);addWeaponDrop(drop);changed();}}
    const position=world.player.mesh.position,e=a.events.delivery,pp=e.drop??source;parcel.x=pp.x;parcel.z=pp.z;parcel.group.position.set(pp.x,world.groundHeight(pp.x,pp.z),pp.z);
    for(const item of items){const distance=Math.hypot(item.x-position.x,item.z-position.z);
     if(dt>0&&!inVehicle&&Math.abs(position.y-world.groundHeight(item.x,item.z))<1.8&&item.kind==='money'&&item.enabled()&&distance<1.55&&clearSegment(position,{x:item.x,z:item.z},world.blocked,.05))item.interaction();

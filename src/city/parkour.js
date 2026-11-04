@@ -12,6 +12,7 @@ export function createParkour(scene,world,state){
  const metal=new T.MeshStandardMaterial({color:'#8a8372',roughness:.72,metalness:.35});
  function box(x,y,z,w,h,d,angle,key){const g=new T.BoxGeometry(w,h,d);g.rotateY(angle);g.translate(x,y,z);if(!chunks.has(key))chunks.set(key,[]);chunks.get(key).push(g);}
  for(const roof of roofs){
+  if(roof.scaffoldAccess)continue;
   const wall=roof.wallBounds??roof;
   const options=[];
   for(const side of [-1,1])for(const along of [0,-.45,.45]){

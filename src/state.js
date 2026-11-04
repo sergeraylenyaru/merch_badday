@@ -125,6 +125,7 @@ export const freshState = () => ({
   energy: 0,
   ending: null,
   selected: 0,
+  awaitingShopChoice:false,
   position: {...START},
   shops: SHOPS.map((shop) => ({
     carts: 0,
@@ -167,10 +168,12 @@ export function complete(s, id) {
   s.stress -= 8;
   s.money += 200;
   s.bonus += 100 + urgentReward(s,id);
+  s.awaitingShopChoice=!s.shops.every(x=>x.done);
   normalize(s);
   if (s.shops.every((x) => x.done)) finish(s);
   return true;
 }
+export function selectShop(state,id){if(!Number.isInteger(id)||!state.shops[id]||state.shops[id].done||!isShopUnlocked(state,id))return false;state.selected=id;state.awaitingShopChoice=false;state.adventure.tracked=null;return true;}
 export function finish(s, quit = false) {
   const allDone = s.shops.every((p) => p.done);
   s.ending = quit

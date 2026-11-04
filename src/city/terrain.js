@@ -1,4 +1,4 @@
-import { MAP, ROADS, ROAD_JOINS,RIVERS, COAST, point, pixel, segmentDistance, PIER } from './reference-layout.js';
+import { MAP, ROADS, ROAD_JOINS,RIVERS, COAST, point, pixel, segmentDistance, PIER,POND_ISLAND,parkBridgeHeight } from './reference-layout.js';
 export const WATER_LEVEL = -0.45;
 export const BRIDGE_HEIGHT = 0.55;
 export function waterDistance(u,v) {
@@ -7,7 +7,7 @@ export function waterDistance(u,v) {
   let distance=coast-v;
   distance=Math.min(distance,(Math.hypot((u-1015)/48,(v-480)/50)-1)*48);
   for(const [i,river] of RIVERS.entries())for(let n=1;n<river.length;n++)distance=Math.min(distance,segmentDistance(u,v,...river[n-1],...river[n])-(i?10:13));
-  return distance;
+  return Math.max(distance,POND_ISLAND.radius-Math.hypot(u-POND_ISLAND.u,v-POND_ISLAND.v));
 }
 export const terrainHeight=(x,z)=>{const p=pixel(x,z),distance=waterDistance(p.x,p.y);return distance<0?Math.max(-5,-.42+distance*.23):Math.min(0,(distance-3)*.14);};
 export const ROAD_PROFILES=ROADS.map(([a,b,c,d,width])=>{
@@ -24,7 +24,7 @@ export function roadHeight(x,z) {
     if(across<=road.width/2+.02)height=Math.max(height,road.heightAt(Math.max(0,Math.min(road.length,along))));}
   for(const j of ROAD_JOINS)if(Math.hypot(x-j.x,z-j.z)<=j.radius+.02)for(const {index,end}of j.roads){const r=ROAD_PROFILES[index];height=Math.max(height,r.heightAt(end?r.length:0));}
   const p=pixel(x,z);if(segmentDistance(p.x,p.y,...PIER.slice(0,4))<=PIER[4]/2 || (p.x>837.5&&p.x<892.5&&p.y>870&&p.y<882))height=Math.max(height,.12);
-  return height;
+  return Math.max(height,parkBridgeHeight(x,z));
 }
 export function gridTerrain(step=4) {
  const columns=Math.ceil(MAP.width/step),rows=Math.ceil(MAP.height/step),positions=[],uv=[],indices=[];

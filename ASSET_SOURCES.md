@@ -111,5 +111,26 @@ Quaternius **Swat**, Ultimate Modular Men Pack, CC0-1.0.
 
 Строительные леса созданы процедурной геометрией проекта в
 `src/city/scaffolding.js`: металлические стойки, перила и деревянные настилы.
-Камни используют общую геометрию и материал, неподвижные группы объединены
-в один InstancedMesh. Внешние модели и изображения для них не используются.
+
+## Камни Quaternius — Ultimate Nature Pack
+
+Три исходных GLB — `Rock_1.glb`, `Rock_3.glb`, `Rock_Moss_5.glb`,
+локально `public/models/nature/rock-round.glb`, `rock-flat.glb`, `rock-moss.glb`.
+Автор Quaternius, **CC0-1.0**. Официальный источник:
+https://quaternius.com/packs/ultimatenature.html . Файлы получены из
+`trebeljahr/quaternius-showcase` на коммите
+`722c39e964360beff2728a8ee4d103e2d11d457c`, `public/glb/nature_pack/`.
+Подтверждение категории и лицензии сохранено в
+`art/quaternius/NATURE_LICENSES.md`. GLB не изменены; загрузчик сохраняет
+цвета камня и мха в атрибутах вершин и рисует три InstancedMesh.
+
+## Парк и мостики
+
+`public/models/park/chain-swing.glb`, `pirate-ship.glb`, `mini-coaster.glb` —
+оригинальные модели и анимации проекта, без внешних изображений.
+Источник `src/visuals/park-models.js`, воспроизведение
+`node scripts/create-park-models.mjs`.
+
+Мостики используют `public/models/city-pack/bridge.glb` из ранее присланного
+городского набора с его PBR-материалами. Настилы, пандусы, перила и коллизии
+привязаны к одной системе координат парка; новые мосты отмечены на карте.
