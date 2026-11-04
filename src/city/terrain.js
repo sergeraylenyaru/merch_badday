@@ -7,7 +7,7 @@ export function waterDistance(u,v) {
   let distance=coast-v;
   distance=Math.min(distance,(Math.hypot((u-1015)/48,(v-480)/50)-1)*48);
   for(const [i,river] of RIVERS.entries())for(let n=1;n<river.length;n++)distance=Math.min(distance,segmentDistance(u,v,...river[n-1],...river[n])-(i?10:13));
-  return Math.max(distance,POND_ISLAND.radius-Math.hypot(u-POND_ISLAND.u,v-POND_ISLAND.v));
+  return POND_ISLAND.enabled?Math.max(distance,POND_ISLAND.radius-Math.hypot(u-POND_ISLAND.u,v-POND_ISLAND.v)):distance;
 }
 export const terrainHeight=(x,z)=>{const p=pixel(x,z),distance=waterDistance(p.x,p.y);return distance<0?Math.max(-5,-.42+distance*.23):Math.min(0,(distance-3)*.14);};
 const profile=([a,b,c,d,width])=>{

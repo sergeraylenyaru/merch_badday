@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { MAP_BUILDINGS } from './map-buildings.js';
-import { MAP, HOME, HOME_CAR, ROAD_BOXES, PARK_PATHS, WORK_STOPS, LOCAL_POINTS, isReferenceWater,meetsStreet } from './reference-layout.js';
-import { boxesIntersect, vehicleBox } from '../spatial.js';
+import { MAP, HOME, HOME_CAR, ROAD_BOXES, PARK_PATHS,PARK_SQUARE, WORK_STOPS, LOCAL_POINTS, isReferenceWater,meetsStreet } from './reference-layout.js';
+import { boxesIntersect,circleIntersectsBox,vehicleBox } from '../spatial.js';
 import { NEIGHBORHOODS, populateNeighborhoods, populateEntrances } from './neighborhood-details.js';
 import {BREAKABLE_IDS,createDestructibles} from './destructibles.js';
 
@@ -792,6 +792,7 @@ export function createUrbanDetails(sceneRoot, world, point) {
     const u=(footprint.x-MAP.x)/MAP.scale,v=(footprint.z-MAP.z)/MAP.scale;
     const w=footprint.w/MAP.scale,d=footprint.d/MAP.scale;
     const region=options.region;
+    if(circleIntersectsBox(PARK_SQUARE.x,PARK_SQUARE.z,PARK_SQUARE.radius+1,footprint))return true;
     if(region&&(u-w<region.left||u+w>region.right||v-d<region.top||v+d>region.bottom))return true;
     if(u-w<22||u+w>1650||v-d<24||v+d>780)return true;
     // Test the full visible footprint, including corners, overhangs and signs.

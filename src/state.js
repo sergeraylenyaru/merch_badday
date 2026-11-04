@@ -1,4 +1,4 @@
-import {ensureBackpack} from './city/backpack.js';
+import {ensureBackpack,awardFirstJobBoots} from './city/backpack.js';
 import { WORK_STOPS, START, HOME_CAR, HOME_CAR_HEADING } from './city/reference-layout.js';
 import {makeShift,urgentReward,career,remember} from './city/shift.js';
 import { JOBS, newJob, jobDone, isShopUnlocked } from './jobs/catalog.js';
@@ -127,9 +127,9 @@ export const freshState = () => {const state=({
   ending: null,
   selected: 0,
   awaitingShopChoice:false,
-  mapMode:'schematic',
+  mapMode:'satellite',
   mapLayers:{shops:true,vendors:true,guards:false,leisure:false,health:true,parkour:false,collectibles:false},
-  backpack:null,wearing:null,layoutRevision:4,
+  backpack:null,wearing:null,rewards:{firstJobBoots:false},preferencesRevision:2,layoutRevision:4,
   supplyTrip:null,mapTarget:null,
   position: {...START},
   shops: SHOPS.map((shop) => ({
@@ -167,7 +167,7 @@ export function complete(s, id) {
   if (!canComplete(s, id)) return false;
   s.bonus += Math.min(3,s.career.loyalty[id])*20;
   s.career.loyalty[id]++; remember(s);
-  s.shops[id].done = true;
+  s.shops[id].done=true;if(awardFirstJobBoots(s))s.messages.push('Награда за первое выполненное задание: обувь для бега. Надень её в M → Снаряжение.');
   s.shops[id].rep += 10;
   s.reputation += 5;
   s.stress -= 8;
@@ -213,7 +213,7 @@ export function load(storage = localStorage) {
       Number.isFinite(s.position.z)
     ) {
       const v = { ...freshState(), ...s };
-      v.wearing=s.wearing??null;v.mapMode=v.mapMode==='satellite'?'satellite':'schematic';v.mapLayers={...freshState().mapLayers,...s.mapLayers};
+      v.wearing=s.wearing??null;v.rewards=s.rewards??{firstJobBoots:s.shops.some(p=>p.done)};v.mapMode=(s.preferencesRevision??0)<2?'satellite':v.mapMode==='schematic'?'schematic':'satellite';v.preferencesRevision=2;v.mapLayers={...freshState().mapLayers,...s.mapLayers};
       if(s.shops.length===8&&Array.isArray(v.vehicles)){v.vehicles=[...v.vehicles];v.vehicles.splice(8,0,null);}
       const migrating = ![2,3].includes(s.missionVersion);
       v.missionVersion = 3;

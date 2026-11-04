@@ -11,6 +11,7 @@ export function mapMarkers(state,world){
  for(const [i,g]of (world?.adventure?.diagnostics.guards??[]).entries())list.push({...g,id:'guard:'+i,layer:'guards',symbol:'О',label:'Охрана · '+g.shopName,detail:'Подойди и нажми E · взятка снимает одну звезду'});
  if(world?.hospital)list.push({...world.hospital.spawn,id:'hospital',layer:'health',symbol:'+',label:'Городская больница',detail:'Здесь герой появляется после лечения'});
  for(const r of world?.park?.diagnostics.rides??[])list.push({...point(r.u,r.v),id:'ride:'+r.id,layer:'leisure',symbol:'П',label:r.name??'Аттракцион в парке',detail:'Место отдыха'});
+ if(world?.park?.diagnostics.square)list.push({...world.park.diagnostics.square,id:'lenin-square',layer:'leisure',symbol:'П',label:'Площадь Ленина',detail:'Памятник и скамейки в парке'});
  for(const l of world?.parkour?.diagnostics.ladders??[])list.push({...l,id:'ladder:'+l.id,layer:'parkour',symbol:'↟',label:'Лестница на крышу',detail:'Space + E · зацепиться; W / S · лезть'});
  for(const [i,y]of (world?.yards?.yards??[]).entries())list.push({...y.props[0],id:'vault:'+i,layer:'parkour',symbol:'↟',label:'Опора у забора',detail:'Запрыгни на ящик или бак, затем Space + E'});
  for(const item of world?.adventure?.diagnostics.items??[])if(item.kind==='pack'&&item.available)list.push({...item,id:'pack:'+item.id,layer:'collectibles',symbol:'◆',label:'Коллекционная пачка',detail:PACKS[item.id]?.name??'Нажми E рядом с находкой'});

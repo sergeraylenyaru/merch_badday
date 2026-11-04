@@ -14,6 +14,7 @@ export function createCityLife(world){
   }
   for(const [u,v] of LOCAL_POINTS)add(point(u,v+22),'shop',point(u,v));
   for(const u of [215,520,1130,1410])add(point(u+10,305),'bus',point(u,305));
+  for(const seat of world.park?.diagnostics.square?.seats??[])add(seat,'rest',seat.lookAt);
   for(const node of world.walkways?.nodes??[])add(node,'walk',node.lookAt??node);
   const walkers=world.people.filter(n=>n.kind==='civilian'&&!n.seated);
   function assign(person,index){

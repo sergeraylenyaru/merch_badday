@@ -6,7 +6,7 @@ import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {prepareCityAsset} from './city-assets.js';
 import {MAP_BUILDINGS} from './map-buildings.js';
-import { MAP, point, GARAGE_PLOTS, WORK_STOPS, ROADS,ROAD_JOINS, nearRoad, nearFootpath, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT, COAST, PARK_PATHS,HOSPITAL,PARK_BRIDGES,parkBridgeHeight } from './reference-layout.js';
+import { MAP, point, GARAGE_PLOTS, WORK_STOPS, ROADS,ROAD_JOINS, nearRoad, nearFootpath, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT, COAST, PARK_PATHS,PARK_SQUARE,HOSPITAL,PARK_BRIDGES,parkBridgeHeight } from './reference-layout.js';
 export {isReferenceWater} from './reference-layout.js';
 import { BOROUGHS, LOCAL_SHOPS } from './layout.js';
 import { createUrbanDetails } from './urban-details.js';
@@ -47,7 +47,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  const rim=new T.Mesh(new T.TorusGeometry(8,.13,6,48),metal);hub.add(rim);
  for(let i=0;i<12;i++){const a=i*Math.PI/6;const spoke=new T.Mesh(new T.CylinderGeometry(.05,.05,8,5),metal);spoke.position.set(Math.cos(a)*4,Math.sin(a)*4,0);spoke.rotation.z=a-Math.PI/2;hub.add(spoke);const c=new T.Mesh(new T.BoxGeometry(1.25,1.2,1),new T.MeshStandardMaterial({color:['#cf6250','#e5be5e','#699bb9'][i%3]}));c.position.set(Math.cos(a)*8,Math.sin(a)*8,0);hub.add(c);animated.push(c);}
  for(const x of [-3,3]){const leg=new T.Mesh(new T.CylinderGeometry(.2,.3,10,8),metal);leg.position.set(x,4.5,0);leg.rotation.z=x<0?-.3:.3;wheel.add(leg);}
- add('tree',1046,475,.8,0,false,true);
+
  // Street furniture follows the main boulevard and residential streets.
  for(let u=80;u<1660;u+=120){add('streetlight',u,310,1,0,false,true);add('streetlight',u+45,370,1,0,false,true);}
  for(const u of [215,520,1130,1410])add('bus_stop',u,305,1,0,true,true);
@@ -59,7 +59,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  for(let i=0;i<1400;i++){
   const u=35+random()*1600,v=30+random()*740;
   const p=point(u,v);if(Math.abs(p.x-HOSPITAL.x)<HOSPITAL.w+4&&Math.abs(p.z-HOSPITAL.z)<HOSPITAL.d+4)continue;
-  if(!clearShop(u,v,8)||nearRoad(u,v,20)||nearFootpath(u,v,10)||isReferenceWater(u,v)||parkBridgeHeight(p.x,p.z)>-Infinity||PARK_RIDES.some(r=>Math.abs(u-r.u)<r.w/MAP.scale+10&&Math.abs(v-r.v)<r.d/MAP.scale+10)||PARK_PATHS.some(([x,y,w,d])=>Math.abs(u-x)<w/2+6&&Math.abs(v-y)<d/2+6))continue;
+  if(Math.hypot(p.x-PARK_SQUARE.x,p.z-PARK_SQUARE.z)<PARK_SQUARE.radius+5||!clearShop(u,v,8)||nearRoad(u,v,20)||nearFootpath(u,v,10)||isReferenceWater(u,v)||parkBridgeHeight(p.x,p.z)>-Infinity||PARK_RIDES.some(r=>Math.abs(u-r.u)<r.w/MAP.scale+10&&Math.abs(v-r.v)<r.d/MAP.scale+10)||PARK_PATHS.some(([x,y,w,d])=>Math.abs(u-x)<w/2+6&&Math.abs(v-y)<d/2+6))continue;
   if([...placements].some(([n,list])=>!['tree','shrub','bench','trash_bin','streetlight','bus_stop'].includes(n)&&list.some(p=>(p.width?Math.abs(u-p.u)<p.width/2+12&&Math.abs(v-p.v)<p.depth/2+12:Math.hypot(u-p.u,v-p.v)<45))))continue;
   add(i%5?'tree':'shrub',u,v,.85+random()*.45);
  }

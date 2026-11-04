@@ -1,3 +1,4 @@
+import {createLeninSquare} from './lenin-square.js';
 import * as T from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {prepareCityAsset} from './city-assets.js';
@@ -13,5 +14,6 @@ export async function createParkDetails(scene,world){
   const positions=[],uv=[];for(let d=-b.length/2-4;d<b.length/2+4;d+=.5){const coords=[[d,-1],[d+.5,1],[d+.5,-1],[d,-1],[d,1],[d+.5,1]];for(const [along,side]of coords){const x=b.x+Math.cos(b.angle)*along-Math.sin(b.angle)*side*b.width/2,z=b.z+Math.sin(b.angle)*along+Math.cos(b.angle)*side*b.width/2;positions.push(x,Math.max(0,parkBridgeHeight(x,z)),z);uv.push(along,side);}}
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(Array.from({length:positions.length/3},(_,i)=>i));g.computeVertexNormals();world.terrainCollider(g);owned.push(g);const m=new T.MeshStandardMaterial({color:'#b9b6a4',roughness:.9,side:T.DoubleSide});materials.push(m);const ramp=new T.Mesh(g,m);ramp.position.y=.003;root.add(ramp);
  }
- return {diagnostics:{rides:PARK_RIDES,bridges:PARK_BRIDGES,riverBanks:2,pondIsland:true},update(dt){mixers.forEach(m=>m.update(dt));},dispose(){mixers.forEach(m=>m.stopAllAction());root.removeFromParent();bridge.dispose();owned.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());for(const asset of assets)asset.traverse(n=>{if(n.isMesh){n.geometry.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}});}};
+ const square=await createLeninSquare(scene,world);
+ return {diagnostics:{square:square.diagnostics,rides:PARK_RIDES,bridges:PARK_BRIDGES,riverBanks:2,pondIsland:false},update(dt){mixers.forEach(m=>m.update(dt));},dispose(){square.dispose();mixers.forEach(m=>m.stopAllAction());root.removeFromParent();bridge.dispose();owned.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());for(const asset of assets)asset.traverse(n=>{if(n.isMesh){n.geometry.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}});}};
 }

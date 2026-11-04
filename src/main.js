@@ -42,7 +42,7 @@ import { createWalkingBlocker, createPedestrianNavigator, clearSegment } from '.
 import { createCityLife } from './npc/city-life.js';
 import { createCrossingMarkings } from './npc/crossings.js';
 import {createLocalCrowd} from './npc/local-crowd.js';
-import {collisionInjury,pedestrianContact} from './physics/vehicle-impact.js';
+import {collisionInjury,pedestrianContact,resolveVehicleImpact,stepVehicleImpacts} from './physics/vehicle-impact.js';
 import {createAdventure} from './adventure/world.js';
 import {createSideWork} from './jobs/side-work-world.js';
 import {tickHealth} from './city/vitals.js';
@@ -652,7 +652,7 @@ try {
       jump = vertical = 0;
       world.player.mesh.position.copy(car.mesh.position);
       world.player.mesh.visible = false;
-      car.speed = 0;
+      car.speed=0;car.impactMotion=null;
       car.doorAnimation = 1;
       yaw = car.heading + Math.PI;
       notify(
@@ -831,8 +831,8 @@ try {
       yaw -= e.movementX * 0.002 * settings.sensitivity;
       pitch = T.MathUtils.clamp(
         pitch + e.movementY * 0.002 * settings.sensitivity,
-        -0.2,
-        1.1,
+        -1.48,
+        1.35,
       );
     }
   });
@@ -861,6 +861,8 @@ try {
       side = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
     if (keys.has("ArrowLeft")) yaw += dt * 1.7;
     if (keys.has("ArrowRight")) yaw -= dt * 1.7;
+    if(keys.has("ArrowUp"))pitch=T.MathUtils.clamp(pitch-dt*1.7,-1.48,1.35);
+    if(keys.has("ArrowDown"))pitch=T.MathUtils.clamp(pitch+dt*1.7,-1.48,1.35);
     if (vehicle) {
       vehicle.impactCooldown=Math.max(0,(vehicle.impactCooldown??0)-dt);
       walkingVelocity.set(0, 0, 0);
@@ -883,11 +885,13 @@ try {
         (keys.has("ShiftLeft") ? 2 : 1.15) *
         Math.min(1, Math.abs(vehicle.speed) / 5) *
         sign;
-      const dx = Math.sin(vehicle.heading) * vehicle.speed * dt,
+      let dx = Math.sin(vehicle.heading) * vehicle.speed * dt,
         dz = Math.cos(vehicle.heading) * vehicle.speed * dt;
       const p = vehicle.mesh.position;
-      const nx = p.x + dx,
+      let nx = p.x + dx,
         nz = p.z + dz;
+      const hitCar=world.vehicles.find(v=>v!==vehicle&&v.mesh.visible&&!v.sunk&&!(v.police&&state.wanted<3)&&boxesIntersect(vehicleBox(vehicle,nx,nz),vehicleBox(v)));
+      if(hitCar){const speedBefore=vehicle.speed,impact=resolveVehicleImpact(vehicle,hitCar,world);if(impact){collisionInjury(state,impact.closing);world.adventure.onCrash(impact.closing,vehicle);if(Math.abs(speedBefore)>4)crime(1);const ratio=Math.abs(speedBefore)>.01?vehicle.speed/speedBefore:0;dx*=ratio;dz*=ratio;nx=p.x+dx;nz=p.z+dz;}}
       world.props.vehicle(vehicleBox(vehicle,nx,nz),vehicle.speed,{x:Math.sin(vehicle.heading),z:Math.cos(vehicle.heading)});
       if (world.vehicleBlocked(vehicle, nx, nz,vehicle.heading,true)) {
         if (Math.abs(vehicle.speed) > 7&&vehicle.impactCooldown===0) {
@@ -895,7 +899,7 @@ try {
           world.adventure.onCrash(vehicle.speed,vehicle);
           beep(80, 0.2);
         }
-        vehicle.speed *= -0.25;
+        vehicle.speed*=hitCar ? .85 : -.25;
         vehicle.heading = oldHeading;
       } else {p.set(nx,world.water.isWater(nx,nz)?p.y:world.groundHeight(nx,nz),nz);if(world.water.isWater(nx,nz))world.water.carTick(vehicle,0);}
       vehicle.mesh.rotation.y = vehicle.heading;
@@ -1070,7 +1074,7 @@ try {
     const player = world.player.mesh.position;
     policeHitCooldown=Math.max(0,policeHitCooldown-dt);
     policeResponse.update(player,state.time,yaw);
-    localCrowd.update(player,state.time,yaw);
+    localCrowd.update(player,state.time,yaw,camera.position);
     pedestrianNavigator.beginFrame(state.time);
     for (const n of world.people) {
       if (n.seated) continue;
@@ -1196,7 +1200,7 @@ try {
     separatePeople(world.people,(x,z,r,y)=>world.blockedAt(x,z,r,null,y)||(y>world.groundHeight(x,z)+.5&&world.parkour.floorAt(x,z,y+.1)<y-.3),vehicle?null:player);
     for (const [i, v] of world.policeVehicles.entries()) {
       v.mesh.visible = state.wanted >= 3;
-      if (!v.mesh.visible) continue;
+      if (!v.mesh.visible||v.impactMotion) continue;
       v.light.material.emissive.set(
         Math.sin(visualTime * 12) > 0 ? "#3c75f5" : "#e15645",
       );
@@ -1219,9 +1223,9 @@ try {
       if (officer.activePolice&&!officer.dead&&!officer.roofPursuit&&player.y<world.groundHeight(player.x,player.z)+2&&officer.mesh.position.distanceTo(p) > 70)
         officer.mesh.position.set(p.x + 3, 0, p.z);
     }
-    world.traffic.update(dt,player,state.time);
+    world.traffic.update(dt,player,state.time,yaw,camera.position);
     for (const v of world.vehicles.filter((v) => v.traffic)) {
-      if (v === vehicle || v.claimed || v.sunk || !v.mesh.visible) continue;
+      if(v===vehicle||v.claimed||v.sunk||!v.mesh.visible||v.impactMotion)continue;
       if (v.rival) {
         if((state.supplyTrip?.item==='dima'||state.mapTarget?.id==='vendor:dima')&&!vehicle&&Math.hypot(v.mesh.position.x-player.x,v.mesh.position.z-player.z)<10){v.speed=0;continue;}
         const stop = SHOPS[Math.floor(state.time / 80) % SHOPS.length],
@@ -1263,14 +1267,7 @@ try {
         if(!world.blocked(contact.x,contact.z,PLAYER_SHAPE.radius,v)){player.x=contact.x;player.z=contact.z;}
         walkingVelocity.set(0,0,0);notify('Вас сбила машина. Поднимаемся…');
       }
-      if (vehicle && vehicle.impactCooldown===0&&boxesIntersect(vehicleBox(vehicle), vehicleBox(v))) {
-        const driverSpeed=Math.abs(vehicle.speed);
-        const impactSpeed=Math.abs(vehicle.speed-v.speed);
-        collisionInjury(state,impactSpeed);vehicle.impactCooldown=1;v.impactBrake=1.2;
-        world.adventure.onCrash(impactSpeed,vehicle);
-        vehicle.speed *= -0.3;
-        if(driverSpeed>4)crime(1);
-      }
+      if(vehicle&&vehicle.impactCooldown===0&&boxesIntersect(vehicleBox(vehicle),vehicleBox(v))){const impact=resolveVehicleImpact(vehicle,v,world);if(impact){collisionInjury(state,impact.closing);world.adventure.onCrash(impact.closing,vehicle);if(Math.abs(impact.driverBefore)>4)crime(1);}}
     }
   }
   function systems(dt) {
@@ -1388,22 +1385,22 @@ try {
           .clone()
           .add(
             new T.Vector3(
-              -Math.sin(yaw) * 10,
-              -Math.sin(pitch) * 7,
-              -Math.cos(yaw) * 10,
+              -Math.sin(yaw)*Math.cos(pitch)*10,
+              -Math.sin(pitch)*10,
+              -Math.cos(yaw)*Math.cos(pitch)*10,
             ),
           ),
       );
     } else {
       world.player.mesh.visible = !vehicle;
-      const r = vehicle ? 10 : 4.8;
+      const r=vehicle?10:4.8,boomPitch=Math.max(-.18,pitch);
       desired = target
         .clone()
         .add(
           new T.Vector3(
-            Math.sin(yaw) * r * Math.cos(pitch),
-            (vehicle ? 2 : 0.6) + Math.sin(pitch) * r,
-            Math.cos(yaw) * r * Math.cos(pitch),
+            Math.sin(yaw)*r*Math.cos(boomPitch),
+            (vehicle?2:.6)+Math.sin(boomPitch)*r,
+            Math.cos(yaw)*r*Math.cos(boomPitch),
           ),
         );
       avoidCameraCollision(anchor, desired);
@@ -1411,9 +1408,10 @@ try {
       else camera.position.lerp(desired, 1 - Math.exp(-dt * 10));
       avoidCameraCollision(anchor, camera.position);
       if (!vehicle) world.player.mesh.visible = camera.position.distanceTo(target) > 0.65;
-      camera.lookAt(target);
+      const lookPitch=pitch+(vehicle?Math.atan2(2,r):.12);camera.lookAt(camera.position.clone().add(new T.Vector3(-Math.sin(yaw)*Math.cos(lookPitch),-Math.sin(lookPitch),-Math.cos(yaw)*Math.cos(lookPitch)).multiplyScalar(10)));
     }
   }
+  world.traffic.prime(world.player.mesh.position,state.time,yaw);
   ui.setSatellite(captureSatelliteMap(renderer,scene,world,[marker,goalZone]));
   ui.update(world, null);
   updateCarts();
@@ -1445,6 +1443,7 @@ try {
       rainGeo.attributes.position.needsUpdate = true;
     }
     if (mode === "play") {
+      stepVehicleImpacts(world,dt,vehicle);
       move(dt);
       if(pendingSwing){
         if(vehicle||state.carrying||held||knockdownTime>.5||state.adventure.equipped!==pendingSwing.id){pendingSwing=null;attack=0;}
@@ -1555,7 +1554,7 @@ try {
         firstPersonHandsVisible: world.visuals?.firstPersonHandsVisible ?? false,
         fov: camera.fov,
         pointerLocked: mouseCapture.captured,
-        cameraYaw: yaw,
+        lastVehicleImpact:world.lastVehicleImpact??null,cameraYaw:yaw,cameraPitch:pitch,cameraForward:camera.getWorldDirection(new T.Vector3()).toArray(),
         cameraPosition: camera.position.toArray(),
       };
     },
@@ -1565,7 +1564,7 @@ try {
     get vehicles() {
       return world.vehicles.map((v) => ({ id: v.id, type: v.type, model: v.visualModel, name: v.displayName,
         traffic: v.traffic, claimed: v.claimed,sunk:!!v.sunk,waterTime:v.waterTime??0,visible:v.mesh.visible, controlled: v === vehicle,
-        position: v.mesh.position.toArray(), heading: v.heading, speed: v.speed, halfWidth: v.w, halfLength: v.l, height: v.h }));
+        position: v.mesh.position.toArray(), heading: v.heading, speed:v.speed,impactMoving:!!v.impactMotion,halfWidth: v.w, halfLength: v.l, height: v.h }));
     },
     get navigation() {
       return { streetObstructions: world.streetObstructions.map(({ x, z, w, d }) => ({ x, z, w, d })),

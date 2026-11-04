@@ -37,9 +37,10 @@ export const ROADS = [
 ];
 export const PEDESTRIAN_ROUTES=[[850,400,1030,440,10],[1030,440,1145,490,10],[1145,490,1168,490,10]];
 export const nearFootpath=(u,v,margin=0)=>PEDESTRIAN_ROUTES.some(([a,b,c,d,w])=>segmentDistance(u,v,a,b,c,d)<w/2+margin);
-export const PARK_PATHS=[[850,560,14,360],[850,400,340,14],[850,748,420,14],[775,110,14,80],[795,190,9,240],[850,76,260,9],[722,200,146,9],[1060,164,9,180],[1090,190,80,9],[1018,180,86,9]];
-export const PARK_BRIDGES=[{id:'west',...point(637,200),length:16,width:2.8,angle:0},{id:'east',...point(1117,190),length:16,width:2.8,angle:0},{id:'island',...point(1046,510),length:20,width:2.8,angle:Math.PI/2}];
-export const POND_ISLAND={u:1046,v:475,radius:10};
+export const PARK_PATHS=[[895,610,90,8],[850,560,14,360],[850,400,340,14],[850,748,420,14],[775,110,14,80],[795,190,9,240],[850,76,260,9],[722,200,146,9],[1060,164,9,180],[1090,190,80,9],[1018,180,86,9]];
+export const PARK_BRIDGES=[{id:'west',...point(637,200),length:16,width:2.8,angle:0},{id:'east',...point(1117,190),length:16,width:2.8,angle:0}];
+export const POND_ISLAND={u:1046,v:475,radius:10,enabled:false};
+export const PARK_SQUARE={u:940,v:610,...point(940,610),radius:12};
 export function parkBridgeHeight(x,z){let height=-Infinity;for(const b of PARK_BRIDGES){const dx=x-b.x,dz=z-b.z,along=dx*Math.cos(b.angle)+dz*Math.sin(b.angle),across=-dx*Math.sin(b.angle)+dz*Math.cos(b.angle);if(Math.abs(across)<=b.width/2+1e-6&&Math.abs(along)<=b.length/2+4+1e-6)height=Math.max(height,.35*Math.max(0,Math.min(1,(b.length/2+4-Math.abs(along))/4)));}return height;}
 const joinMap=new Map();
 ROADS.forEach(([a,b,c,d,width],index)=>{for(const [u,v,end]of [[a,b,0],[c,d,1]]){const key=u.toFixed(3)+':'+v.toFixed(3),j=joinMap.get(key)??{...point(u,v),radius:0,roads:[]};j.radius=Math.max(j.radius,width*MAP.scale/2);j.roads.push({index,end});joinMap.set(key,j);}});
@@ -52,7 +53,7 @@ export const RIVERS=[
 export const COAST=[[0,847],[120,855],[230,879],[300,878],[360,851],[430,830],[500,809],[565,798],[625,802],[690,808],[760,813],[800,811],[850,820],[900,820],[970,826],[1040,827],[1110,847],[1170,876],[1240,887],[1320,886],[1390,880],[1480,900],[1570,914],[1672,914]];
 export const segmentDistance=(u,v,a,b,c,d)=>{const dx=c-a,dy=d-b,t=Math.max(0,Math.min(1,((u-a)*dx+(v-b)*dy)/(dx*dx+dy*dy)));return Math.hypot(u-a-t*dx,v-b-t*dy);};
 export function rawWater(u,v){
- if(Math.hypot(u-POND_ISLAND.u,v-POND_ISLAND.v)<POND_ISLAND.radius)return false;
+ if(POND_ISLAND.enabled&&Math.hypot(u-POND_ISLAND.u,v-POND_ISLAND.v)<POND_ISLAND.radius)return false;
  let sea=COAST.at(-1)[1];for(let i=1;i<COAST.length;i++){const a=COAST[i-1],b=COAST[i];if(u<=b[0]){sea=a[1]+(b[1]-a[1])*(u-a[0])/(b[0]-a[0]);break;}}
  if(v>sea)return true;
  if(((u-1015)/48)**2+((v-480)/50)**2<1)return true;

@@ -1,4 +1,4 @@
-import {POPULATION_RECYCLE_DISTANCE,POPULATION_SPAWN_DISTANCE} from '../city/visibility.js';
+import {createSpawnVisibility} from '../city/spawn-visibility.js';
 import * as T from 'three';
 export const policeLimit=level=>level>0?Math.min(6,Math.ceil(level)+1):0;
 export const POLICE_HEALTH=100,REINFORCEMENT_INTERVAL=18;
@@ -11,7 +11,7 @@ export function damagePolice(person,amount,now){
 }
 /** A fixed, reusable pool: lower wanted levels never activate the entire roster. */
 export function createPoliceResponse(world,state){
- const pool=world.people.filter(n=>n.kind==='police'),saved=state.policeResponse??={officers:{},roster:[],lastLevel:0,nextAt:0,extra:0};
+ const concealed=createSpawnVisibility(world),pool=world.people.filter(n=>n.kind==='police'),saved=state.policeResponse??={officers:{},roster:[],lastLevel:0,nextAt:0,extra:0};
  saved.officers??={};saved.roster??=[];saved.extra??=0;
  for(const n of pool){const r=saved.officers[n.policeIndex]??={health:POLICE_HEALTH};n.policeRecord=r;n.health=Math.max(0,Math.min(POLICE_HEALTH,Number(r.health)));if(!Number.isFinite(n.health))n.health=POLICE_HEALTH;n.dead=n.health===0;n.deadAt=r.deadAt??null;if(n.dead&&Array.isArray(r.position))n.mesh.position.fromArray(r.position);n.activePolice=false;n.mesh.visible=false;}
  function place(n,player,yaw){
@@ -37,12 +37,12 @@ export function createPoliceResponse(world,state){
    // Corpses stay down. A later reinforcement can reuse a slot only out of sight.
    if(level>=3&&now>=saved.nextAt){
     saved.nextAt=now+REINFORCEMENT_INTERVAL;
-    for(const n of pool)if(n.dead&&now-n.deadAt>45&&Math.hypot(n.mesh.position.x-player.x,n.mesh.position.z-player.z)>POPULATION_SPAWN_DISTANCE){n.dead=false;n.deadAt=null;n.health=POLICE_HEALTH;n.stun=0;Object.assign(n.policeRecord,{health:POLICE_HEALTH,deadAt:null,position:null});saved.roster=saved.roster.filter(id=>id!==n.policeIndex);}
+    for(const n of pool)if(n.dead&&now-n.deadAt>45&&Math.hypot(n.mesh.position.x-player.x,n.mesh.position.z-player.z)>65&&concealed(player,n.mesh.position,yaw)){n.dead=false;n.deadAt=null;n.health=POLICE_HEALTH;n.stun=0;Object.assign(n.policeRecord,{health:POLICE_HEALTH,deadAt:null,position:null});saved.roster=saved.roster.filter(id=>id!==n.policeIndex);}
     const alive=saved.roster.filter(id=>pool.some(n=>n.policeIndex===id&&!n.dead)).length;
     if(alive<base+2&&deploy(player,yaw))saved.extra=Math.min(2,saved.extra+1);
    }
    const active=saved.roster.filter(id=>pool.some(n=>n.policeIndex===id&&!n.dead)).slice(0,base+(level>=3?saved.extra:0));
-   for(const n of pool){n.activePolice=active.includes(n.policeIndex);if(!n.activePolice&&!n.dead){n.mesh.visible=false;n.attack=0;n.combat=null;}if(n.activePolice&&!n.roofPursuit&&!n.climb&&Math.hypot(n.mesh.position.x-player.x,n.mesh.position.z-player.z)>POPULATION_RECYCLE_DISTANCE)place(n,player,yaw);}
+   for(const n of pool){n.activePolice=active.includes(n.policeIndex);if(!n.activePolice&&!n.dead){n.mesh.visible=false;n.attack=0;n.combat=null;}if(n.activePolice&&!n.roofPursuit&&!n.climb&&Math.hypot(n.mesh.position.x-player.x,n.mesh.position.z-player.z)>130&&concealed(player,n.mesh.position,yaw))place(n,player,yaw);}
    saved.lastLevel=level;
   },
   get diagnostics(){return {base:policeLimit(state.wanted),active:pool.filter(n=>n.activePolice&&!n.dead).length,dead:pool.filter(n=>n.dead).length,nextReinforcement:state.wanted>=3?Math.max(0,saved.nextAt-state.time):null};},

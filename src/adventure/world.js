@@ -1,6 +1,7 @@
 import {rollPoliceLoot} from './police-loot.js';
 import * as T from 'three';
 import {createWeaponRig} from '../visuals/weapon-rig.js';
+import {PLAYER_SHAPE} from '../spatial.js';
 import {point,HOME_CAR} from '../city/reference-layout.js';
 import {clearSegment} from '../npc/navigation.js';
 import {WEAPONS,PACKS,EVENT_INFO,ensureAdventure,collectPack,pickupWeapon,bribeGuard,bribePrice,startEvent,finishEvent,buyGarage,crashCargo,tableCard} from './state.js';
@@ -26,9 +27,12 @@ export function createAdventure(scene,world,state,callbacks){
  function pickup(kind,id,p,color,text,enabled,interaction){
   const group=new T.Group();group.position.set(p.x,p.y??world.groundHeight(p.x,p.z),p.z);root.add(group);
   const ring=new T.Mesh(geo('pickup-ring',()=>new T.RingGeometry(.55,.73,24)),new T.MeshBasicMaterial({color,transparent:true,opacity:.7,side:T.DoubleSide,depthWrite:false}));materials.set('ring:'+materials.size,ring.material);ring.rotation.x=-Math.PI/2;ring.position.y=.05;group.add(ring);
-  const beam=cylinder(group,.035,.035,1.65,0,.85,0,color);beam.material=mat(color,true);
-  label(group,text,color);const object=new T.Group();object.position.y=.8;group.add(object);
-  const item={kind,id,group,object,x:p.x,z:p.z,y:p.y??world.groundHeight(p.x,p.z),enabled,interaction,label:text};items.push(item);return item;
+  let beam=null;if(!['football','table'].includes(kind)){
+   const key='pickup-light-column';if(!geometries.has(key)){const g=new T.CylinderGeometry(.22,.34,PLAYER_SHAPE.height*2,12,8,true),colors=[];for(let i=0;i<g.attributes.position.count;i++){const t=g.attributes.position.getY(i)/(PLAYER_SHAPE.height*2)+.5;colors.push(1,1,1,Math.pow(1-t,.7)*.58);}g.setAttribute('color',new T.Float32BufferAttribute(colors,4));geometries.set(key,g);}
+   const keyMat='beacon:'+color;if(!materials.has(keyMat))materials.set(keyMat,new T.MeshBasicMaterial({color,vertexColors:true,transparent:true,opacity:.5,blending:T.AdditiveBlending,depthWrite:false,side:T.DoubleSide,toneMapped:false}));beam=new T.Mesh(geometries.get(key),materials.get(keyMat));beam.name=key;beam.position.y=PLAYER_SHAPE.height;group.add(beam);
+  }
+  const object=new T.Group();object.position.y=.8;group.add(object);
+  const item={kind,id,group,object,x:p.x,z:p.z,y:p.y??world.groundHeight(p.x,p.z),enabled,interaction,label:text,beam};items.push(item);return item;
  }
  function weaponModel(parent,id){
   if(id==='slingshot'){
@@ -175,7 +179,7 @@ export function createAdventure(scene,world,state,callbacks){
    const near=Math.hypot(position.x-court.x,position.z-court.z)<55;if(near!==ballEnabled){ballBody.setEnabled(near);ballEnabled=near;}ball.visible=near;goalRoot.visible=near;
    if(near){ball.position.copy(ballBody.translation());ball.quaternion.copy(ballBody.rotation());if(flight){ballAge+=dt;const p=ballBody.translation();if(Math.hypot(p.x-goal.x,p.z-goal.z)<1.15&&p.y<world.groundHeight(goal.x,goal.z)+1.65){a.fun.goals++;flight=false;if(a.fun.goals>=3&&!a.fun.footballWon){a.fun.footballWon=true;state.money+=30;state.stress=Math.max(0,state.stress-12);callbacks.notify('Три гола! +30 ₽ · стресс −12');}else callbacks.notify(`Гол! ${Math.min(3,a.fun.goals)}/3`);changed();}else if(ballAge>5)flight=false;}}
   },
-  get diagnostics(){return {items:items.map(i=>({kind:i.kind,id:i.id,x:i.x,z:i.z,y:i.y,available:i.enabled(),visible:i.group.visible})),guards:guards.map(g=>({x:g.mesh.position.x,z:g.mesh.position.z,name:g.role,shopName:g.shopName})),goal:{...goal},court:{...court},equipped:a.equipped,heldVisible:!!heldRig?.root.visible,heldY:heldRig?.root.position.y??0,heldScale:heldRig?.root.scale.toArray()??[1,1,1],heldBounds:heldRig?new T.Box3().setFromObject(heldRig.root).getSize(new T.Vector3()).toArray():[0,0,0],weaponRig:heldRig?.diagnostics??null,policeWeapons:policeRigs.map(({person,rig})=>({officer:person.policeIndex,...rig.diagnostics})),activeEffects:effects.length};},
+  get diagnostics(){return {items:items.map(i=>({kind:i.kind,id:i.id,x:i.x,z:i.z,y:i.y,available:i.enabled(),visible:i.group.visible,beaconHeight:i.beam?PLAYER_SHAPE.height*2:0,hasBillboard:i.group.children.some(n=>n.isSprite)})),guards:guards.map(g=>({x:g.mesh.position.x,z:g.mesh.position.z,name:g.role,shopName:g.shopName})),goal:{...goal},court:{...court},equipped:a.equipped,heldVisible:!!heldRig?.root.visible,heldY:heldRig?.root.position.y??0,heldScale:heldRig?.root.scale.toArray()??[1,1,1],heldBounds:heldRig?new T.Box3().setFromObject(heldRig.root).getSize(new T.Vector3()).toArray():[0,0,0],weaponRig:heldRig?.diagnostics??null,policeWeapons:policeRigs.map(({person,rig})=>({officer:person.policeIndex,...rig.diagnostics})),activeEffects:effects.length};},
   dispose(){heldRig?.dispose();for(const {rig}of policeRigs)rig.dispose();root.removeFromParent();for(const {vest}of guardLabels)vest.removeFromParent();carriedParcel.removeFromParent();world.physics.removeRigidBody(ballBody);for(const g of geometries.values())g.dispose();for(const m of materials.values())m.dispose();for(const t of textures)t.dispose();},
  };
 }

@@ -25,10 +25,10 @@ export function createJobWorld(scene, world, state) {
     const ctx = canvas.getContext('2d');
     const texture = new T.CanvasTexture(canvas); texture.colorSpace = T.SRGBColorSpace; textures.add(texture);
     const mat = fixed?new T.MeshBasicMaterial({map:texture}):new T.SpriteMaterial({ map: texture, depthWrite: false });
-    const sprite = fixed?new T.Mesh(new T.PlaneGeometry(1,1),mat):new T.Sprite(mat);if(fixed){geometries.set('warehouse-sign',sprite.geometry);sprite.name='warehouse-facade-sign';}sprite.position.set(x, y, z); sprite.scale.set(width, width * 160 / 768, 1); group.add(sprite);
+    const sprite = fixed?new T.Mesh(new T.PlaneGeometry(1,1),mat):new T.Sprite(mat);if(fixed){geometries.set('fixed-sign:'+labels.length,sprite.geometry);sprite.name='warehouse-facade-sign';}sprite.position.set(x, y, z); sprite.scale.set(width, width * 160 / 768, 1); group.add(sprite);
     let last = '';
     const label = { sprite, set(value) {
-      if (value === last) return; last = value;
+      if (value === last) return; last = value;label.text=value;
       ctx.fillStyle = background; ctx.fillRect(0, 0, 768, 160);
       ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.strokeRect(8, 8, 752, 144);
       ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = 'bold 55px sans-serif';
@@ -151,7 +151,7 @@ export function createJobWorld(scene, world, state) {
   const gateProxy = proxy(SHOPS[7], 0, 2, 2.7, 27.2, 4, 0.2);
   const gate = new T.Group(); groups[7].add(gate);
   for (let y = 0.2; y < 4; y += 0.22) box(gate, 0, y, 2.73, 15.1, 0.18, 0.13, y % 0.44 < 0.22 ? '#687879' : '#80918d');
-  const gateLabel = sign(gate, 'ЗАКРЫТО · ПОСЛЕ 5 ВИЗИТОВ', 0, 2.3, 2.9, 12);
+  const gateLabel=sign(groups[7],'ЗАКРЫТО · ПОСЛЕ 5 ВИЗИТОВ',0,4.75,2.91,5.7,'#f2ddb0','#233c48',true);gateLabel.sprite.name='locked-shop-facade-sign';
   target(7, 'locked', [0, 4.6], 'Закрыто · сначала 5 магазинов', { range: 3 });
   let gateAmount = isShopUnlocked(state, 7) ? 1 : 0;
   gate.position.y = gateAmount * 4;
@@ -297,7 +297,7 @@ export function createJobWorld(scene, world, state) {
       return targets.find((t) => t.shop === id && enabled(t));
     },
     get diagnostics() { return { targets: targets.filter(enabled).map((t) => ({ ...t })), parkingCar: this.parkingCar?.id ?? null, gateOpen: isShopUnlocked(state, 7), activity: this.activity,
-      carrying: state.carrying, handPosition: this.handObject?.position.toArray() ?? null,warehouseSign:{mesh:warehouseSign.sprite.isMesh===true,position:warehouseSign.sprite.getWorldPosition(new T.Vector3()).toArray(),rotation:warehouseSign.sprite.getWorldQuaternion(new T.Quaternion()).toArray()} }; },
+      carrying: state.carrying, handPosition: this.handObject?.position.toArray() ?? null,gateSign:{text:gateLabel.text,mesh:gateLabel.sprite.isMesh===true,width:gateLabel.sprite.scale.x,position:gateLabel.sprite.getWorldPosition(new T.Vector3()).toArray(),rotation:gateLabel.sprite.getWorldQuaternion(new T.Quaternion()).toArray()},warehouseSign:{mesh:warehouseSign.sprite.isMesh===true,position:warehouseSign.sprite.getWorldPosition(new T.Vector3()).toArray(),rotation:warehouseSign.sprite.getWorldQuaternion(new T.Quaternion()).toArray()} }; },
     dispose() {
       if (disposed) return; disposed = true; root.removeFromParent();
       for (const geometry of geometries.values()) geometry.dispose();
