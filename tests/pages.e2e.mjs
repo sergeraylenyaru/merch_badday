@@ -75,7 +75,8 @@ try {
   await page.keyboard.press('KeyM');
   await page.locator('.phone').waitFor();
   assert.equal(await page.evaluate(() => document.pointerLockElement), null);
-  await page.click('[data-tab="Карта"]');
+  await page.click('[data-tab="Сообщения"]');
+  await page.click('#hideSheet');
   assert.equal(await page.locator('#bigmap').count(), 1);
   await page.click('#close');
   await page.waitForFunction(() => __MERCH__.view.pointerLocked);

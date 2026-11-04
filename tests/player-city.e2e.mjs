@@ -16,14 +16,14 @@ try{
  weapon=await page.evaluate(()=>__MERCH__.city.adventure);assert.ok(weapon.heldVisible);assert.ok(weapon.heldScale.every(n=>Math.abs(n-1)<.01));await page.screenshot({path:'.playwright/player-bat-first.png'});
  await page.waitForFunction(()=>__MERCH__.state.health===51);console.log('PASS visible full-size bat in both cameras, right HUD and timed HP recovery');
  await page.keyboard.press('KeyM');assert.equal(await page.locator('.tablet-sheet').count(),0);
- const tabs=['Маршрут','Город','Охрана','Коллекция','Снаряжение','Гараж','Сообщения','Показатели','Фото'];
+ const tabs=['Маршрут','Город','Коллекция','Снаряжение','Подработка','Гараж','Сообщения','Фото'];
  for(const tab of tabs){await page.locator(`[data-tab="${tab}"]`).click();assert.ok(await page.locator('.tablet-sheet').isVisible());assert.ok(await page.locator('#bigmap').isVisible());assert.equal(await page.locator('.tablet-sheet header h2').textContent(),tab);}
- const buttons=await page.locator('[data-tab]').evaluateAll(bs=>bs.map(b=>{const r=b.getBoundingClientRect();return{x:r.x,y:r.y};}));assert.ok(buttons.every(b=>Math.abs(b.x-buttons[0].x)<1));for(let i=1;i<buttons.length;i++)assert.ok(buttons[i].y>buttons[i-1].y);
+ const buttons=await page.locator('[data-tab]').evaluateAll(bs=>bs.map(b=>{const r=b.getBoundingClientRect();return{x:r.x,y:r.y};}));assert.ok(buttons.every(b=>Math.abs(b.y-buttons[0].y)<1));for(let i=1;i<buttons.length;i++)assert.ok(buttons[i].x>buttons[i-1].x);
  await page.locator('[data-tab="Коллекция"]').click();await page.screenshot({path:'.playwright/player-tablet-wide.png'});
  await page.setViewportSize({width:600,height:800});await page.screenshot({path:'.playwright/player-tablet-narrow.png'});
  await page.locator('#hideSheet').click();assert.equal(await page.locator('.tablet-sheet').count(),0);
  city=await page.evaluate(()=>__MERCH__.city);assert.equal(city.adventure.guards.length,15);assert.equal(new Set(city.tracedBuildings.filter(b=>b.housingStyle).map(b=>b.housingStyle)).size,8);
- await page.locator('[data-tab="Охрана"]').click();assert.equal(await page.locator('[data-value^="guard:"]').count(),15);console.log('PASS one-column tablet navigation, overlays, fifteen guards and eight instanced house finishes');await context.close();}
+ await page.locator('[data-tab="Город"]').click();assert.equal(await page.locator('[data-extra="guard"]').count(),1);console.log('PASS bottom tablet navigation, overlays, fifteen guards and eight instanced house finishes');await context.close();}
 
  if(run('stress')){s=fresh();s.health=50;s.stress=85;s.adventure.vitals={rest:0,strain:9.5};({page,context}=await app.scenario(s,'player-city-stress'));await page.waitForFunction(()=>__MERCH__.state.health===49);assert.ok(await page.evaluate(()=>__MERCH__.state.time>=.499));console.log('PASS saved high-stress clock damages HP at the ten-second boundary');await context.close();}
 

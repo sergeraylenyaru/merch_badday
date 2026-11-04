@@ -63,7 +63,8 @@ try {
   await page.keyboard.press("KeyM");
   await page.locator(".phone").waitFor();
   await released("phone");
-  await page.click('[data-tab="Карта"]');
+  await page.click('[data-tab="Сообщения"]');
+  await page.click('#hideSheet');
   assert.equal(await page.locator("#bigmap").count(), 1);
   await page.click("#close");
   await locked();

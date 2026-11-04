@@ -1,3 +1,6 @@
+import {createSchematicMap} from './city/map-schematic.js';
+import {purchaseCards,playerFigures} from './ui/purchase-cards.js';
+import {SUPPLIES} from './city/purchases.js';
 import {equipmentIcon} from './ui/equipment-icons.js';
 import {wantedFeedback} from './city/gameplay.js';
 import {SIDE_JOBS} from './jobs/side-work.js';
@@ -7,7 +10,7 @@ import { BOROUGHS, boroughFor, LOCAL_SHOPS } from './city/layout.js';
 import { SHOPS,selectShop } from "./state.js";
 import { JOBS, EXPIRY_BATCHES, PRICE_ITEMS, jobDone, jobProgress, isShopUnlocked } from './jobs/catalog.js';
 import { PRODUCT_NAMES, planogramWon } from './jobs/match3.js';
-import {PACKS,WEAPONS,EVENT_INFO,bribePrice} from './adventure/state.js';
+import {PACKS,WEAPONS,EVENT_INFO} from './adventure/state.js';
 import { poweredContacts, circuitConnected } from './jobs/circuit.js';
 export function createUI(state, actions) {
   const root = document.createElement("div");
@@ -20,6 +23,7 @@ export function createUI(state, actions) {
   stats.insertAdjacentHTML('afterbegin','<div class="hand-status"><span>СЕЙЧАС В РУКАХ</span><div class="held-item"><i id="handIcon"></i><strong id="handItem">Кулаки</strong></div><small class="weapon-keys">1 Кулаки · 2 Бита · 3 Палка · 4 Вода · 5 Камни · 6 Рогатка · 7 Дубинка</small></div>');
   root.querySelector('.clock').append(stats);
   const mapImage=new Image();mapImage.src=`${import.meta.env.BASE_URL}maps/city-reference.png`;
+  const schematicMap=createSchematicMap();
   let toastTimer,
     tab = "Карта", overlayEpoch = 0, currentWorld=null;
   function toast(t) {
@@ -37,19 +41,21 @@ export function createUI(state, actions) {
     const view=mapViewport(w,h,state.position,mini),xy=view.project;
     canvas.dataset.mapZoom=String(view.zoom);
     ctx.fillStyle='#132830';ctx.fillRect(0,0,w,h);
-    if(mapImage.complete&&mapImage.naturalWidth)ctx.drawImage(mapImage,view.offsetX,view.offsetY,MAP.width*view.zoom,MAP.height*view.zoom);
+    const schematic=state.mapMode==='schematic';canvas.dataset.mapMode=schematic?'schematic':'satellite';if(schematic)ctx.drawImage(schematicMap,view.offsetX,view.offsetY,MAP.width*view.zoom,MAP.height*view.zoom);else if(mapImage.complete&&mapImage.naturalWidth)ctx.drawImage(mapImage,view.offsetX,view.offsetY,MAP.width*view.zoom,MAP.height*view.zoom);
     for(const b of PARK_BRIDGES){const a=xy(b.x-Math.cos(b.angle)*(b.length/2+4),b.z-Math.sin(b.angle)*(b.length/2+4)),c=xy(b.x+Math.cos(b.angle)*(b.length/2+4),b.z+Math.sin(b.angle)*(b.length/2+4));ctx.strokeStyle='#e4d0a4';ctx.lineWidth=Math.max(2,b.width/MAP.scale*view.zoom);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(c.x,c.y);ctx.stroke();}
     for(const ride of world?.park?.diagnostics.rides??[]){const p=xy(point(ride.u,ride.v).x,point(ride.u,ride.v).z);ctx.fillStyle='#d86353';ctx.beginPath();ctx.arc(p.x,p.y,mini?3:5,0,Math.PI*2);ctx.fill();}
-    const destination=world?.sideWork?.target()??world?.adventure?.target()??world?.homeTarget?.()??(state.awaitingShopChoice?null:SHOPS[state.selected]);
+    const destination=world?.vendors?.target()??world?.sideWork?.target()??world?.adventure?.target()??world?.homeTarget?.()??(state.awaitingShopChoice?null:SHOPS[state.selected]);
     const me=xy(state.position.x,state.position.z);if(destination){const target=xy(destination.x,destination.z);
     ctx.setLineDash([4,5]);ctx.strokeStyle='#ffe18b';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(me.x,me.y);ctx.lineTo(target.x,target.y);ctx.stroke();ctx.setLineDash([]);}
     for(const shop of SHOPS){
       const done=state.shops[shop.id].done,selected=shop.id===state.selected,locked=!isShopUnlocked(state,shop.id);
-      if(!done&&!selected&&!locked)continue;
-      const location=point(...MAP_MARKERS[shop.id]),p=xy(location.x,location.z),radius=Math.max(8,17*view.zoom);
+      if(!schematic&&!done&&!selected&&!locked)continue;
+      const location=schematic?shop:point(...MAP_MARKERS[shop.id]),p=xy(location.x,location.z),radius=Math.max(8,17*view.zoom);
       ctx.beginPath();ctx.arc(p.x,p.y,radius,0,Math.PI*2);ctx.strokeStyle=done?'#8be59a':locked?'#859296':'#ffe18b';ctx.lineWidth=selected?3:2;ctx.stroke();
-      if(done||locked){ctx.fillStyle=done?'#235a3c':'#34454b';ctx.fill();ctx.fillStyle='#fff';ctx.font=`bold ${Math.max(10,radius)}px Arial`;ctx.textAlign='center';ctx.fillText(done?'✓':'×',p.x,p.y+radius*.4);}
+      if(schematic){ctx.fillStyle=done?'#447c5c':locked?'#7e8a8a':selected?'#d5a43c':'#456d85';ctx.fill();ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font=`bold ${Math.max(9,radius*.8)}px Arial`;ctx.fillText(done?'✓':locked?'×':shop.code,p.x,p.y+3);}
+      else if(done||locked){ctx.fillStyle=done?'#235a3c':'#34454b';ctx.fill();ctx.fillStyle='#fff';ctx.font=`bold ${Math.max(10,radius)}px Arial`;ctx.textAlign='center';ctx.fillText(done?'✓':'×',p.x,p.y+radius*.4);}
     }
+    for(const seller of world?.vendors?.markers()??[]){if(mini&&Math.hypot(seller.x-state.position.x,seller.z-state.position.z)>65)continue;const p=xy(seller.x,seller.z);ctx.beginPath();ctx.arc(p.x,p.y,mini?6:8,0,Math.PI*2);ctx.fillStyle='#497ca0';ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 9px Arial';ctx.textAlign='center';ctx.fillText(seller.id==='dima'?'Д':seller.id==='garage'?'А':'Л',p.x,p.y+3);}
     for(const guard of world?.adventure?.diagnostics.guards??[]){
       if(mini&&Math.hypot(guard.x-state.position.x,guard.z-state.position.z)>55)continue;
       const p=xy(guard.x,guard.z);ctx.fillStyle='#f8d856';ctx.beginPath();ctx.arc(p.x,p.y,mini?5:7,0,Math.PI*2);ctx.fill();ctx.fillStyle='#22333b';ctx.font='bold 10px Arial';ctx.textAlign='center';ctx.fillText('О',p.x,p.y+3.5);
@@ -86,8 +92,8 @@ export function createUI(state, actions) {
             : s.id === 4 && state.carrying ? 'Коробка в руках. Отнесите её в голубую приёмку внутри магазина и нажмите E.'
               : s.id===0 ? !p.job.paid ? 'Возьмите свою машину у дома и припаркуйтесь в голубом месте у первого магазина. Паркомат — рядом с разметкой.' : !p.job.assigned ? 'Парковка оплачена. Зайдите к Нине в зал и получите следующее задание.' : 'Восстановите выкладку чая, сока и крупы: подойдите к каждой отмеченной секции в зале и нажмите E. Затем найдите Нину.' : JOBS[s.id].description;
     $("cartCount").textContent = jobProgress(state, s.id);
-    const goal = world?.sideWork?.target()??world?.adventure?.target()??world?.homeTarget?.()??world?.jobs?.targetFor(s.id) ?? s;
-    if(world?.sideWork?.target()||world?.adventure?.target()||world?.homeTarget?.()){$('targetName').textContent=goal.label;$('targetDesc').textContent='Подойдите к подсвеченной зоне · E — действие.';}
+    const goal = world?.vendors?.target()??world?.sideWork?.target()??world?.adventure?.target()??world?.homeTarget?.()??world?.jobs?.targetFor(s.id) ?? s;
+    if(world?.vendors?.target()||world?.sideWork?.target()||world?.adventure?.target()||world?.homeTarget?.()){$('targetName').textContent=goal.label;$('targetDesc').textContent='Подойдите к подсвеченной зоне · E — действие.';}
     $("distance").textContent =
       `${Math.round(Math.hypot(goal.x - state.position.x, goal.z - state.position.z))} М`;
     $("hp").textContent = Math.round(state.health);
@@ -98,7 +104,7 @@ export function createUI(state, actions) {
       `${Math.round(state.money)} ₽   ·   Репутация ${Math.round(state.reputation)}`;
     for(const [i,star]of [...$('wanted').children].entries()){const filled=i<Math.ceil(state.wanted);star.textContent=filled?'★':'☆';star.classList.toggle('filled',filled);star.classList.toggle('decaying',filled&&i===Math.ceil(state.wanted)-1);}
     const feedback=wantedFeedback(state);$('wanted').dataset.pulse=feedback.pulse;$('wanted').classList.toggle('parkour-bonus',feedback.parkour);
-    if(state.awaitingShopChoice&&!world?.sideWork?.target()&&!world?.adventure?.target()){$('targetName').textContent='Выберите следующий магазин';$('targetDesc').textContent='Откройте планшет M и выберите задание справа.';$('distance').textContent='—';$('cartCount').textContent='Визит подтверждён';}
+    if(state.awaitingShopChoice&&!world?.vendors?.target()&&!world?.sideWork?.target()&&!world?.adventure?.target()){$('targetName').textContent='Выберите следующий магазин';$('targetDesc').textContent='Откройте планшет M и выберите задание справа.';$('distance').textContent='—';$('cartCount').textContent='Визит подтверждён';}
     $("speed").textContent = vehicle
       ? `${Math.round(Math.abs(vehicle.speed) * 3.6)} км/ч`
       : "";
@@ -108,7 +114,7 @@ export function createUI(state, actions) {
       const width=Math.round(rect.width*ratio),height=Math.round(rect.height*ratio);
       if(width>0&&height>0&&(canvas.width!==width||canvas.height!==height)){canvas.width=width;canvas.height=height;}
       map(canvas, world);
-      $("tabletGoal").textContent=state.awaitingShopChoice?"Выберите следующий магазин":`${goal.label??s.code+' · '+s.name} · ${Math.round(Math.hypot(goal.x-state.position.x,goal.z-state.position.z))} м`;
+      $("tabletGoal").textContent=state.awaitingShopChoice&&!world?.vendors?.target()?"Выбери следующий магазин":`${goal.label??s.code+' · '+s.name} · ${Math.round(Math.hypot(goal.x-state.position.x,goal.z-state.position.z))} м`;
     }
   }
   function clear() {
@@ -153,8 +159,8 @@ export function createUI(state, actions) {
     $("new").onclick = confirmNewShift;
   }
   function phone(which = tab) {
-    tab = which;
-    const tabs = ["Карта", "Маршрут", "Город", "Охрана", "Коллекция", "Снаряжение", "Подработка", "Гараж", "Сообщения", "Показатели", "Фото"];
+    tab = which==='Показатели'?'Снаряжение':which;
+    const tabs = ["Маршрут", "Город", "Коллекция", "Снаряжение", "Подработка", "Гараж", "Сообщения", "Фото"];
     let body = "";
     if (tab === "Маршрут")
       body = [...SHOPS].sort((a,b)=>state.shift.order.indexOf(a.id)-state.shift.order.indexOf(b.id)).map(
@@ -170,8 +176,6 @@ export function createUI(state, actions) {
     if (tab === "Карта")
       body =
         '<p class="message">Карта города открыта слева. Нажмите на рабочую точку, чтобы выбрать цель.<br><br>Жёлтый — цель · стрелка — вы · зелёный — визит закрыт. Пунктир показывает направление.</p>';
-    if (tab === "Показатели")
-      body = `<div class="message">Репутация: ${Math.round(state.reputation)} / 100<br>Стресс: ${Math.round(state.stress)} / 100<br>Деньги: ${state.money} ₽<br>Премия: ${state.bonus} ₽<br>Конфликты: ${state.conflicts}<br>Штрафы: ${state.fines} ₽<br>Закрыто: ${state.shops.filter((s) => s.done).length} / ${SHOPS.length}<br>Осталось: ${Math.max(0,Math.ceil((1500 - state.time) / 60))} мин</div><div class="actions"><button id="energy" class="secondary">Энергетик · 70 ₽</button><button id="boots" class="secondary">Обувь для бега · 150 ₽ премии</button><button id="gloves" class="secondary">Перчатки для груза · 120 ₽ премии</button><button id="dimaDeal" class="secondary">Дима: договориться о сроках · 40 ₽</button></div>`;
     if (tab === "Фото")
       body = `<p class="message">Необязательный фотоотчёт: встаньте рядом с магазином. Фото сохраняет текущий вид камеры; задания у каждой точки свои.</p><button class="primary" id="takePhoto">СДЕЛАТЬ ФОТО</button><div id="photoResult"></div>`;
     const a=state.adventure;
@@ -179,13 +183,14 @@ export function createUI(state, actions) {
     if(tab==='Коллекция')body=`<h3>Разноцветные пачки · <span id="collectionCount">${a.cigarettes.length}/${PACKS.length}</span></h3><p>Десять цветов спрятаны в городе, ещё десять — на разных крышах. E — подобрать. Первая коллекция даёт 300 ₽, коллекция крыш — 400 ₽.</p><div class="collection-grid">${PACKS.map(p=>`<div class="collection-card ${a.cigarettes.includes(p.id)?'collected':''}" data-pack="${p.id}" style="--pack-color:${p.color}"><i></i><strong>${p.name}${p.rooftop?' · крыша':''}</strong><span>${a.cigarettes.includes(p.id)?'✓ Собрана':'Не найдена'}</span></div>`).join('')}</div>`;
     if(tab==='Подработка'){const w=state.sideWork,a=w?.active;body=`<p>Доски заказов находятся в подсобках магазинов, в глубине зала слева. Подойдите к доске и нажмите E.</p><p>Доставка продуктов — 160 ₽; срочный заказ — 180 ₽ и 100 ₽ за три минуты; возврат тары — 170 ₽. Груз нужно отвезти на машине.</p>${a?`<div class="message"><strong>${SIDE_JOBS[a.type].title}</strong><p>${a.address.label} · ${a.phase==='collect'?'Забрать тару':a.phase==='return'?'Вернуть тару в подсобку':'Передать заказ у подъезда'}${a.type==='express'?` · до доплаты ${Math.max(0,Math.ceil(a.due-state.time))} с`:''}</p><button data-side-work="cancel">Отменить подработку</button></div>`:''}<p>Выполнено: ${w?.completed.length??0} · заработано: ${w?.earned??0} ₽</p>`+(currentWorld?.sideWork?.diagnostics.boards??[]).map(b=>({...b,d:Math.round(Math.hypot(b.x-state.position.x,b.z-state.position.z))})).sort((a,b)=>a.d-b.d).map(b=>`<button class="shoprow" data-side-work="${b.shop}">Подсобка «${SHOPS[b.shop].name}» · ${b.d} м · показать</button>`).join('');}
     if(tab==='Снаряжение')body=`<p>1 — кулаки · 2 — бита · 3 — палка · 4 — вода · 5 — камни · 6 — рогатка · 7 — дубинка. F / ЛКМ — использовать.</p><div class="equipment-grid"><button data-extra="equip" data-value="fists">${equipmentIcon('fists')}<strong>Кулаки</strong><small>${a.equipped===null?'✓ В руках':'1'}</small></button>${Object.entries(WEAPONS).map(([id,w])=>`<button data-extra="equip" data-value="${id}" ${!a.inventory.includes(id)?'disabled':''}>${equipmentIcon(id)}<strong>${w.name}</strong><small>${a.equipped===id?'✓ В руках · ':''}${id==='slingshot'?`${a.apples}/30 яблок`:id==='stone'?`${a.stones}/5`:a.inventory.includes(id)?'Подобрано':'Найдите в городе'}</small></button>`).join('')}</div>`;
+    if(tab==='Снаряжение')body=playerFigures(state)+'<h3>Покупки и улучшения</h3><p>Выбери товар — на карте появится продавец. Покупка оплачивается при встрече.</p>'+purchaseCards(state,['energy','boots','gloves','dima'])+'<h3>Оружие</h3>'+body;
     if(tab==='Город')body=Object.entries(EVENT_INFO).map(([id,info])=>{const e=a.events[id];return `<div class="message"><h3>${info.title}</h3><p>${info.text}</p><strong>${({offered:'Можно принять',active:'Выполняется',done:'✓ Выполнено',declined:'Вы отказались',kept:'Деньги оставлены'})[e.status]}</strong>${id==='spill'&&e.status==='active'?`<p>Коробки ${e.boxes.length}/3</p>`:''}${id==='delivery'&&e.status==='active'?`<p>Груз ${e.integrity}% · до срока ${Math.max(0,Math.ceil(e.due-state.time))} с</p>`:''}<div class="actions">${e.status==='offered'?`<button data-extra="start" data-value="${id}">Принять</button><button data-extra="decline" data-value="${id}">Отказаться</button>`:''}${e.status==='active'?`<button data-extra="track" data-value="${id}">Показать цель</button>`:''}${id==='favor'&&e.status==='active'&&e.found?'<button data-extra="keep">Оставить 80 ₽ себе · −5 репутации</button>':''}</div></div>`;}).join('')+`<div class="message"><h3>Отдых во дворе</h3><p>Мяч в парке: три гола — 30 ₽ и −12 стресса. Найдите столик и сыграйте в пары: 20 ₽ и −10 стресса.</p><button data-extra="track" data-value="football">Показать ворота</button></div><div class="message"><h3>Знакомства</h3><p>${state.career.contacts.includes('seller')?'Продавец помнит помощь: кофе у «У дома» 20 ₽.':'Верните кошелёк продавцу, чтобы заслужить доверие.'}</p><button data-extra="guard">Найти ближайшего охранника</button></div>`;
     if(tab==='Город')body+='<div class="message"><h3>Лестницы и крыши</h3><p>У лестницы нажмите Space + E, затем W / S — вверх / вниз. E — отпустить. Выше 6,3 м от земли доступен один двойной прыжок. Красное яблоко на яблоне можно сбить ударом и подобрать: +30 HP, стресс −50.</p><button data-extra="track" data-value="ladder">Показать ближайшую лестницу</button><button data-extra="track" data-value="hospital">Показать больницу</button><button data-extra="track" data-value="billboard">Найти рекламный щит</button><button data-extra="track" data-value="scaffold">Найти строительные леса</button><button data-extra="track" data-value="weapon:slingshot">Рогатка у колеса обозрения</button></div>';
     if(tab==='Город')body+='<div class="message"><h3>Провода и гаражи</h3><p>Провода соединяют столбы на крышах, в том числе через шоссе. Поднимитесь по лестнице; Space + E у столба — зацепиться, E — отпустить. На ящики и баки можно запрыгнуть. Рядом с забором используйте Space + E, чтобы перелезть.</p><button data-extra="track" data-value="wire">Показать ближайший провод</button><button data-extra="track" data-value="garage-yard">Ящики и забор у гаражей</button></div>';
-    if(tab==='Гараж')body=`<div class="message">Состояние рабочей машины: ${a.garage.condition}%<br>Целый груз приносит больше денег. Сильная авария может выбросить посылку.</div>${[['repair','Ремонт рабочей машины',120],['engine','Тюнинг двигателя · +15% скорости',400],['suspension','Подвеска · защита груза',250],['van','Собственный фургон у дома · перевозка тележек',900]].map(([id,title,cost])=>`<button class="shoprow" data-extra="garage" data-value="${id}" ${state.money<cost||(id==='repair'?a.garage.condition===100:state.career.garage[id])?'disabled':''}>${title} · ${id!=='repair'&&state.career.garage[id]?'✓ Куплено':cost+' ₽'}</button>`).join('')}${state.career.garage.van?'<button data-extra="track" data-value="van">Показать мой фургон</button>':''}`;
-    if(tab==='Охрана')body=`<p>Охранники в жёлтых жилетах дежурят у входов магазинов. На карте — жёлтая отметка «О». Подойдите и нажмите E: сейчас ${bribePrice(state)} ₽ за одну звезду. Следующая сделка дороже на 50 ₽, через 30 секунд без оплаты цена снова 50 ₽.</p>`+(currentWorld?.adventure?.diagnostics.guards??[]).map((g,i)=>({...g,i,d:Math.round(Math.hypot(g.x-state.position.x,g.z-state.position.z))})).sort((p,q)=>p.d-q.d).map(g=>`<button class="shoprow" data-extra="track" data-value="guard:${g.i}"><strong>Охрана · ${g.shopName}</strong><small>${g.name} · ${g.d} м · показать цель</small></button>`).join('');
+    if(tab==='Гараж')body=`<div class="message">Состояние рабочей машины: ${a.garage.condition}%. Выбери услугу — на карте появится автосервис. Оплата производится на месте.</div>${purchaseCards(state,['repair','engine','suspension','van'])}${state.career.garage.van?'<button data-extra="track" data-value="van">Показать мой фургон</button>':''}`;
+
     show(
-      `<div class="modal tablet-modal"><div class="phone tablet" role="dialog" aria-modal="true" aria-label="Рабочий планшет"><div class="phonebar tabletbar"><span>МЕРЧПЛАНШЕТ · ГОРОДСКОЙ МАРШРУТ</span><button class="close" id="close" aria-label="Закрыть планшет">×</button></div><div class="tablet-layout"><section class="tablet-map" aria-label="Карта города"><div class="tablet-mapbar"><span>ТРИ РАЙОНА · ДЕВЯТЬ ВИЗИТОВ</span><strong id="tabletGoal"></strong></div><div class="tablet-mapstage"><canvas id="bigmap" width="1672" height="941" aria-label="Карта районов и положение игрока"></canvas>${tab!=="Карта"?`<section class="tablet-sheet" aria-label="${tab}"><header><div><small>МЕРЧПЛАНШЕТ</small><h2>${tab}</h2></div><button id="hideSheet" aria-label="Свернуть раздел к карте">×</button></header><div id="phoneBody" tabindex="0">${body}</div></section>`:""}</div><div class="tablet-mapfooter"><span>↑ СЕВЕР · НАЖМИТЕ НА МАГАЗИН, ЧТОБЫ ВЫБРАТЬ ЦЕЛЬ</span><span>M / ESC — ЗАКРЫТЬ</span></div></section><aside class="tablet-sidebar"><h2>${state.awaitingShopChoice?"Выберите магазин":"Активные задания"}</h2><div class="tablet-active-tasks">${Object.entries(EVENT_INFO).filter(([id])=>state.adventure.events[id].status==='active').map(([id,info])=>`<button data-task-tab="Город" class="active-task"><strong>${info.title}</strong><small>Дополнительное задание</small></button>`).join('')}${[...SHOPS].filter(s=>!state.shops[s.id].done&&isShopUnlocked(state,s.id)).sort((a,b)=>(b.id===state.selected)-(a.id===state.selected)).map(s=>`<button data-shop="${s.id}" class="active-task ${s.id===state.selected&&!state.awaitingShopChoice?"selected":""}"><strong>${s.name}</strong><small>${JOBS[s.id].title}</small><span>${jobProgress(state,s.id)}</span></button>`).join("")||"<p>Все визиты завершены</p>"}${state.sideWork?.active?'<button data-task-tab="Подработка" class="active-task"><strong>Доставка</strong><small>Текущая подработка</small></button>':""}</div><h2>Приложения</h2><nav class="tabs" aria-label="Меню планшета">${tabs.map((t) => `<button data-tab="${t}" class="${t === tab ? "active" : ""}" aria-pressed="${t === tab}">${t}</button>`).join("")}</nav></aside></div></div></div>`,
+      `<div class="modal tablet-modal"><div class="phone tablet" role="dialog" aria-modal="true" aria-label="Рабочий планшет"><div class="phonebar tabletbar"><span>МЕРЧПЛАНШЕТ · ГОРОДСКОЙ МАРШРУТ</span><button class="close" id="close" aria-label="Закрыть планшет">×</button></div><div class="tablet-layout"><section class="tablet-map" aria-label="Карта города"><div class="tablet-mapbar"><div class="navigator-title"><span>НАВИГАТОР ГОРОДА</span><strong id="tabletGoal"></strong></div><div class="map-modes" role="group" aria-label="Слой карты"><button data-map-mode="schematic" aria-pressed="${state.mapMode==='schematic'}" class="${state.mapMode==='schematic'?'active':''}">Схема</button><button data-map-mode="satellite" aria-pressed="${state.mapMode!=='schematic'}" class="${state.mapMode!=='schematic'?'active':''}">Спутник</button></div></div><div class="tablet-mapstage"><canvas id="bigmap" width="1672" height="941" aria-label="Карта районов и положение игрока"></canvas>${tab!=="Карта"?`<section class="tablet-sheet" aria-label="${tab}"><header><div><small>МЕРЧПЛАНШЕТ</small><h2>${tab}</h2></div><button id="hideSheet" aria-label="Свернуть раздел к карте">×</button></header><div id="phoneBody" tabindex="0">${body}</div></section>`:""}</div><div class="tablet-mapfooter"><span>↑ СЕВЕР · НАЖМИТЕ НА МАГАЗИН, ЧТОБЫ ВЫБРАТЬ ЦЕЛЬ</span><span>M / ESC — ЗАКРЫТЬ</span></div></section><aside class="tablet-sidebar ${state.awaitingShopChoice?'awaiting-choice':''}"><h2 id="nextShopTitle">Выбери следующий магазин</h2><p class="shop-choice-tip">${state.awaitingShopChoice?'Визит завершён. Нажми на магазин ниже, чтобы продолжить.':'Нажми на магазин ниже — на карте появится маршрут.'}</p><div class="tablet-active-tasks">${SUPPLIES[state.supplyTrip?.item]?`<button class="active-task selected" data-task-tab="Снаряжение"><strong>Покупка · ${SUPPLIES[state.supplyTrip.item].name}</strong><small>Продавец отмечен на карте · E на месте</small></button>`:""}${Object.entries(EVENT_INFO).filter(([id])=>state.adventure.events[id].status==='active').map(([id,info])=>`<button data-task-tab="Город" class="active-task"><strong>${info.title}</strong><small>Дополнительное задание</small></button>`).join('')}${[...SHOPS].filter(s=>!state.shops[s.id].done&&isShopUnlocked(state,s.id)).sort((a,b)=>(b.id===state.selected)-(a.id===state.selected)).map(s=>`<button data-shop="${s.id}" class="active-task ${s.id===state.selected&&!state.awaitingShopChoice?"selected":""}"><strong>${s.name}</strong><small>${JOBS[s.id].title}</small><span>${jobProgress(state,s.id)}</span></button>`).join("")||"<p>Все визиты завершены</p>"}${state.sideWork?.active?'<button data-task-tab="Подработка" class="active-task"><strong>Доставка</strong><small>Текущая подработка</small></button>':""}</div></aside></div><footer class="tablet-apps"><nav class="tabs" aria-label="Меню планшета">${tabs.map((t) => `<button data-tab="${t}" class="${t === tab ? "active" : ""}" aria-pressed="${t === tab}">${t}</button>`).join("")}</nav></footer></div></div>`,
     );
     $("bigmap").onclick=(event)=>{
       const canvas=$("bigmap"),rect=canvas.getBoundingClientRect();
@@ -197,7 +202,7 @@ export function createUI(state, actions) {
     if($("hideSheet"))$("hideSheet").onclick=()=>phone('Карта');
     document
       .querySelectorAll("[data-tab], [data-task-tab]")
-      .forEach((b) => (b.onclick = () => phone(b.dataset.tab??b.dataset.taskTab)));
+      .forEach((b) => (b.onclick = () => phone(b.dataset.tab&&b.dataset.tab===tab?"Карта":b.dataset.tab??b.dataset.taskTab)));
     document.querySelectorAll("[data-shop]").forEach(
       (b) =>
         (b.onclick = () => {
@@ -212,10 +217,8 @@ export function createUI(state, actions) {
             (el.textContent = state.messages[state.messages.length - 1 - i]),
         );
     if ($("takePhoto")) $("takePhoto").onclick = actions.photo;
-    if ($("boots")) $("boots").onclick=()=>{actions.equipment("boots");};
-    if ($("gloves")) $("gloves").onclick=()=>{actions.equipment("gloves");};
-    if ($("dimaDeal")) $("dimaDeal").onclick=actions.dima;
-    if ($("energy")) $("energy").onclick = actions.energy;
+    document.querySelectorAll('[data-purchase]').forEach(b=>b.onclick=()=>actions.purchase(b.dataset.purchase));
+    document.querySelectorAll('[data-map-mode]').forEach(b=>b.onclick=()=>{state.mapMode=b.dataset.mapMode;actions.mapModeChanged?.();phone(tab);});
     document.querySelectorAll('[data-side-work]').forEach(b=>b.onclick=()=>actions.sideWork(b.dataset.sideWork));
     document.querySelectorAll('[data-extra]').forEach(b=>b.onclick=()=>actions.adventure(b.dataset.extra,b.dataset.value==='fists'?null:b.dataset.value,tab));
     document.querySelector('[data-open-collection]')?.addEventListener('click',()=>phone('Коллекция'));

@@ -1,8 +1,9 @@
+import {createSupplyStalls} from './city/supply-stalls.js';
 import {createPoliceResponse,createPoliceHealthBars,damagePolice} from './npc/police-response.js';
 import {createStones} from './adventure/stones.js';
 import {tickWanted,raiseWanted,freeRoam,runningSpeed,policeRunningSpeed,SHIFT_DURATION} from './city/gameplay.js';
 import {START,point,pixel} from './city/reference-layout.js';
-import {buyEquipment,dealWithDima,remember} from './city/shift.js';
+import {remember} from './city/shift.js';
 import * as T from "three";
 import "@fontsource/manrope/cyrillic-400.css";
 import "@fontsource/manrope/cyrillic-700.css";
@@ -354,18 +355,8 @@ function photo() {
   beep(900);
   snapshot();
 }
-function energy() {
-  if (state.money < 70) {
-    notify("Недостаточно денег.");
-    return;
-  }
-  state.money -= 70;
-  state.energy = 45;
-  state.stress -= 5;
-  normalize(state);
-  notify("Энергетик: быстрый бег на 45 секунд. Потом придёт стресс.");
-  ui.phone("Показатели");
-}
+function planPurchase(item){if(world?.vendors.track(item)){open('phone');ui.phone('Карта');}}
+
 try {
   scene = new T.Scene();
   camera = new T.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 350);
@@ -396,8 +387,8 @@ try {
   illustrated=createIllustratedRenderer(renderer,scene,camera);
   applyQuality();
   ui = createUI(state, {
-    adventure(name,value,tab){if(name==='equip'){pendingSwing=null;attack=0;}if(name==='track'&&!state.sideWork.active)state.sideWork.board=null;world.adventure.action(name,value);snapshot();if(name==='table')ui.tableGame();else ui.phone(tab??'Город');},
-    sideWork(value){if(value==='cancel')world.sideWork.cancel();else world.sideWork.track(Number(value));snapshot();ui.phone('Подработка');},
+    adventure(name,value,tab){if(name==='garage'){planPurchase(value);return;}if(['track','guard','van'].includes(name))state.supplyTrip=null;if(name==='equip'){pendingSwing=null;attack=0;}if(name==='track'&&!state.sideWork.active)state.sideWork.board=null;world.adventure.action(name,value);snapshot();if(name==='table')ui.tableGame();else ui.phone(tab??'Город');},
+    sideWork(value){if(value!=='cancel')state.supplyTrip=null;if(value==='cancel')world.sideWork.cancel();else world.sideWork.track(Number(value));snapshot();ui.phone('Подработка');},
     settings,
     heal:recoverHero,
     resume,
@@ -417,15 +408,16 @@ try {
     removeExpired,
     replacePrice,
     photo,
-    energy,
-    equipment(item){ if(buyEquipment(state,item)) { snapshot(); notify("Снаряжение куплено за премию."); } else notify("Недостаточно премии или предмет уже куплен."); ui.phone("Показатели"); },
-    dima(){if(dealWithDima(state)){snapshot();notify("Дима договорился с точками: срочные визиты продлены на две минуты.");}else notify("Договор уже заключён или не хватает 40 ₽.");ui.phone("Показатели");},
+    purchase:planPurchase,
+    mapModeChanged(){snapshot();},
+
   });
   world = await createWorld(scene, state);
   world.adventure=createAdventure(scene,world,state,{notify,crime,changed:snapshot,resume,
     dialog(title,text,choices){open('adventure');ui.adventureDialog(title,text,choices);},
     table(){open('adventure');ui.tableGame();},
   });
+  world.vendors=createSupplyStalls(scene,world,state,{notify,changed:snapshot,resume,garageChanged(){world.adventure.refreshGarage();},dialog(title,text,choices){open('supplies');ui.adventureDialog(title,text,choices);}});
   world.stones=await createStones(scene,world,state,{notify,changed:snapshot,impact(person,kind){person.stun=3;damagePolice(person,kind==='apple'?10:22,state.time);person.anger=8;world.adventure.dropMoney(person);state.conflicts++;state.reputation-=4;crime(2);notify(kind==='apple'?'Попадание яблоком!':'Попадание камнем!');}});
   world.orchard=createOrchard(scene,world,state,{notify,changed:snapshot});
   world.sideWork=createSideWork(scene,world,state,{notify,changed:snapshot,resume,dialog(title,text,choices){open('side-work');ui.adventureDialog(title,text,choices);}});
@@ -518,6 +510,7 @@ try {
     const task = world.jobs.nearest(pos);
     if (state.carrying) return task?.type === 'drop' ? 'E · Поставить коробку в приёмку' : 'Коробка в руках · R у грузовика — взять вторую; отнесите в голубую приёмку магазина «СуперЦена»';
     if (held) return held.missionCargo ? 'R · Оставить грузовую тележку в голубой приёмке' : 'R · Вернуть в жёлтую зону за бонус';
+    const seller=world.vendors.nearest(pos);if(seller)return `E · ${seller.name} · купить на месте`;
     const stone=world.stones.nearest(pos);if(stone)return `E · Подобрать камень · ${state.adventure.stones}/5`;
     const side=world.sideWork.nearest(pos);if(side)return side.label;
     const extra=world.adventure.nearest(pos);if(extra)return extra.label.startsWith('E ·')?extra.label:'E · '+extra.label;
@@ -571,6 +564,7 @@ try {
     }
     const pos = world.player.mesh.position;
     if (world.jobs.activity) return;
+    const seller=world.vendors.nearest(pos);if(seller&&!state.carrying&&!held){world.vendors.interact(seller);return;}
     const stone=world.stones.nearest(pos);if(stone&&!state.carrying&&!held){world.stones.pickup(stone);return;}
     const side=world.sideWork.nearest(pos);if(side&&!state.carrying&&!held){world.sideWork.interact(side);return;}
     const extra=world.adventure.nearest(pos);
@@ -1222,6 +1216,7 @@ try {
     for (const v of world.vehicles.filter((v) => v.traffic)) {
       if (v === vehicle || v.claimed || v.sunk || !v.mesh.visible) continue;
       if (v.rival) {
+        if(state.supplyTrip?.item==='dima'&&!vehicle&&Math.hypot(v.mesh.position.x-player.x,v.mesh.position.z-player.z)<10){v.speed=0;continue;}
         const stop = SHOPS[Math.floor(state.time / 80) % SHOPS.length],
           d = stop.x - v.mesh.position.x,
           z = stop.z + 16 - v.mesh.position.z;
@@ -1481,7 +1476,7 @@ try {
     }
     illustrated.setSubmerged(mode==='play'&&world.water.diagnostics.headUnder);world.orchard.update(mode==='play'?dt:0);illustrated.setFailure(mode==='defeat'?Math.min(1,state.defeat.elapsed/2):0);
     const selected = SHOPS[state.selected];
-    const sideGoal=world.sideWork.target()??world.adventure.target()??world.homeTarget();
+    const sideGoal=world.vendors.target()??world.sideWork.target()??world.adventure.target()??world.homeTarget();
     const goal = sideGoal??world.jobs.targetFor(selected.id) ?? selected;
     const nearby = Math.hypot(goal.x - world.player.mesh.position.x, goal.z - world.player.mesh.position.z) < 25;
     marker.scale.setScalar(nearby ? 0.32 : 1);
@@ -1570,7 +1565,7 @@ try {
         obstacles: [ ...world.blockers.filter((b) => b.enabled !== false).map(({ x, z, w, d }) => ({ x, z, w, d, heading: 0 })),
           ...world.vehicles.filter((v) => v.mesh.visible && !(v.police && state.wanted < 3)).map((v) => vehicleBox(v)) ] };
     },
-    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,water:world.water.diagnostics,traffic:world.traffic.diagnostics,hospital:world.hospital.diagnostics,yards:world.yards.diagnostics,enclosures:world.enclosures.diagnostics,cables:world.cables.diagnostics,billboards:world.billboards.diagnostics,scaffolding:world.scaffolding.diagnostics,park:world.park.diagnostics,policeResponse:policeResponse.diagnostics,parkour:world.parkour.diagnostics,orchard:world.orchard.diagnostics,walkways:world.walkways.diagnostics,roadWear:world.roadWear.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,stones:world.stones.diagnostics,sideWork:world.sideWork.diagnostics,flyers:flyerSellers.diagnostics}));},
+    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,water:world.water.diagnostics,traffic:world.traffic.diagnostics,hospital:world.hospital.diagnostics,yards:world.yards.diagnostics,enclosures:world.enclosures.diagnostics,cables:world.cables.diagnostics,billboards:world.billboards.diagnostics,scaffolding:world.scaffolding.diagnostics,park:world.park.diagnostics,vendors:world.vendors.diagnostics,policeResponse:policeResponse.diagnostics,parkour:world.parkour.diagnostics,orchard:world.orchard.diagnostics,walkways:world.walkways.diagnostics,roadWear:world.roadWear.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,stones:world.stones.diagnostics,sideWork:world.sideWork.diagnostics,flyers:flyerSellers.diagnostics}));},
     get jobs() { return JSON.parse(JSON.stringify(world.jobs.diagnostics)); },
     get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null,
       health:n.health??null,dead:!!n.dead,activePolice:!!n.activePolice,personType:n.personType,role:n.role,weapon:n.weapon??null,policeIndex:n.policeIndex??null,visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,roofPursuit:n.roofPursuit?{...n.roofPursuit}:null,climb:n.climb??null,motion:n.motion?.diagnostics??null,
@@ -1580,7 +1575,7 @@ try {
   // BFCache preserves the page and its GPU resources. Dispose only on a real exit.
   addEventListener("pagehide", (event) => {
     if (!event.persisted) {
-      world.parkour.dispose();world.cables.dispose();world.enclosures.dispose();world.yards.dispose();world.hospital.dispose();world.orchard.dispose();world.roadWear.dispose();world.billboards.dispose();world.scaffolding.dispose();world.park.dispose();world.stones.dispose();policeHealthBars.dispose();
+      world.parkour.dispose();world.cables.dispose();world.enclosures.dispose();world.yards.dispose();world.hospital.dispose();world.orchard.dispose();world.roadWear.dispose();world.billboards.dispose();world.scaffolding.dispose();world.park.dispose();world.stones.dispose();world.vendors.dispose();policeHealthBars.dispose();
       world.homeYard.dispose();
       world.boroughs.dispose();
       world.adventure.dispose();world.sideWork.dispose();goalFill.geometry.dispose();goalFill.material.dispose();goalRing.geometry.dispose();goalRing.material.dispose();

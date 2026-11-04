@@ -132,6 +132,7 @@ export function createAdventure(scene,world,state,callbacks){
   return p?{x:p.x,z:p.z,...(Number.isFinite(p.y)?{y:p.y}:{}),label}:null;
  }
  return {
+  refreshGarage:ensureVan,
   target,
   kickBall(origin,reach,direction,power=1){const p=ballBody.translation(),dx=p.x-origin.x,dz=p.z-origin.z,d=Math.hypot(dx,dz);if(!ballEnabled||d>reach||Math.abs(origin.y-p.y)>1.7||(d>.05&&(dx*direction.x+dz*direction.z)/d<.1))return false;ballBody.setLinvel({x:direction.x*(5+power),y:1.8,z:direction.z*(5+power)},true);ballBody.setAngvel({x:direction.z*12,y:0,z:-direction.x*12},true);flight=true;ballAge=0;return true;},
   nearest(position){

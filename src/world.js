@@ -348,7 +348,7 @@ export async function createWorld(scene, state) {
   const rival = car(rivalStart.x,rivalStart.z,1,vehicles.length,true);
   rival.rival = true;
   vehicles.push(rival);
-  label("КОЛЛЕГА ДИМА", rivalStart.x, 4, rivalStart.z, "#edda9b", 1);
+  const dimaLabel=label("КОЛЛЕГА ДИМА",0,0,0,"#edda9b",1);rival.mesh.add(dimaLabel);dimaLabel.position.set(0,4,0);
   // Keep pre-existing IDs stable for saved games; extra cars replace the
   // formerly decorative, non-interactive sedans on each shop's left bay.
   for (const shop of SHOPS) vehicles.push(car(shop.x - 17, shop.z + 12, shop.id % 2 ? 0 : 2, vehicles.length));

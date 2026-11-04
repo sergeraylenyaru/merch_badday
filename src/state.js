@@ -126,6 +126,8 @@ export const freshState = () => ({
   ending: null,
   selected: 0,
   awaitingShopChoice:false,
+  mapMode:'satellite',
+  supplyTrip:null,
   position: {...START},
   shops: SHOPS.map((shop) => ({
     carts: 0,
@@ -173,7 +175,7 @@ export function complete(s, id) {
   if (s.shops.every((x) => x.done)) finish(s);
   return true;
 }
-export function selectShop(state,id){if(!Number.isInteger(id)||!state.shops[id]||state.shops[id].done||!isShopUnlocked(state,id))return false;state.selected=id;state.awaitingShopChoice=false;state.adventure.tracked=null;return true;}
+export function selectShop(state,id){if(!Number.isInteger(id)||!state.shops[id]||state.shops[id].done||!isShopUnlocked(state,id))return false;state.selected=id;state.awaitingShopChoice=false;state.supplyTrip=null;state.adventure.tracked=null;return true;}
 export function finish(s, quit = false) {
   const allDone = s.shops.every((p) => p.done);
   s.ending = quit
@@ -208,6 +210,7 @@ export function load(storage = localStorage) {
       Number.isFinite(s.position.z)
     ) {
       const v = { ...freshState(), ...s };
+      v.mapMode=v.mapMode==='schematic'?'schematic':'satellite';
       if(s.shops.length===8&&Array.isArray(v.vehicles)){v.vehicles=[...v.vehicles];v.vehicles.splice(8,0,null);}
       const migrating = ![2,3].includes(s.missionVersion);
       v.missionVersion = 3;
