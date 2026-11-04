@@ -1,7 +1,8 @@
 import {createTerrainMaterials,tileBoxUV} from './city/terrain-materials.js';
 import {createReferenceCity, buildReferenceTerrain, isReferenceWater} from './city/reference-city.js';
 import {roadHeight} from './city/terrain.js';
-import {MAP, point, pixel, START, HOME_CAR, HOME_CAR_HEADING, ROADS} from './city/reference-layout.js';
+import {MAP, point, pixel, START, HOME_CAR, HOME_CAR_HEADING, ROADS,ROAD_BOXES} from './city/reference-layout.js';
+import {clipSurface,appendSurface,rectanglePolygon} from './city/planar-surfaces.js';
 import * as T from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
 import { SHOPS } from "./state.js";
@@ -20,6 +21,7 @@ import {createTraffic} from './city/traffic.js';
 import {createServiceYards} from './city/service-yards.js';
 import {createCables} from './city/cables.js';
 import {createEnclosures} from './city/enclosures.js';
+import {createRoadWear} from './city/road-wear.js';
 export async function createWorld(scene, state) {
   await RAPIER.init();
   const physics = new RAPIER.World({ x: 0, y: -20, z: 0 });
@@ -92,11 +94,13 @@ export async function createWorld(scene, state) {
   }
   function groundHeight(x, z) {
     let height = roadHeight(x,z);
+    if(ROAD_BOXES.some(r=>circleIntersectsBox(x,z,0,r)))return height;
     for (const surface of surfaces) if (Math.abs(x - surface.x) <= surface.w && Math.abs(z - surface.z) <= surface.d)
       height = Math.max(height, surface.height);
     return height;
   }
-  buildReferenceTerrain({box,terrainMaterials,terrainCollider},scene);
+  const terrain=buildReferenceTerrain({box,terrainMaterials,terrainCollider},scene);
+  function pavedApron(x,z,w,d,y,color){const polygon=rectanglePolygon(x,z,w,d),data={positions:[],uv:[]};for(const part of clipSurface(polygon,terrain.roadCuts))appendSurface(data,part,()=>y);const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(data.positions,3));g.setAttribute('uv',new T.Float32BufferAttribute(data.uv,2));g.computeVertexNormals();const m=new T.MeshStandardMaterial({color,roughness:1}),mesh=new T.Mesh(g,m);mesh.receiveShadow=true;scene.add(mesh);visualBucket?.push(mesh);terrain.paving.push(polygon);}
   function human(x, z, color, kind = "civilian", shop = -1) {
     const g = new T.Group();
     const torso = new T.Mesh(new T.BoxGeometry(0.75, 1, 0.45), mat(color));
@@ -203,7 +207,7 @@ export async function createWorld(scene, state) {
     surface(x, z - 3, 28, 11, 0.08);
     surface(x, z + 3.7, 15.5, 2.5, 0.08);
     surface(x + (x === -55 ? 1 : -1) * 24.75, z + 13, 10.5, 7, 0.04);
-    box(x, 0.03, z, 39, 0.06, 36, "#a4a797");
+    pavedApron(x,z,39,36,.06,'#a4a797');
     // Open-front stores: back, side walls, canopy and shelves form a walkable interior.
     box(x, 3.2, z - 8, 28, 6.4, 1, color, true);
     box(x - 14, 3.2, z - 3, 1, 6.4, 11, color, true);
@@ -390,6 +394,7 @@ export async function createWorld(scene, state) {
     return vehicles.some(v=>v!==ignoreCar&&v.mesh.visible&&!(v.police&&state.wanted<3)&&feetY<v.mesh.position.y+v.h-.04&&feetY+PLAYER_SHAPE.height>v.mesh.position.y&&circleIntersectsBox(x,z,r,vehicleBox(v)));
   }
   const world = {
+    terrain,
     physics,
     disposeTerrain:()=>terrainMaterials.dispose(),
     RAPIER,
@@ -437,6 +442,7 @@ export async function createWorld(scene, state) {
   world.jobs = createJobWorld(scene, world, state);
   world.enclosures=createEnclosures(scene,world);
   world.walkways=createWalkways(scene,world,world.boroughs.diagnostics.urbanDetails.placements);
+  world.roadWear=await createRoadWear(scene);
   world.homeYard=createHomeYard(scene,world);
   world.homeTarget=()=>state.selected!==0||state.onboarding.carTaken||state.shops[0].job.paid?null:{x:homeCar.mesh.position.x,z:homeCar.mesh.position.z,label:'Ваша машина · парковка у дома'};
   for(const cart of carts) cart.mesh.scale.set(.74,.84,.74);

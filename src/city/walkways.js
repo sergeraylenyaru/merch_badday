@@ -2,10 +2,15 @@ import * as T from 'three';
 import {ROADS,ROAD_BOXES,MAP,point,pixel,isReferenceWater} from './reference-layout.js';
 import {circleIntersectsBox} from '../spatial.js';
 import {clearSegment} from '../npc/navigation.js';
+import {ROAD_PROFILES} from './terrain.js';
+import {SurfaceIndex,clipSurface,appendSurface,roadPolygon} from './planar-surfaces.js';
 
 /** Continuous, ground-level pavement, with a curb only along its street side. */
 export function createWalkways(scene,world,entrances=[]){
   const chunks=new Map(),nodes=[],segments=[];
+  const roadIndex=new SurfaceIndex(),pavementIndex=new SurfaceIndex(),curbIndex=new SurfaceIndex();let fragments=0;
+  for(const p of world.terrain?.roadCuts??ROAD_PROFILES.map(roadPolygon))roadIndex.add(p);
+  for(const p of world.terrain?.paving??[])pavementIndex.add(p);
   const buildings=world.blockers.filter(b=>b.h>=2.5&&(b.w>2||b.d>2));
   const blocked=(x,z,r=.1)=>{const p=pixel(x,z);return isReferenceWater(p.x,p.y)||buildings.some(b=>b.enabled!==false&&circleIntersectsBox(x,z,r,b));};
   function quad(a,b,width,curb=false){
@@ -14,7 +19,9 @@ export function createWalkways(scene,world,entrances=[]){
     const key=Math.floor((a.x+b.x)/96)+','+Math.floor((a.z+b.z)/96)+':'+curb;
     if(!chunks.has(key))chunks.set(key,{positions:[],uv:[]});const out=chunks.get(key);
     const corners=[[a.x-nx,a.z-nz],[a.x+nx,a.z+nz],[b.x+nx,b.z+nz],[b.x-nx,b.z-nz]];
-    for(const i of [0,2,1,0,3,2]){const [x,z]=corners[i];out.positions.push(x,world.groundHeight(x,z)+(curb?.08:.025),z);out.uv.push(x/2,z/2);}
+    const polygon=corners.map(([x,z])=>({x,z})),index=curb?curbIndex:pavementIndex;
+    for(const piece of clipSurface(polygon,[...roadIndex.at(polygon),...index.at(polygon)])){appendSurface(out,piece,(x,z)=>world.groundHeight(x,z)+(curb?.085:.035),2);fragments++;}
+    index.add(polygon);
   }
   for(const [index,[u,v,eu,ev,width]] of ROADS.entries()){
     const a=point(u,v),b=point(eu,ev),length=Math.hypot(b.x-a.x,b.z-a.z);
@@ -55,5 +62,5 @@ export function createWalkways(scene,world,entrances=[]){
   const pavement=new T.MeshStandardMaterial({color:'#c2beb2',map:texture,roughness:1});
   const curb=new T.MeshStandardMaterial({color:'#c7c5bb',roughness:1});
   for(const [key,data] of chunks){const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(data.positions,3));g.setAttribute('uv',new T.Float32BufferAttribute(data.uv,2));g.computeVertexNormals();const mesh=new T.Mesh(g,key.endsWith('true')?curb:pavement);mesh.receiveShadow=true;root.add(mesh);}
-  return {nodes,segments,diagnostics:{segments:segments.length,drawBatches:chunks.size,nodes:nodes.length},dispose(){root.traverse(n=>n.geometry?.dispose());root.removeFromParent();texture?.dispose();pavement.dispose();curb.dispose();}};
+  return {nodes,segments,diagnostics:{segments:segments.length,drawBatches:chunks.size,nodes:nodes.length,fragments,joined:true},dispose(){root.traverse(n=>n.geometry?.dispose());root.removeFromParent();texture?.dispose();pavement.dispose();curb.dispose();}};
 }

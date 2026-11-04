@@ -29,19 +29,22 @@ import { newPlanogram, swapProducts, planogramWon } from './jobs/match3.js';
 import { rotatePort, circuitConnected } from './jobs/circuit.js';
 import { staffPatrol } from './npc/patrol.js';
 import { policeCombat } from './npc/police-combat.js';
+import {createRoofPursuit} from './npc/roof-pursuit.js';
+import {separatePeople,vehicleHitsPerson} from './npc/body-collision.js';
 import { createWalkingBlocker, createPedestrianNavigator, clearSegment } from './npc/navigation.js';
 import { createCityLife } from './npc/city-life.js';
 import { createCrossingMarkings } from './npc/crossings.js';
 import {createLocalCrowd} from './npc/local-crowd.js';
 import {collisionInjury,pedestrianContact} from './physics/vehicle-impact.js';
 import {createAdventure} from './adventure/world.js';
+import {createSideWork} from './jobs/side-work-world.js';
 import {tickHealth} from './city/vitals.js';
 import {createFlyerSellers} from './npc/flyer-sellers.js';
 import {MELEE_TIMING} from './visuals/weapon-rig.js';
 import {createIllustratedRenderer} from './visuals/illustrated-renderer.js';
 import {beginDefeat,advanceDefeat,healAtHospital,DEFEAT_SECONDS} from './city/recovery.js';
 import {createOrchard} from './city/orchard.js';
-import {ensureAdventure,WEAPONS} from './adventure/state.js';
+import {ensureAdventure,WEAPONS,equipSlot} from './adventure/state.js';
 const state = load();
 ensureAdventure(state);
 let settings = { sensitivity: 1, volume: 0.25, quality: "high" };
@@ -392,7 +395,8 @@ try {
   illustrated=createIllustratedRenderer(renderer,scene,camera);
   applyQuality();
   ui = createUI(state, {
-    adventure(name,value,tab){if(name==='equip'){pendingSwing=null;attack=0;}world.adventure.action(name,value);snapshot();if(name==='table')ui.tableGame();else ui.phone(tab??'Город');},
+    adventure(name,value,tab){if(name==='equip'){pendingSwing=null;attack=0;}if(name==='track'&&!state.sideWork.active)state.sideWork.board=null;world.adventure.action(name,value);snapshot();if(name==='table')ui.tableGame();else ui.phone(tab??'Город');},
+    sideWork(value){if(value==='cancel')world.sideWork.cancel();else world.sideWork.track(Number(value));snapshot();ui.phone('Подработка');},
     settings,
     heal:recoverHero,
     resume,
@@ -421,8 +425,10 @@ try {
     table(){open('adventure');ui.tableGame();},
   });
   world.orchard=createOrchard(scene,world,state,{notify,changed:snapshot});
+  world.sideWork=createSideWork(scene,world,state,{notify,changed:snapshot,resume,dialog(title,text,choices){open('side-work');ui.adventureDialog(title,text,choices);}});
   const walkingBlocked=createWalkingBlocker(world);
   const pedestrianNavigator=createPedestrianNavigator(walkingBlocked);
+  const roofPursuit=createRoofPursuit(world);
   const cityLife=createCityLife(world);
   const localCrowd=createLocalCrowd(world,cityLife,walkingBlocked);
   const flyerSellers=createFlyerSellers(scene,world);
@@ -507,6 +513,7 @@ try {
     const task = world.jobs.nearest(pos);
     if (state.carrying) return task?.type === 'drop' ? 'E · Поставить коробку в приёмку' : 'Коробка в руках · R у грузовика — взять вторую; отнесите в голубую приёмку магазина «СуперЦена»';
     if (held) return held.missionCargo ? 'R · Оставить грузовую тележку в голубой приёмке' : 'R · Вернуть в жёлтую зону за бонус';
+    const side=world.sideWork.nearest(pos);if(side)return side.label;
     const extra=world.adventure.nearest(pos);if(extra)return extra.label.startsWith('E ·')?extra.label:'E · '+extra.label;
     if (task) return `E · ${task.label}`;
     const employee=nearest(world.people.filter(n=>n.kind==='employee'),2.5);
@@ -531,7 +538,7 @@ try {
     return world.orchard.context();
   }
   function interact() {
-    if(!vehicle&&!held&&!state.carrying&&!world.jobs.activity){
+    if(!vehicle&&!held&&!state.carrying&&!world.sideWork.carrying&&!world.jobs.activity){
       if(world.parkour.climbing){world.parkour.detach();vertical=0;return;}
       if((keys.has('Space')||!world.parkour.grounded)&&world.parkour.tryGrab()){vertical=0;jump=.1;pendingSwing=null;attack=0;walkingVelocity.set(0,0,0);yaw=world.player.mesh.rotation.y-Math.PI;notify(world.parkour.context());return;}
     }
@@ -558,6 +565,7 @@ try {
     }
     const pos = world.player.mesh.position;
     if (world.jobs.activity) return;
+    const side=world.sideWork.nearest(pos);if(side&&!state.carrying&&!held){world.sideWork.interact(side);return;}
     const extra=world.adventure.nearest(pos);
     if(extra&&!state.carrying&&!held){world.adventure.interact(extra,{x:-Math.sin(yaw),z:-Math.cos(yaw)});return;}
     const task = world.jobs.nearest(pos);
@@ -707,7 +715,7 @@ try {
   }
   function hit(strong = false) {
     if(knockdownTime>.5||world.parkour.climbing)return;
-    if (state.carrying || world.jobs.activity || state.adventure.events.delivery.carrying) { notify('Руки заняты работой.'); return; }
+    if (state.carrying || world.sideWork.carrying || world.jobs.activity || state.adventure.events.delivery.carrying) { notify('Руки заняты работой.'); return; }
     if (held) {
       notify("Сначала отпустите ручку тележки: R.");
       return;
@@ -778,9 +786,9 @@ try {
       return;
     }
     if (mode !== "play") return;
-    if(['Digit0','Digit1','Digit2','Digit3'].includes(e.code)){
-      const id=({Digit0:null,Digit1:'bat',Digit2:'stick',Digit3:'water'})[e.code];
-      if(id===null||state.adventure.inventory.includes(id)){pendingSwing=null;attack=0;world.adventure.action('equip',id);notify(id?WEAPONS[id].name:'Кулаки');}else notify('Сначала найдите и подберите этот предмет');return;
+    if(/^(Digit|Numpad)[0-4]$/.test(e.code)){
+      const slot=Number(e.code.at(-1))||1;
+      if(equipSlot(state,slot)){pendingSwing=null;attack=0;world.adventure.action('equip',state.adventure.equipped);notify(state.adventure.equipped?WEAPONS[state.adventure.equipped].name:'Кулаки');}else notify('Сначала найдите и подберите этот предмет');return;
     }
     keys.add(e.code);
     if (e.code === "KeyE") interact();
@@ -883,8 +891,7 @@ try {
       for (const n of world.people) {
         if(!n.mesh.visible)continue;
         if (n.kind === "police" && state.wanted === 0) continue;
-        const d = n.mesh.position.distanceTo(p);
-        if (d < 3.2 && Math.abs(vehicle.speed) > 4) {
+        if (n.stun<=0 && vehicleHitsPerson(vehicle,n.mesh.position) && Math.abs(vehicle.speed) > 4) {
           n.stun = 5;
           n.anger = 6;
           const impact = vehicle.speed;
@@ -1060,18 +1067,22 @@ try {
         if(n.kind==='police'){policeCombat(n,{stunned:true},dt);n.attack=0;}
         n.stun -= dt;
         n.mesh.rotation.z = 1.25;
-        n.mesh.position.y = world.groundHeight(n.mesh.position.x, n.mesh.position.z) + 0.2;
+        const p=n.mesh.position,roof=world.roofs.find(r=>p.y>=r.y-.2&&Math.abs(p.x-r.x)<r.w&&Math.abs(p.z-r.z)<r.d),floor=roof?.y??world.groundHeight(p.x,p.z);
+        if(n.climb){n.climb=null;n.roofPursuit=null;}
+        n.fallSpeed=(n.fallSpeed??0)+18*dt;p.y=Math.max(floor+.2,p.y-n.fallSpeed*dt);if(p.y<=floor+.2)n.fallSpeed=0;
         continue;
       }
       n.mesh.rotation.z = 0;
       if(n.kind==='civilian'||n.kind==='police'){n.activity=null;n.social=false;}
-      n.mesh.position.y = world.groundHeight(n.mesh.position.x, n.mesh.position.z);
+      const pursuit=n.kind==='police'?roofPursuit.update(n,player,dt,state.wanted>0&&!vehicle):{};
+      if(pursuit.handled){policeCombat(n,{stunned:true},dt);n.attack=0;if(state.wanted>0&&nearby<25)state.wantedElapsed=0;continue;}
+      if(!pursuit.onRoof)n.mesh.position.y = world.groundHeight(n.mesh.position.x, n.mesh.position.z);
       const d = n.mesh.position.distanceTo(player);
       let target = null,
         speed = 1.1;
       if (n.kind === "police") {
         const fighting=policeCombat(n,{hostile:state.wanted>0,distance:d,
-          clear:d<2.5&&clearSegment(n.mesh.position,player,walkingBlocked,.1),
+          clear:d<2.5&&Math.abs(n.mesh.position.y-player.y)<1.2&&clearSegment(n.mesh.position,player,pursuit.onRoof?(x,z,r)=>world.blockedAt(x,z,r,null,n.mesh.position.y):walkingBlocked,.1),
           guarding:keys.has('KeyQ'),inVehicle:!!vehicle},dt);
         n.attack=fighting.attack;n.attackKind='quick';
         if(fighting.damage&&policeHitCooldown===0){
@@ -1082,7 +1093,7 @@ try {
           notify(`Удар полицейского: −${fighting.damage} здоровья. Q — блок, F — ответный удар.`);
         }
         if (state.wanted > 0) {
-          target = n.attack>0||d<1.45 ? null : player;
+          target = pursuit.approach??(n.attack>0||d<1.45 ? null : player);
           n.lookAt=player;
           speed = vehicle ? 5.5 : state.wanted >= 3 ? 6.5 : 4;
           if(d<20)state.wantedElapsed=0;
@@ -1131,6 +1142,7 @@ try {
         n.mesh.rotation.y+=Math.atan2(Math.sin(desired-n.mesh.rotation.y),Math.cos(desired-n.mesh.rotation.y))*(1-Math.exp(-dt*7));
       }
       if (target) {
+        if(pursuit.onRoof){pursuit.move(target,speed);continue;}
         if(n.kind==='civilian'||n.kind==='police'||n.promoter){
           const movement=pedestrianNavigator.step(n,target,speed,dt,state.time);
           n.mesh.position.y=world.groundHeight(n.mesh.position.x,n.mesh.position.z);
@@ -1165,6 +1177,7 @@ try {
         }
       }
     }
+    separatePeople(world.people,(x,z,r,y)=>world.blockedAt(x,z,r,null,y),vehicle?null:player);
     for (const [i, v] of world.policeVehicles.entries()) {
       v.mesh.visible = state.wanted >= 3;
       if (!v.mesh.visible) continue;
@@ -1187,7 +1200,7 @@ try {
       }
       p.y=world.groundHeight(p.x,p.z);
       const officer = world.people.filter((n) => n.kind === "police")[i];
-      if (officer.mesh.position.distanceTo(p) > 12)
+      if (!officer.roofPursuit&&player.y<world.groundHeight(player.x,player.z)+2&&officer.mesh.position.distanceTo(p) > 70)
         officer.mesh.position.set(p.x + 3, 0, p.z);
     }
     world.traffic.update(dt,player,state.time);
@@ -1453,7 +1466,7 @@ try {
     }
     illustrated.setSubmerged(mode==='play'&&world.water.diagnostics.headUnder);world.orchard.update(mode==='play'?dt:0);illustrated.setFailure(mode==='defeat'?Math.min(1,state.defeat.elapsed/2):0);
     const selected = SHOPS[state.selected];
-    const sideGoal=world.adventure.target()??world.homeTarget();
+    const sideGoal=world.sideWork.target()??world.adventure.target()??world.homeTarget();
     const goal = sideGoal??world.jobs.targetFor(selected.id) ?? selected;
     const nearby = Math.hypot(goal.x - world.player.mesh.position.x, goal.z - world.player.mesh.position.z) < 25;
     marker.scale.setScalar(nearby ? 0.32 : 1);
@@ -1472,14 +1485,15 @@ try {
       player: world.player.mesh.position,
       dt,
     });
-    world.adventure.prepareWeapons({inVehicle:!!vehicle,carrying:!!state.carrying||!!held||world.parkour.climbing||mode==='defeat',firstPerson,pitch,attack,attackKind});
+    world.sideWork.update(mode==='play'?dt:0,!!vehicle);
+    world.adventure.prepareWeapons({inVehicle:!!vehicle,carrying:!!state.carrying||world.sideWork.carrying||!!held||world.parkour.climbing||mode==='defeat',firstPerson,pitch,attack,attackKind});
     world.visuals?.setFirstPerson(firstPerson && !vehicle && hasStarted);
     world.visuals?.update?.(dt, visualTime, {
       active: mode === "play"||mode==='defeat', defeated:mode==='defeat',defeatElapsed:state.defeat?.elapsed??0,climb:world.parkour.motion,airKick:world.parkour.airKick,heldCart: held?.mesh ?? null,
-      carriedBox:mode==='defeat'?null:world.jobs.handObject, activity: state.adventure.equipped==='water'&&attack>0?{id:'water-spray',clip:'Interact',duration:.35,remaining:attack}:world.jobs.activity,
+      carriedBox:mode==='defeat'?null:world.jobs.handObject??world.sideWork.handObject, activity: state.adventure.equipped==='water'&&attack>0?{id:'water-spray',clip:'Interact',duration:.35,remaining:attack}:world.jobs.activity,
       grounded:mode==='defeat'?false:world.parkour.grounded,verticalVelocity:vertical,
       crouch: !held && keys.has("ControlLeft"), guard: !held && keys.has("KeyQ"),
-      attack, attackKind, inVehicle: !!vehicle,
+      attack, attackKind, inVehicle: !!vehicle,fists:state.adventure.equipped===null&&!state.carrying&&!world.sideWork.carrying,
       firstPerson,
     });
     updateCamera(dt);
@@ -1539,20 +1553,20 @@ try {
         obstacles: [ ...world.blockers.filter((b) => b.enabled !== false).map(({ x, z, w, d }) => ({ x, z, w, d, heading: 0 })),
           ...world.vehicles.filter((v) => v.mesh.visible && !(v.police && state.wanted < 3)).map((v) => vehicleBox(v)) ] };
     },
-    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,water:world.water.diagnostics,traffic:world.traffic.diagnostics,hospital:world.hospital.diagnostics,yards:world.yards.diagnostics,enclosures:world.enclosures.diagnostics,cables:world.cables.diagnostics,parkour:world.parkour.diagnostics,orchard:world.orchard.diagnostics,walkways:world.walkways.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,flyers:flyerSellers.diagnostics}));},
+    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,water:world.water.diagnostics,traffic:world.traffic.diagnostics,hospital:world.hospital.diagnostics,yards:world.yards.diagnostics,enclosures:world.enclosures.diagnostics,cables:world.cables.diagnostics,parkour:world.parkour.diagnostics,orchard:world.orchard.diagnostics,walkways:world.walkways.diagnostics,roadWear:world.roadWear.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,sideWork:world.sideWork.diagnostics,flyers:flyerSellers.diagnostics}));},
     get jobs() { return JSON.parse(JSON.stringify(world.jobs.diagnostics)); },
     get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null,
-      personType:n.personType,role:n.role,weapon:n.weapon??null,policeIndex:n.policeIndex??null,visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,motion:n.motion?.diagnostics??null,
+      personType:n.personType,role:n.role,weapon:n.weapon??null,policeIndex:n.policeIndex??null,visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,roofPursuit:n.roofPursuit?{...n.roofPursuit}:null,climb:n.climb??null,motion:n.motion?.diagnostics??null,
       dailyRoute:n.dailyRoute?{index:n.dailyRoute.index,wait:n.dailyRoute.wait,visits:n.dailyRoute.visits,stops:n.dailyRoute.stops}:null,
       navigation:n.navigation?{waypoints:n.navigation.path.length,stuck:n.navigation.stuck}:null })); },
   };
   // BFCache preserves the page and its GPU resources. Dispose only on a real exit.
   addEventListener("pagehide", (event) => {
     if (!event.persisted) {
-      world.parkour.dispose();world.cables.dispose();world.enclosures.dispose();world.yards.dispose();world.hospital.dispose();world.orchard.dispose();
+      world.parkour.dispose();world.cables.dispose();world.enclosures.dispose();world.yards.dispose();world.hospital.dispose();world.orchard.dispose();world.roadWear.dispose();
       world.homeYard.dispose();
       world.boroughs.dispose();
-      world.adventure.dispose();goalFill.geometry.dispose();goalFill.material.dispose();goalRing.geometry.dispose();goalRing.material.dispose();
+      world.adventure.dispose();world.sideWork.dispose();goalFill.geometry.dispose();goalFill.material.dispose();goalRing.geometry.dispose();goalRing.material.dispose();
       flyerSellers.dispose();
       crossingMarkings.dispose();
       world.walkways.dispose();

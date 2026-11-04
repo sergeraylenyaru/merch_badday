@@ -13,6 +13,8 @@ test("Pages export preserves local GLB URLs and licenses beside the HTML", async
   try {
     await mkdir(join(root, "scripts"));
     await mkdir(join(root, "dist/maps"), { recursive: true });
+    await mkdir(join(root, "dist/textures"), { recursive: true });
+    await writeFile(join(root,"dist/textures/road-pothole.svg"),"<svg/>");
     await writeFile(join(root,"dist/maps/city-reference.png"),"map-fixture");
     await mkdir(join(root, "dist/assets"), { recursive: true });
     await mkdir(join(root, "dist/models/vendor"), { recursive: true });
@@ -26,6 +28,7 @@ test("Pages export preserves local GLB URLs and licenses beside the HTML", async
     await writeFile(join(root, "dist/models/vendor/LICENSE.txt"), "CC0 1.0 Universal");
     await run(process.execPath, [join(root, "scripts/export-pages.mjs")]);
     assert.equal(await readFile(join(root,"maps/city-reference.png"),"utf8"),"map-fixture");
+    assert.equal(await readFile(join(root,"textures/road-pothole.svg"),"utf8"),"<svg/>");
     assert.equal(await readFile(join(root, "index.html"), "utf8"), html);
     assert.match(await readFile(join(root, "assets/game.js"), "utf8"), /models\/vendor\/cart\.glb/);
     assert.deepEqual(await readFile(join(root, "models/vendor/cart.glb")), model);

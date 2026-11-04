@@ -62,8 +62,8 @@ export async function walkTo(page, x, z, tolerance = 0.35, maxSteps = 160) {
   }
   throw new Error(`Walk blocked at ${JSON.stringify(await page.evaluate(() => __MERCH__.state.position))}; goal ${x},${z}`);
 }
-function path(start, goal, obstacles) {
-  const step = 0.25, margin = 6;
+function path(start, goal, obstacles, margin = 6) {
+  const step = 0.25;
   const minX = start.x - Math.ceil((Math.max(0, start.x - goal.x) + margin) / step) * step;
   const minZ = start.z - Math.ceil((Math.max(0, start.z - goal.z) + margin) / step) * step;
   const width = Math.ceil((Math.abs(start.x - goal.x) + margin * 2) / step) + 2;
@@ -108,9 +108,9 @@ function path(start, goal, obstacles) {
   }
   return short;
 }
-export async function navigate(page, x, z, tolerance = 0.35) {
+export async function navigate(page, x, z, tolerance = 0.35, margin = 6) {
   const data = await page.evaluate(() => ({ position: __MERCH__.state.position, obstacles: __MERCH__.navigation.obstacles }));
-  const route = path(data.position, { x, z }, data.obstacles);
+  const route = path(data.position, { x, z }, data.obstacles, margin);
   for (let i = 0; i < route.length; i++) await walkTo(page, route[i].x, route[i].z, i === route.length - 1 ? tolerance : 0.1);
 }
 export async function report(page, shop) {

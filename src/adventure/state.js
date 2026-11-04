@@ -1,5 +1,7 @@
 import {remember} from '../city/shift.js';
 export const WEAPONS={bat:{name:'Бита',reach:3.5,power:3,color:'#ffba45'},stick:{name:'Палка',reach:3.2,power:2,color:'#adf16b'},water:{name:'Водяной пистолет',reach:10,power:0,color:'#43deff'}};
+export const WEAPON_SLOTS=[null,'bat','stick','water'];
+export function equipSlot(state,slot){const id=WEAPON_SLOTS[slot-1];if(slot<1||slot>4||id&&!state.adventure.inventory.includes(id))return false;state.adventure.equipped=id;return true;}
 export const PACKS=['Красная','Синяя','Зелёная','Жёлтая','Фиолетовая','Оранжевая','Бирюзовая','Розовая','Белая','Чёрная'].map((name,id)=>({id,name,color:['#f04d52','#4c8cff','#54cd72','#ffe268','#b67aff','#ff9e46','#49e1cf','#ff79bb','#e7edf4','#43495c'][id]}));
 export const EVENT_INFO={spill:{title:'Упавший груз',text:'Соберите три коробки возле фургона. Можно помочь за 80 ₽ или отказаться.',reward:80},delivery:{title:'Срочная доставка',text:'Заберите посылку и доставьте за четыре минуты. До 150 ₽ за целый груз; авария может выбросить его из машины.',reward:150},favor:{title:'Кошелёк продавца',text:'Найдите потерянный кошелёк и верните продавцу. Награда 120 ₽ и знакомство: кофе здесь вполовину дешевле в следующих сменах.',reward:120}};
 export const BRIBE_RESET_SECONDS=30;

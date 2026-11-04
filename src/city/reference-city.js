@@ -1,4 +1,5 @@
-import {gridTerrain,ROAD_PROFILES,WATER_LEVEL} from './terrain.js';
+import {gridTerrain,ROAD_PROFILES,WATER_LEVEL,roadHeight} from './terrain.js';
+import {clipSurface,appendSurface,roadPolygon,rectanglePolygon,SurfaceIndex} from './planar-surfaces.js';
 import {createCityMaterialPool} from './shared-materials.js';
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -144,14 +145,17 @@ export function buildReferenceTerrain(world,scene){
  const ground=new T.Mesh(geometry,world.terrainMaterials.byColor.get('#708666'));ground.receiveShadow=true;ground.name='continuous-terrain';scene.add(ground);world.terrainCollider(geometry);
  const water=new T.Mesh(new T.PlaneGeometry(MAP.width*MAP.scale,MAP.height*MAP.scale),world.terrainMaterials.water);
  water.rotation.x=-Math.PI/2;water.position.set(MAP.x+MAP.width*MAP.scale/2,WATER_LEVEL,MAP.z+MAP.height*MAP.scale/2);water.name='continuous-water';scene.add(water);
+ const roadCuts=[],paving=[],pavingIndex=new SurfaceIndex();
  for(const road of ROAD_PROFILES){
   const vertices=[],uv=[],indices=[];
-  for(let i=0;i<=road.steps;i++){const d=road.length*i/road.steps,y=road.heightAt(d);for(const side of [-1,1]){vertices.push(road.start.x+road.dx*d+road.dz*road.width/2*side,y,road.start.z+road.dz*d-road.dx*road.width/2*side);uv.push((side+1)*road.width/8,d/4);}}
-  for(let i=0;i<road.steps;i++){const a=i*2;indices.push(a,a+2,a+1,a+1,a+2,a+3);}
+  const out={positions:vertices,uv};
+  for(let i=0;i<road.steps;i++){const a=road.length*i/road.steps,b=road.length*(i+1)/road.steps,quad=[];for(const [d,side]of [[a,-1],[a,1],[b,1],[b,-1]])quad.push({x:road.start.x+road.dx*d+road.dz*road.width/2*side,z:road.start.z+road.dz*d-road.dx*road.width/2*side});for(const p of clipSurface(quad,roadCuts))appendSurface(out,p,roadHeight);}
+  for(let i=0;i<vertices.length/3;i++)indices.push(i);
+  roadCuts.push(roadPolygon(road));
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();
   const mesh=new T.Mesh(g,world.terrainMaterials.byColor.get('#414f59'));mesh.receiveShadow=true;mesh.name=road.crossings.length?'bridge-road':'city-road';scene.add(mesh);world.terrainCollider(g);
   const angle=Math.atan2(road.dx,road.dz);
-  for(let d=3;d<road.length-2;d+=7){const paint=world.box(road.start.x+road.dx*d,road.heightAt(d)+.012,road.start.z+road.dz*d,.15,.012,2.4,'#dfdfbf');paint.rotation.y=angle;}
+  for(let d=3;d<road.length-2;d+=7){const x=road.start.x+road.dx*d,z=road.start.z+road.dz*d;if(ROAD_PROFILES.some(other=>other!==road&&(x-other.start.x)*other.dx+(z-other.start.z)*other.dz>=-1.3&&(x-other.start.x)*other.dx+(z-other.start.z)*other.dz<=other.length+1.3&&Math.abs((x-other.start.x)*other.dz-(z-other.start.z)*other.dx)<other.width/2+1.3))continue;const paint=world.box(x,roadHeight(x,z)+.012,z,.15,.012,2.4,'#dfdfbf');paint.rotation.y=angle;}
   // Rails and posts mark the raised span; gentle ramps stay open at both ends.
   for(let d=1;d<road.length-1;d+=2){if(road.heightAt(d)<.5)continue;
     for(const side of [-1,1]){const x=road.start.x+road.dx*d+road.dz*(road.width/2+.12)*side,z=road.start.z+road.dz*d-road.dx*(road.width/2+.12)*side,y=road.heightAt(d);
@@ -172,5 +176,8 @@ export function buildReferenceTerrain(world,scene){
   const mesh=new T.Mesh(g,world.terrainMaterials.byColor.get(color));mesh.receiveShadow=true;scene.add(mesh);
  }
  // Footpaths connect the park entrances to the fountain and promenade.
- for(const [u,v,w,d] of PARK_PATHS){const p=point(u,v);world.box(p.x,.002,p.z,w*MAP.scale,.002,d*MAP.scale,'#bcad8e');}
+ const pathData={positions:[],uv:[]};
+ for(const [u,v,w,d] of PARK_PATHS){const p=point(u,v),poly=rectanglePolygon(p.x,p.z,w*MAP.scale,d*MAP.scale);for(const part of clipSurface(poly,[...roadCuts,...pavingIndex.at(poly)])){appendSurface(pathData,part,()=>.035);paving.push(part);}pavingIndex.add(poly);}
+ const paths=new T.BufferGeometry();paths.setAttribute('position',new T.Float32BufferAttribute(pathData.positions,3));paths.setAttribute('uv',new T.Float32BufferAttribute(pathData.uv,2));paths.computeVertexNormals();const pathMesh=new T.Mesh(paths,world.terrainMaterials.byColor.get('#bcad8e'));pathMesh.receiveShadow=true;pathMesh.name='joined-park-paving';scene.add(pathMesh);
+ return {paving,roadCuts};
 }

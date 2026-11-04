@@ -68,6 +68,24 @@ export function createEnclosures(scene,world){
   }
   if(plot)rectangle('shop-back:'+shop.id,'shop',plot,[{side:entrance.side,at:entrance.at,width:3.4}],2);
  }
+ // A pair of solid supports on either side makes each enclosure climbable.
+ // Keep entrances, streets, shop work points and the landing strip clear.
+ for(const area of areas){
+  if(area.kind==='garage')continue;
+  let sites=0;
+  for(const f of [...area.segments].sort((a,b)=>b.span-a.span)){
+   if(f.span<2.6)continue;
+   for(const fraction of [0,-.45,.45]){
+    const x=f.x+f.nz*f.span*fraction,z=f.z-f.nx*f.span*fraction;
+    if(gates.some(g=>Math.hypot(g.x-x,g.z-z)<5)||world.jobs.diagnostics.targets.some(t=>Math.hypot(t.x-x,t.z-z)<4))continue;
+    const free=[-1,1].every(side=>[-.9,1.35].every(along=>{const px=x+(f.nx?f.nx*side*1.4:along),pz=z+(f.nx?along:f.nz*side*1.4);return !meetsStreet(px,pz,2,2)&&!world.blockers.some(b=>b.enabled!==false&&circleIntersectsBox(px,pz,.76,b));}));
+    if(!free)continue;
+    for(const side of [-1,1])world.yards.add(x,z,f.nz*side,f,area.id,f.nx*side);
+    sites++;break;
+   }
+   if(sites>=(area.kind==='park'?2:1))break;
+  }
+ }
  world.yards.finish();
  for(const {color,list}of parts.values()){const geometry=mergeGeometries(list);list.forEach(g=>g.dispose());geometries.push(geometry);if(!materials.has(color))materials.set(color,new T.MeshStandardMaterial({color,roughness:.9,metalness:color===schemes.park.iron?.3:0}));const mesh=new T.Mesh(geometry,materials.get(color));mesh.castShadow=mesh.receiveShadow=true;root.add(mesh);}
  return {areas,segments,gates,get diagnostics(){return {areas,gates,count:areas.length,segments:segments.length,batches:parts.size};},dispose(){root.removeFromParent();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());}};

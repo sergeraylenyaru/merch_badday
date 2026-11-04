@@ -1,3 +1,4 @@
+import {SIDE_JOBS} from './jobs/side-work.js';
 import {mapViewport} from './city/map-view.js';
 import {MAP,pixel,districtAt,WORK_STOPS,MAP_MARKERS,point} from './city/reference-layout.js';
 import { BOROUGHS, boroughFor, LOCAL_SHOPS } from './city/layout.js';
@@ -12,7 +13,7 @@ export function createUI(state, actions) {
   root.innerHTML = `<div class="hud hidden" id="hud"><div class="topline"><div><div class="brand">ПЛОХОЙ ДЕНЬ МЕРЧА<small>ЕЩЁ ОДНА ОБЫЧНАЯ СМЕНА</small></div><div class="objective panel"><div class="eyebrow">РАБОЧИЙ МАРШРУТ <span id="routeCount"></span></div><h2 id="targetName"></h2><p id="targetDesc"></p><div class="progressbar"><i id="routeBar"></i></div><div class="row"><span id="cartCount"></span><span id="distance"></span></div></div></div><div class="clock"><strong id="clock">08:00</strong><p>ДО КОНЦА СМЕНЫ <span id="remaining"></span></p><div class="wanted" id="wanted">☆☆☆☆☆</div><div class="speed" id="speed"></div></div></div><div class="bottomline"><div class="bottomleft"><div class="mapbox panel"><canvas id="minimap" width="300" height="300"></canvas><div class="mapcaption"><span>СЕВЕРНЫЙ РАЙОН</span><span>↑ N</span></div></div><div class="statbox panel"><div class="eyebrow">МЕРЧЕНДАЙЗЕР · СТАЖЁР</div><div class="stat"><span>ЗДОРОВЬЕ</span><div class="meter"><i id="hpBar"></i></div><span id="hp"></span></div><div class="stat"><span>СТРЕСС</span><div class="meter stress"><i id="stressBar"></i></div><span id="stress"></span></div><div class="row" style="font-size:11px;color:#d8c28e" id="money"></div></div></div><div class="controls"><span><b>WASD</b>движение</span><span><b>E</b>действие</span><span><b>R</b>тележка</span><span><b>M</b>планшет</span><span><b>ESC</b>пауза</span></div></div></div><div class="crosshair hidden" id="crosshair"></div><div class="context hidden" id="context"><span></span></div><div class="toast" id="toast"></div><div id="overlay"></div><div class="loading" id="loading">СОБИРАЕМ ТЕЛЕЖКИ…</div>`;
   const $ = (id) => document.getElementById(id);
   const stats=root.querySelector('.statbox');stats.classList.add('player-status');
-  stats.insertAdjacentHTML('afterbegin','<div class="hand-status"><span>СЕЙЧАС В РУКАХ</span><strong id="handItem">Кулаки</strong></div>');
+  stats.insertAdjacentHTML('afterbegin','<div class="hand-status"><span>СЕЙЧАС В РУКАХ</span><strong id="handItem">Кулаки</strong><small class="weapon-keys">1 Кулаки · 2 Бита · 3 Палка · 4 Вода</small></div>');
   root.querySelector('.clock').append(stats);
   const mapImage=new Image();mapImage.src=`${import.meta.env.BASE_URL}maps/city-reference.png`;
   let toastTimer,
@@ -33,7 +34,7 @@ export function createUI(state, actions) {
     canvas.dataset.mapZoom=String(view.zoom);
     ctx.fillStyle='#132830';ctx.fillRect(0,0,w,h);
     if(mapImage.complete&&mapImage.naturalWidth)ctx.drawImage(mapImage,view.offsetX,view.offsetY,MAP.width*view.zoom,MAP.height*view.zoom);
-    const destination=world?.adventure?.target()??world?.homeTarget?.()??SHOPS[state.selected];
+    const destination=world?.sideWork?.target()??world?.adventure?.target()??world?.homeTarget?.()??SHOPS[state.selected];
     const target=xy(destination.x,destination.z),me=xy(state.position.x,state.position.z);
     ctx.setLineDash([4,5]);ctx.strokeStyle='#ffe18b';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(me.x,me.y);ctx.lineTo(target.x,target.y);ctx.stroke();ctx.setLineDash([]);
     for(const shop of SHOPS){
@@ -53,7 +54,7 @@ export function createUI(state, actions) {
   function update(world, vehicle) {
     currentWorld=world;
     const equipped=WEAPONS[state.adventure.equipped]?.name??'Кулаки';
-    $("handItem").textContent=vehicle?'За рулём':world?.carts.some(c=>c.gripped)?'Тележка':state.carrying||state.adventure.events.delivery.carrying?'Груз':equipped;
+    $("handItem").textContent=vehicle?'За рулём':world?.carts.some(c=>c.gripped)?'Тележка':state.carrying||world?.sideWork?.carrying||state.adventure.events.delivery.carrying?'Груз':equipped;
     const s = SHOPS[state.selected],
       p = state.shops[s.id],
       done = state.shops.filter((x) => x.done).length;
@@ -76,8 +77,8 @@ export function createUI(state, actions) {
             : s.id === 4 && state.carrying ? 'Коробка в руках. Отнесите её в голубую приёмку внутри магазина и нажмите E.'
               : s.id===0 ? !p.job.paid ? 'Возьмите свою машину у дома и припаркуйтесь в голубом месте у первого магазина. Паркомат — рядом с разметкой.' : !p.job.assigned ? 'Парковка оплачена. Зайдите к Нине в зал и получите следующее задание.' : 'Восстановите выкладку чая, сока и крупы: подойдите к каждой отмеченной секции в зале и нажмите E. Затем найдите Нину.' : JOBS[s.id].description;
     $("cartCount").textContent = jobProgress(state, s.id);
-    const goal = world?.adventure?.target()??world?.homeTarget?.()??world?.jobs?.targetFor(s.id) ?? s;
-    if(world?.adventure?.target()||world?.homeTarget?.()){$('targetName').textContent=goal.label;$('targetDesc').textContent='Подойдите к подсвеченной зоне · E — действие.';}
+    const goal = world?.sideWork?.target()??world?.adventure?.target()??world?.homeTarget?.()??world?.jobs?.targetFor(s.id) ?? s;
+    if(world?.sideWork?.target()||world?.adventure?.target()||world?.homeTarget?.()){$('targetName').textContent=goal.label;$('targetDesc').textContent='Подойдите к подсвеченной зоне · E — действие.';}
     $("distance").textContent =
       `${Math.round(Math.hypot(goal.x - state.position.x, goal.z - state.position.z))} М`;
     $("hp").textContent = Math.round(state.health);
@@ -144,7 +145,7 @@ export function createUI(state, actions) {
   }
   function phone(which = tab) {
     tab = which;
-    const tabs = ["Карта", "Маршрут", "Город", "Охрана", "Коллекция", "Снаряжение", "Гараж", "Сообщения", "Показатели", "Фото"];
+    const tabs = ["Карта", "Маршрут", "Город", "Охрана", "Коллекция", "Снаряжение", "Подработка", "Гараж", "Сообщения", "Показатели", "Фото"];
     let body = "";
     if (tab === "Маршрут")
       body = [...SHOPS].sort((a,b)=>state.shift.order.indexOf(a.id)-state.shift.order.indexOf(b.id)).map(
@@ -167,7 +168,8 @@ export function createUI(state, actions) {
     const a=state.adventure;
     if(tab==='Маршрут')body=`<button class="message collection-summary" data-open-collection>Пачки: ${a.cigarettes.length}/10 · посмотреть цвета</button>`+body;
     if(tab==='Коллекция')body=`<h3>Разноцветные пачки · <span id="collectionCount">${a.cigarettes.length}/10</span></h3><p>Найдите десять разных пачек в трёх районах. E — подобрать. За полную коллекцию — 300 ₽.</p><div class="collection-grid">${PACKS.map(p=>`<div class="collection-card ${a.cigarettes.includes(p.id)?'collected':''}" data-pack="${p.id}" style="--pack-color:${p.color}"><i></i><strong>${p.name}</strong><span>${a.cigarettes.includes(p.id)?'✓ Собрана':'Не найдена'}</span></div>`).join('')}</div>`;
-    if(tab==='Снаряжение')body=`<p>Оружие видно на ярких стойках. E — подобрать, F — использовать, G — сильный удар, 1/2/3 — переключить, 0 — кулаки.</p><button class="shoprow" data-extra="equip" data-value="fists">${a.equipped===null?'✓ ':''}Кулаки</button>${Object.entries(WEAPONS).map(([id,w])=>`<button class="shoprow" data-extra="equip" data-value="${id}" ${!a.inventory.includes(id)?'disabled':''}>${a.equipped===id?'✓ ':''}${w.name} · ${a.inventory.includes(id)?'Подобрано':'Найдите в городе'}</button>`).join('')}`;
+    if(tab==='Подработка'){const w=state.sideWork,a=w?.active;body=`<p>Доски заказов находятся в подсобках магазинов, в глубине зала слева. Подойдите к доске и нажмите E.</p><p>Доставка продуктов — 160 ₽; срочный заказ — 180 ₽ и 100 ₽ за три минуты; возврат тары — 170 ₽. Груз нужно отвезти на машине.</p>${a?`<div class="message"><strong>${SIDE_JOBS[a.type].title}</strong><p>${a.address.label} · ${a.phase==='collect'?'Забрать тару':a.phase==='return'?'Вернуть тару в подсобку':'Передать заказ у подъезда'}${a.type==='express'?` · до доплаты ${Math.max(0,Math.ceil(a.due-state.time))} с`:''}</p><button data-side-work="cancel">Отменить подработку</button></div>`:''}<p>Выполнено: ${w?.completed.length??0} · заработано: ${w?.earned??0} ₽</p>`+(currentWorld?.sideWork?.diagnostics.boards??[]).map(b=>({...b,d:Math.round(Math.hypot(b.x-state.position.x,b.z-state.position.z))})).sort((a,b)=>a.d-b.d).map(b=>`<button class="shoprow" data-side-work="${b.shop}">Подсобка «${SHOPS[b.shop].name}» · ${b.d} м · показать</button>`).join('');}
+    if(tab==='Снаряжение')body=`<p>Оружие видно на ярких стойках. E — подобрать, F — использовать, G — сильный удар, 1 — кулаки, 2 — бита, 3 — палка, 4 — водяной пистолет.</p><button class="shoprow" data-extra="equip" data-value="fists">${a.equipped===null?'✓ ':''}Кулаки</button>${Object.entries(WEAPONS).map(([id,w])=>`<button class="shoprow" data-extra="equip" data-value="${id}" ${!a.inventory.includes(id)?'disabled':''}>${a.equipped===id?'✓ ':''}${w.name} · ${a.inventory.includes(id)?'Подобрано':'Найдите в городе'}</button>`).join('')}`;
     if(tab==='Город')body=Object.entries(EVENT_INFO).map(([id,info])=>{const e=a.events[id];return `<div class="message"><h3>${info.title}</h3><p>${info.text}</p><strong>${({offered:'Можно принять',active:'Выполняется',done:'✓ Выполнено',declined:'Вы отказались',kept:'Деньги оставлены'})[e.status]}</strong>${id==='spill'&&e.status==='active'?`<p>Коробки ${e.boxes.length}/3</p>`:''}${id==='delivery'&&e.status==='active'?`<p>Груз ${e.integrity}% · до срока ${Math.max(0,Math.ceil(e.due-state.time))} с</p>`:''}<div class="actions">${e.status==='offered'?`<button data-extra="start" data-value="${id}">Принять</button><button data-extra="decline" data-value="${id}">Отказаться</button>`:''}${e.status==='active'?`<button data-extra="track" data-value="${id}">Показать цель</button>`:''}${id==='favor'&&e.status==='active'&&e.found?'<button data-extra="keep">Оставить 80 ₽ себе · −5 репутации</button>':''}</div></div>`;}).join('')+`<div class="message"><h3>Отдых во дворе</h3><p>Мяч в парке: три гола — 30 ₽ и −12 стресса. Найдите столик и сыграйте в пары: 20 ₽ и −10 стресса.</p><button data-extra="track" data-value="football">Показать ворота</button></div><div class="message"><h3>Знакомства</h3><p>${state.career.contacts.includes('seller')?'Продавец помнит помощь: кофе у «У дома» 20 ₽.':'Верните кошелёк продавцу, чтобы заслужить доверие.'}</p><button data-extra="guard">Найти ближайшего охранника</button></div>`;
     if(tab==='Город')body+='<div class="message"><h3>Лестницы и крыши</h3><p>У лестницы нажмите Space + E, затем W / S — вверх / вниз. E — отпустить. Выше 6,3 м от земли доступен один двойной прыжок. Красное яблоко на яблоне можно сбить ударом и подобрать: +30 HP, стресс −50.</p><button data-extra="track" data-value="ladder">Показать ближайшую лестницу</button><button data-extra="track" data-value="hospital">Показать больницу</button></div>';
     if(tab==='Город')body+='<div class="message"><h3>Провода и гаражи</h3><p>Провода соединяют столбы на крышах, в том числе через шоссе. Поднимитесь по лестнице; Space + E у столба — зацепиться, E — отпустить. На ящики и баки можно запрыгнуть. Рядом с забором используйте Space + E, чтобы перелезть.</p><button data-extra="track" data-value="wire">Показать ближайший провод</button><button data-extra="track" data-value="garage-yard">Ящики и забор у гаражей</button></div>';
@@ -207,6 +209,7 @@ export function createUI(state, actions) {
     if ($("gloves")) $("gloves").onclick=()=>{actions.equipment("gloves");};
     if ($("dimaDeal")) $("dimaDeal").onclick=actions.dima;
     if ($("energy")) $("energy").onclick = actions.energy;
+    document.querySelectorAll('[data-side-work]').forEach(b=>b.onclick=()=>actions.sideWork(b.dataset.sideWork));
     document.querySelectorAll('[data-extra]').forEach(b=>b.onclick=()=>actions.adventure(b.dataset.extra,b.dataset.value==='fists'?null:b.dataset.value,tab));
     document.querySelector('[data-open-collection]')?.addEventListener('click',()=>phone('Коллекция'));
   }

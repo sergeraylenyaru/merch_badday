@@ -288,7 +288,7 @@ export async function createVisuals(scene, world, shopDecor) {
         if (input.active === false) continue;
         if (!isPlayer && entity.mesh.position.distanceToSquared(world.player.mesh.position) > 75 * 75) continue;
         entity.motion.update(dt, {
-          ...(isPlayer ? input : { active: entity.stun <= 0, grounded: true, crouch: false, attack: entity.attack??0, attackKind:entity.attackKind??'quick', guard: false,
+          ...(isPlayer ? input : { active: entity.stun <= 0, grounded: !entity.climb,climb:entity.climb??null,fists:entity.kind==='police'&&!entity.weapon, crouch: false, attack: entity.attack??0, attackKind:entity.attackKind??'quick', guard: false,
             staff: entity.kind === 'staff', social: entity.social, activity: entity.activity, lookAt: entity.lookAt }),
           active: isPlayer ? !input.inVehicle : entity.stun <= 0,
           velocity, facing: entity.mesh.rotation.y,

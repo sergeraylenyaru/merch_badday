@@ -12,6 +12,13 @@ async function load(name) {
   return new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), "");
 }
 
+test('the real hero closes both unarmed hands into fists during idle and walking',async()=>{
+ const asset=await load('merch-male'),library=new AssetLibrary({human:{url:'fixture:fists'}},{loader:{loadAsync:async()=>asset},logger:{info(){},warn(){}}});await library.preload();
+ const mesh=new Group(),model=library.instantiate('human',{height:2.1});mesh.add(model);const rest=['Index3L','Index3R'].map(n=>model.getObjectByName(n).quaternion.clone()),motion=createCharacterMotion({mesh},model);
+ for(const speed of [0,3]){for(let i=0;i<30;i++)motion.update(1/60,{fists:true,grounded:true,velocity:new Vector3(0,0,speed)});for(const [i,n]of ['Index3L','Index3R'].entries())assert.ok(model.getObjectByName(n).quaternion.angleTo(rest[i])>1,n+' is closed');}
+ motion.dispose();library.dispose();
+});
+
 test('a real skinned merchant grips the bat with both palms through windup, contact and recovery',async()=>{
  const asset=await load('merch-male');
  const library=new AssetLibrary({human:{url:'fixture:bat-user'}},{loader:{loadAsync:async()=>asset},logger:{info(){},warn(){}}});await library.preload();

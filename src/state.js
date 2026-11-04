@@ -3,6 +3,7 @@ import {makeShift,urgentReward,career,remember} from './city/shift.js';
 import { JOBS, newJob, jobDone, isShopUnlocked } from './jobs/catalog.js';
 import { newPlanogram } from './jobs/match3.js';
 import {newAdventure,ensureAdventure} from './adventure/state.js';
+import {newSideWork} from './jobs/side-work.js';
 export const SHOPS = [
   [
     "У дома",
@@ -102,6 +103,7 @@ export const freshState = () => ({
   cityVersion: 3,
   overtime: false,
   wantedElapsed: 0,
+  lastWantedGainAt:null,
   shift: {...makeShift(),upgrades:{...career().upgrades}},
   career: career(),
   missionVersion: 3,
@@ -140,6 +142,7 @@ export const freshState = () => ({
   vehicles: [],
   brokenProps: [],
   adventure:newAdventure(),
+  sideWork:newSideWork(),
   weather: false,
 });
 export function normalize(s) {

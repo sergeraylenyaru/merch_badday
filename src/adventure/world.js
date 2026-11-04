@@ -43,7 +43,7 @@ export function createAdventure(scene,world,state,callbacks){
  }
  const positions={bat:[195,185],stick:[770,440],water:[1450,610]};
  for(const [id,uv] of Object.entries(positions)){
-  const def=WEAPONS[id],p=safe(point(...uv));const item=pickup('weapon',id,p,def.color,'E · '+def.name,()=>!a.pickedWeapons.includes(id),()=>{pickupWeapon(state,id);callbacks.notify(def.name+' подобрано · 1/2/3 — сменить, 0 — кулаки');changed();});weaponModel(item.object,id);item.object.scale.setScalar(1.15);
+  const def=WEAPONS[id],p=safe(point(...uv));const item=pickup('weapon',id,p,def.color,'E · '+def.name,()=>!a.pickedWeapons.includes(id),()=>{pickupWeapon(state,id);callbacks.notify(def.name+' подобрано · 1 — кулаки, 2 — бита, 3 — палка, 4 — пистолет');changed();});weaponModel(item.object,id);item.object.scale.setScalar(1.15);
  }
  const packSites=[[105,200],[300,130],[370,500],[550,650],[740,230],[935,430],[960,690],[1230,140],[1500,460],[1470,730]];
  for(const pack of PACKS){
@@ -149,7 +149,7 @@ export function createAdventure(scene,world,state,callbacks){
   prepareWeapons({inVehicle=false,carrying=false,firstPerson=false,pitch=0,attack=0,attackKind='quick'}={}){
    setHeld(a.equipped);const visible=!!heldRig&&!inVehicle&&!carrying&&!a.events.delivery.carrying;
    if(heldRig)heldRig.update({remaining:attack,strong:attackKind==='strong',firstPerson,pitch,visible,gait:(world.player.motion?.diagnostics.stride??0)*Math.PI*2,speed:world.player.motion?.diagnostics.speed??0});world.player.weaponRig=visible?heldRig:null;
-   for(const {person,rig}of policeRigs)rig.update({remaining:person.attack??0,visible:person.mesh.visible&&person.stun<=0});
+   for(const {person,rig}of policeRigs)rig.update({remaining:person.attack??0,visible:person.mesh.visible&&person.stun<=0&&!person.climb});
   },
   update(dt,time,{inVehicle=false,carrying=false,firstPerson=false,camera=null,attack=0}={}){
    const position=world.player.mesh.position,e=a.events.delivery,pp=e.drop??source;parcel.x=pp.x;parcel.z=pp.z;parcel.group.position.set(pp.x,world.groundHeight(pp.x,pp.z),pp.z);

@@ -300,8 +300,8 @@ export function createCharacterMotion(entity, model) {
         prior.q.slerp(record.node.quaternion,blend);prior.p.lerp(record.node.position,blend);
         record.node.quaternion.copy(prior.q);record.node.position.copy(prior.p);
       });
-      if (held||input.weaponRig||input.climb) for (const record of records) if (/Index|Middle|Ring|Pinky|Thumb/.test(record.node.name)) {
-        const closed = closedFingers.get(record.node);const closeHand=held||input.climb||input.weaponRig.twoHanded||/Right|\.?R(?:_end)?$/.test(record.node.name);
+      if (held||input.weaponRig||input.climb||input.fists) for (const record of records) if (/Index|Middle|Ring|Pinky|Thumb/.test(record.node.name)) {
+        const closed = closedFingers.get(record.node);const closeHand=held||input.climb||input.fists||input.weaponRig?.twoHanded||/Right|\.?R(?:_end)?$/.test(record.node.name);
         if (closed&&closeHand) record.node.quaternion.slerp(closed, held?gripWeight:1);
       }
     }
