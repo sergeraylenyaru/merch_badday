@@ -19,12 +19,12 @@ test('traffic uses split crossings and opposite lanes instead of crossing buildi
  const graph=buildRoadGraph();assert.ok(graph.nodes.some(n=>n.edges.length>=4));const edge=graph.edges.find(e=>e.length>25),a=trafficPoint(graph,{edge:edge.id,distance:edge.length/2,reverse:false}),b=trafficPoint(graph,{edge:edge.id,distance:edge.length/2,reverse:true});
  assert.ok(Math.hypot(a.x-b.x,a.z-b.z)>2.3);assert.ok(Math.abs(Math.cos(a.heading-b.heading)+1)<1e-6);
 });
-test('three moving cars follow the player locally, and a claimed car leaves the traffic pool',()=>{
- const cars=Array.from({length:6},(_,id)=>({id,traffic:true,mesh:new T.Group(),visualModel:['sedan','taxi','bus','truck','suv','van'][id],speed:0,w:1.2,l:2.4,h:2.4}));
- const world={vehicles:cars,vehicleBlocked:()=>false,groundHeight:()=>0,props:{vehicle(){}}},traffic=createTraffic(world),p=point(165,180);traffic.update(.1,p,0);assert.equal(traffic.diagnostics.active,3);assert.equal(traffic.diagnostics.moving,3);
- const before=traffic.diagnostics.cars.map(v=>v.position);for(let n=1;n<=20;n++)traffic.update(.1,p,n*.1);const after=traffic.diagnostics.cars.map(v=>v.position);assert.ok(after.some((p,i)=>Math.hypot(p[0]-before[i][0],p[2]-before[i][2])>5));
- const far=point(1500,450);traffic.update(.1,far,3);assert.equal(traffic.diagnostics.active,3);for(const c of traffic.diagnostics.cars)assert.ok(Math.hypot(c.position[0]-far.x,c.position[2]-far.z)<116);
- cars.find(c=>c.mesh.visible).claimed=true;traffic.update(.1,far,4);assert.equal(traffic.diagnostics.active,3);
+test('traffic arrives one at a time beyond the fog and only recycles cars far from the player',()=>{
+ const cars=Array.from({length:6},(_,id)=>({id,traffic:true,mesh:new T.Group(),backing:2,impactBrake:4,visualModel:['sedan','taxi','bus','truck','suv','van'][id],speed:0,w:1.2,l:2.4,h:2.4}));
+ const world={vehicles:cars,vehicleBlocked:()=>false,groundHeight:()=>0,props:{vehicle(){}}},traffic=createTraffic(world),p=point(165,180);assert.equal(traffic.diagnostics.active,0);traffic.update(.1,p,0);assert.equal(traffic.diagnostics.active,1);assert.equal(traffic.diagnostics.moving,1);assert.ok(traffic.diagnostics.lastSpawn.distance>=115);const first=traffic.diagnostics.cars[0];
+ for(let n=1;n<=30;n++){const before=traffic.diagnostics.active;traffic.update(.1,p,n*.1);assert.ok(traffic.diagnostics.active-before<=1);}assert.equal(traffic.diagnostics.active,3);assert.equal(traffic.diagnostics.moving,3);const moved=traffic.diagnostics.cars.find(c=>c.id===first.id);assert.ok(Math.hypot(moved.position[0]-first.position[0],moved.position[2]-first.position[2])>10);
+ const far=point(1500,450);traffic.update(.1,far,4);assert.ok(traffic.diagnostics.active<=1);for(let n=41;n<=85;n++)traffic.update(.1,far,n*.1);assert.equal(traffic.diagnostics.active,3);for(const c of traffic.diagnostics.cars)assert.ok(Math.hypot(c.position[0]-far.x,c.position[2]-far.z)<166);
+ cars.find(c=>c.mesh.visible&&!c.claimed).claimed=true;for(let n=86;n<=120;n++)traffic.update(.1,far,n*.1);assert.equal(traffic.diagnostics.active,3);
 });
 test('strong hits and car contact roll the same ball without breaking or expiring it',async()=>{
  await RAPIER.init();const physics=new RAPIER.World({x:0,y:0,z:0}),scene=new T.Scene(),state={brokenProps:['ball']},props=createDestructibles(scene,{physics,RAPIER,state,groundHeight:()=>0});

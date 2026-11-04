@@ -1,12 +1,12 @@
 import {PARK_RIDES} from './park-details.js';
-import {gridTerrain,ROAD_PROFILES,WATER_LEVEL,roadHeight} from './terrain.js';
+import {gridTerrain,ROAD_PROFILES,WALK_PROFILES,WATER_LEVEL,roadHeight} from './terrain.js';
 import {clipSurface,appendSurface,roadPolygon,rectanglePolygon,SurfaceIndex} from './planar-surfaces.js';
 import {createCityMaterialPool} from './shared-materials.js';
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {prepareCityAsset} from './city-assets.js';
 import {MAP_BUILDINGS} from './map-buildings.js';
-import { MAP, point, WORK_STOPS, ROADS,ROAD_JOINS, nearRoad, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT, COAST, PARK_PATHS,HOSPITAL,PARK_BRIDGES,parkBridgeHeight } from './reference-layout.js';
+import { MAP, point, GARAGE_PLOTS, WORK_STOPS, ROADS,ROAD_JOINS, nearRoad, nearFootpath, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT, COAST, PARK_PATHS,HOSPITAL,PARK_BRIDGES,parkBridgeHeight } from './reference-layout.js';
 export {isReferenceWater} from './reference-layout.js';
 import { BOROUGHS, LOCAL_SHOPS } from './layout.js';
 import { createUrbanDetails } from './urban-details.js';
@@ -25,19 +25,19 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  const traced=[];world.roofs=[];world.treeSpots=[];
  const clearShop=(u,v,r=0)=>WORK_STOPS.every(s=>Math.abs(u-s.u)>52+r || Math.abs(v-s.v)>44+r);
  function add(name,u,v,scale=1,angle=0,solid=false,force=false){
-   if(!force && (!clearShop(u,v,14) || nearRoad(u,v,12))) return;
+   if(!force && (!clearShop(u,v,14) || nearRoad(u,v,12)||nearFootpath(u,v,12))) return;
    const list=placements.get(name)||[];list.push({u,v,scale,angle,solid});placements.set(name,list);
  }
  // Measured footprint placement replaces guessed scales and broad exclusions.
  for(const [name,u,v,width,depth,angle] of MAP_BUILDINGS){
    const list=placements.get(name)||[];list.push({u,v,width,depth,angle:angle*Math.PI/180,scale:1,solid:true,traced:true});placements.set(name,list);
  }
- for(const v of [48,90,710,744])for(let i=0;i<10;i++){
-  const u=56+i*16,list=placements.get('garage')||[];list.push({u,v,width:14,depth:26,angle:0,scale:1,solid:true,traced:true});placements.set('garage',list);
+ for(const {u,v}of GARAGE_PLOTS){
+  const list=placements.get('garage')||[];list.push({u,v,width:14,depth:26,angle:0,scale:1,solid:true,traced:true});placements.set('garage',list);
  }
  for(const [u,v] of [[330,170],[350,500],[110,460],[570,430]])add('playground',u,v,1,0,true);
  for(const [u,v] of [[150,470],[355,520]])add('sandbox',u,v,1,0,true);
- for(const [u,v] of [[90,735],[180,735],[70,85],[175,85]])add('garage',u,v,1,0,true);
+ // The forty measured garages already form spaced rows; no overlapping guessed extras.
  // Park: paths, rides, a civic waterfront pavilion and fountain.
  for(const [name,u,v,scale] of [['carousel',850,95,1.4],['carousel',875,285,1.2],['circus_tent',870,210,1.3],['ride_round',953,242,1.5],['fountain_large',850,490,1],['park_stage',860,710,1.5],['kiosk',1000,588,1],['public_toilet',990,680,1]])add(name,u,v,scale,0,true);
  // The uploaded wheel is horizontal. The existing authored vertical wheel is
@@ -59,7 +59,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  for(let i=0;i<1400;i++){
   const u=35+random()*1600,v=30+random()*740;
   const p=point(u,v);if(Math.abs(p.x-HOSPITAL.x)<HOSPITAL.w+4&&Math.abs(p.z-HOSPITAL.z)<HOSPITAL.d+4)continue;
-  if(!clearShop(u,v,8)||nearRoad(u,v,20)||isReferenceWater(u,v)||parkBridgeHeight(p.x,p.z)>-Infinity||PARK_RIDES.some(r=>Math.abs(u-r.u)<r.w/MAP.scale+10&&Math.abs(v-r.v)<r.d/MAP.scale+10)||PARK_PATHS.some(([x,y,w,d])=>Math.abs(u-x)<w/2+6&&Math.abs(v-y)<d/2+6))continue;
+  if(!clearShop(u,v,8)||nearRoad(u,v,20)||nearFootpath(u,v,10)||isReferenceWater(u,v)||parkBridgeHeight(p.x,p.z)>-Infinity||PARK_RIDES.some(r=>Math.abs(u-r.u)<r.w/MAP.scale+10&&Math.abs(v-r.v)<r.d/MAP.scale+10)||PARK_PATHS.some(([x,y,w,d])=>Math.abs(u-x)<w/2+6&&Math.abs(v-y)<d/2+6))continue;
   if([...placements].some(([n,list])=>!['tree','shrub','bench','trash_bin','streetlight','bus_stop'].includes(n)&&list.some(p=>(p.width?Math.abs(u-p.u)<p.width/2+12&&Math.abs(v-p.v)<p.depth/2+12:Math.hypot(u-p.u,v-p.v)<45))))continue;
   add(i%5?'tree':'shrub',u,v,.85+random()*.45);
  }
@@ -158,16 +158,17 @@ export function buildReferenceTerrain(world,scene){
  const water=new T.Mesh(new T.PlaneGeometry(MAP.width*MAP.scale,MAP.height*MAP.scale),world.terrainMaterials.water);
  water.rotation.x=-Math.PI/2;water.position.set(MAP.x+MAP.width*MAP.scale/2,WATER_LEVEL,MAP.z+MAP.height*MAP.scale/2);water.name='continuous-water';scene.add(water);
  const roadCuts=[],paving=[],pavingIndex=new SurfaceIndex();
- for(const road of ROAD_PROFILES){
+ for(const road of [...ROAD_PROFILES,...WALK_PROFILES]){
+  const pedestrian=WALK_PROFILES.includes(road);
   const vertices=[],uv=[],indices=[];
   const out={positions:vertices,uv};
   for(let i=0;i<road.steps;i++){const a=road.length*i/road.steps,b=road.length*(i+1)/road.steps,quad=[];for(const [d,side]of [[a,-1],[a,1],[b,1],[b,-1]])quad.push({x:road.start.x+road.dx*d+road.dz*road.width/2*side,z:road.start.z+road.dz*d-road.dx*road.width/2*side});for(const p of clipSurface(quad,roadCuts))appendSurface(out,p,roadHeight);}
   for(let i=0;i<vertices.length/3;i++)indices.push(i);
   roadCuts.push(roadPolygon(road));
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();
-  const mesh=new T.Mesh(g,world.terrainMaterials.byColor.get('#414f59'));mesh.receiveShadow=true;mesh.name=road.crossings.length?'bridge-road':'city-road';scene.add(mesh);world.terrainCollider(g);
+  const mesh=new T.Mesh(g,world.terrainMaterials.byColor.get(pedestrian?'#bcad8e':'#414f59'));mesh.receiveShadow=true;mesh.name=pedestrian?'pedestrian-park-bridge':road.crossings.length?'bridge-road':'city-road';scene.add(mesh);world.terrainCollider(g);
   const angle=Math.atan2(road.dx,road.dz);
-  for(let d=3;d<road.length-2;d+=7){const x=road.start.x+road.dx*d,z=road.start.z+road.dz*d;if(ROAD_PROFILES.some(other=>other!==road&&(x-other.start.x)*other.dx+(z-other.start.z)*other.dz>=-1.3&&(x-other.start.x)*other.dx+(z-other.start.z)*other.dz<=other.length+1.3&&Math.abs((x-other.start.x)*other.dz-(z-other.start.z)*other.dx)<other.width/2+1.3))continue;const paint=world.box(x,roadHeight(x,z)+.012,z,.15,.012,2.4,'#dfdfbf');paint.rotation.y=angle;}
+  for(let d=3;!pedestrian&&road.width>=5.2&&d<road.length-2;d+=7){const x=road.start.x+road.dx*d,z=road.start.z+road.dz*d;if(ROAD_PROFILES.some(other=>other!==road&&(x-other.start.x)*other.dx+(z-other.start.z)*other.dz>=-1.3&&(x-other.start.x)*other.dx+(z-other.start.z)*other.dz<=other.length+1.3&&Math.abs((x-other.start.x)*other.dz-(z-other.start.z)*other.dx)<other.width/2+1.3))continue;const paint=world.box(x,roadHeight(x,z)+.012,z,.15,.012,2.4,'#dfdfbf');paint.rotation.y=angle;}
   // Rails and posts mark the raised span; gentle ramps stay open at both ends.
   for(let d=1;d<road.length-1;d+=2){if(road.heightAt(d)<.5)continue;
     for(const side of [-1,1]){const x=road.start.x+road.dx*d+road.dz*(road.width/2+.12)*side,z=road.start.z+road.dz*d-road.dx*(road.width/2+.12)*side,y=road.heightAt(d);

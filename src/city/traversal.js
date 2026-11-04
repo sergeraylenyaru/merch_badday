@@ -6,7 +6,10 @@ export function createTraversal(scene,world,state,onComplete=()=>{}){
  if(active?.kind==='zipline'&&!world.cables.wires.some(w=>w.id===active.id))active=null;
  function candidates(){const out=[];
   for(const wire of world.cables.wires)for(const [side,p]of [wire.a,wire.b].entries()){const d=Math.hypot(pos.x-p.x,pos.z-p.z),base=p.roofY??p.y-5.8;if(d<1.9&&pos.y>=base-.12&&pos.y<base+2.2)out.push({kind:'zipline',id:wire.id,side,d});}
-  for(const f of world.yards.fences){const nx=f.nx??0,nz=f.nz??1,along=(pos.x-f.x)*nz-(pos.z-f.z)*nx,d=Math.abs((pos.x-f.x)*nx+(pos.z-f.z)*nz),near=f.props.some(p=>Math.hypot(pos.x-p.x,pos.z-p.z)<1.9);if(d<3.2&&Math.abs(along)<(f.span??f.w)-.3&&near&&pos.y<f.y0+f.height+1)out.push({kind:'vault',id:f.id,d});}
+  for(const f of world.yards.fences){const nx=f.nx??0,nz=f.nz??1,along=(pos.x-f.x)*nz-(pos.z-f.z)*nx,normal=(pos.x-f.x)*nx+(pos.z-f.z)*nz,d=Math.abs(normal);
+   const support=f.props.find(p=>Math.sign((p.x-f.x)*nx+(p.z-f.z)*nz)===Math.sign(normal)&&Math.hypot(pos.x-p.x,pos.z-p.z)<1.1&&pos.y>=p.y-.15);
+   if(d<3.2&&Math.abs(along)<(f.span??f.w)-.3&&support&&pos.y<f.y0+f.height+1.7)out.push({kind:'vault',id:f.id,d});
+  }
   return out.sort((a,b)=>a.d-b.d);
  }
  function detach(force=false){if(!active)return false;if(active.kind==='vault'&&!force)return false;active=null;grip.visible=false;return true;}

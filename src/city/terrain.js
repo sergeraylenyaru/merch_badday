@@ -1,4 +1,4 @@
-import { MAP, ROADS, ROAD_JOINS,RIVERS, COAST, point, pixel, segmentDistance, PIER,POND_ISLAND,parkBridgeHeight } from './reference-layout.js';
+import { MAP, ROADS, PEDESTRIAN_ROUTES, ROAD_JOINS,RIVERS, COAST, point, pixel, segmentDistance, PIER,POND_ISLAND,parkBridgeHeight } from './reference-layout.js';
 export const WATER_LEVEL = -0.45;
 export const BRIDGE_HEIGHT = 0.55;
 export function waterDistance(u,v) {
@@ -10,15 +10,17 @@ export function waterDistance(u,v) {
   return Math.max(distance,POND_ISLAND.radius-Math.hypot(u-POND_ISLAND.u,v-POND_ISLAND.v));
 }
 export const terrainHeight=(x,z)=>{const p=pixel(x,z),distance=waterDistance(p.x,p.y);return distance<0?Math.max(-5,-.42+distance*.23):Math.min(0,(distance-3)*.14);};
-export const ROAD_PROFILES=ROADS.map(([a,b,c,d,width])=>{
+const profile=([a,b,c,d,width])=>{
   const start=point(a,b),end=point(c,d),length=Math.hypot(end.x-start.x,end.z-start.z),steps=Math.max(1,Math.ceil(length/1.2));
   const crossings=[];for(let i=0;i<=steps;i++){const t=i/steps;if(waterDistance(a+(c-a)*t,b+(d-b)*t)<width/2+3)crossings.push(t*length);}
   const heightAt=s=>{let h=.025;for(const cross of crossings)h=Math.max(h,BRIDGE_HEIGHT*Math.max(0,1-Math.max(0,Math.abs(s-cross)-2)/12));return h;};
   return {start,end,length,width:width*MAP.scale,dx:(end.x-start.x)/length,dz:(end.z-start.z)/length,steps,heightAt,crossings};
-});
+};
+export const ROAD_PROFILES=ROADS.map(profile);
+export const WALK_PROFILES=PEDESTRIAN_ROUTES.map(profile);
 export function roadHeight(x,z) {
   let height=terrainHeight(x,z);
-  for(const road of ROAD_PROFILES){const along=(x-road.start.x)*road.dx+(z-road.start.z)*road.dz;
+  for(const road of [...ROAD_PROFILES,...WALK_PROFILES]){const along=(x-road.start.x)*road.dx+(z-road.start.z)*road.dz;
     if(along<-.08||along>road.length+.08)continue;
     const across=Math.abs((x-road.start.x)*road.dz-(z-road.start.z)*road.dx);
     if(across<=road.width/2+.02)height=Math.max(height,road.heightAt(Math.max(0,Math.min(road.length,along))));}

@@ -287,8 +287,8 @@ export async function createVisuals(scene, world, shopDecor) {
         else velocity.multiplyScalar(1 / Math.max(dt, 0.001));
         const isPlayer = entity === world.player;
         if (input.active === false) continue;
-        if (!isPlayer && entity.mesh.position.distanceToSquared(world.player.mesh.position) > 75 * 75) continue;
-        entity.motion.update(dt, {
+        let animationDt=dt;if(!isPlayer&&entity.mesh.position.distanceToSquared(world.player.mesh.position)>75*75){actor.farElapsed=(actor.farElapsed??0)+dt;if(actor.farElapsed<.12)continue;animationDt=actor.farElapsed;actor.farElapsed=0;}
+        entity.motion.update(animationDt, {
           ...(isPlayer ? input : { active: entity.stun <= 0, grounded: !entity.climb,climb:entity.climb??null,fists:entity.kind==='police'&&!entity.weapon, crouch: false, attack: entity.attack??0, attackKind:entity.attackKind??'quick', guard: false,
             staff: entity.kind === 'staff', social: entity.social, activity: entity.activity, lookAt: entity.lookAt }),
           active: isPlayer ? !input.inVehicle : entity.stun <= 0,

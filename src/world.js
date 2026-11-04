@@ -393,7 +393,7 @@ export async function createWorld(scene, state) {
   }
   function blockedAt(x,z,r=PLAYER_SHAPE.radius,ignoreCar=null,feetY=player.mesh.position.y){
     const p=pixel(x,z);if(p.x<8||p.x>1664||p.y<8||p.y>930)return true;
-    if(blockers.some(b=>b.enabled!==false&&feetY<(b.y??b.h/2)+b.h/2-.04&&feetY+PLAYER_SHAPE.height>(b.y??b.h/2)-b.h/2+.04&&circleIntersectsBox(x,z,r,b)))return true;
+    if(blockers.some(b=>b.enabled!==false&&feetY<(b.y??b.h/2)+b.h/2+(b.vaultOnly?1.6:-.04)&&feetY+PLAYER_SHAPE.height>(b.y??b.h/2)-b.h/2+.04&&circleIntersectsBox(x,z,r,b)))return true;
     return vehicles.some(v=>v!==ignoreCar&&v.mesh.visible&&!(v.police&&state.wanted<3)&&feetY<v.mesh.position.y+v.h-.04&&feetY+PLAYER_SHAPE.height>v.mesh.position.y&&circleIntersectsBox(x,z,r,vehicleBox(v)));
   }
   const world = {

@@ -13,7 +13,7 @@ export function createEnclosures(scene,world){
  function post(x,z,style){const key=x.toFixed(2)+':'+z.toFixed(2)+':'+style;if(postKeys.has(key))return;postKeys.add(key);const s=schemes[style],y=world.groundHeight(x,z),w=s.ornament?.34:.17;box(x,y+(s.height+.25)/2,z,w,s.height+.25,w,s.post);box(x,y+s.height+.28,z,w+.14,.10,w+.14,s.post);}
  function fence(area,a,b){
   const length=Math.hypot(b.x-a.x,b.z-a.z);if(length<.3)return;const dx=(b.x-a.x)/length,dz=(b.z-a.z)/length,angle=-Math.atan2(dz,dx),s=schemes[area.kind],x=(a.x+b.x)/2,z=(a.z+b.z)/2,y0=world.groundHeight(x,z),nx=Math.abs(dz)>.5?1:0,nz=nx?0:1;
-  const proxy=world.box(x,y0+s.height/2,z,Math.abs(b.x-a.x)+.16,s.height,Math.abs(b.z-a.z)+.16,'#6a786e',true);proxy.visible=false;
+  const proxy=world.box(x,y0+s.height/2,z,Math.abs(b.x-a.x)+.16,s.height,Math.abs(b.z-a.z)+.16,'#6a786e',true);proxy.visible=false;proxy.userData.blocker.vaultOnly=true;
   const f={id:area.id+':'+area.segments.length,territory:area.id,kind:area.kind,x,z,w:Math.abs(b.x-a.x)/2+.08,d:Math.abs(b.z-a.z)/2+.08,span:length/2,nx,nz,height:s.height,y0,props:[],a,b};area.segments.push(f);segments.push(f);
   const count=Math.max(1,Math.ceil(length/3.1));
   for(let i=0;i<=count;i++)post(a.x+dx*length*i/count,a.z+dz*length*i/count,area.kind);
@@ -50,7 +50,7 @@ export function createEnclosures(scene,world){
   const xs=[...group].sort((a,b)=>a.z-b.z),lane=(Math.min(...group.map(g=>g.z))+Math.max(...group.map(g=>g.z)))/2;
   const area=rectangle(id,'garage',{minX,maxX,minZ,maxZ},[{side:1,at:lane,width:5.6},{side:2,at:(minX+maxX)/2,width:5.6}]);
   box((minX+maxX)/2,.006,(minZ+maxZ)/2,maxX-minX,.012,maxZ-minZ,'#86877b');
-  for(const fraction of [.23,.77]){const x=minX+(maxX-minX)*fraction,f=area.segments.find(f=>f.nz===1&&Math.abs(f.z-maxZ)<.1&&x>Math.min(f.a.x,f.b.x)+3&&x<Math.max(f.a.x,f.b.x)-3);if(f)world.yards.add(x,maxZ,-1,f,xs[0].id);}
+  for(const fraction of [.18,.38,.62,.82]){const x=minX+(maxX-minX)*fraction,f=area.segments.find(f=>f.nz===1&&Math.abs(f.z-maxZ)<.1&&x>Math.min(f.a.x,f.b.x)+3&&x<Math.max(f.a.x,f.b.x)-3);if(f)world.yards.add(x,maxZ,-1,f,xs[0].id);}
  }
  const a=point(670,370),b=point(1110,760),park=rectangle('city-park','park',{minX:a.x,maxX:b.x,minZ:a.z,maxZ:b.z},[{side:0,at:point(850,0).x,width:8},{side:1,at:point(0,475).z,width:10},{side:1,at:point(0,601).z,width:5},{side:2,at:point(850,0).x,width:8},{side:3,at:point(0,562).z,width:6}]);
  const front=park.gates.find(g=>g.side===0),s=schemes.park;
@@ -68,7 +68,7 @@ export function createEnclosures(scene,world){
   }
   if(plot)rectangle('shop-back:'+shop.id,'shop',plot,[{side:entrance.side,at:entrance.at,width:3.4}],2);
  }
- // A pair of solid supports on either side makes each enclosure climbable.
+ // Supports alternate sides at different crossing sites; the return needs another route.
  // Keep entrances, streets, shop work points and the landing strip clear.
  for(const area of areas){
   if(area.kind==='garage')continue;
@@ -80,10 +80,10 @@ export function createEnclosures(scene,world){
     if(gates.some(g=>Math.hypot(g.x-x,g.z-z)<5)||world.jobs.diagnostics.targets.some(t=>Math.hypot(t.x-x,t.z-z)<4))continue;
     const free=[-1,1].every(side=>[-.9,1.35].every(along=>{const px=x+(f.nx?f.nx*side*1.4:along),pz=z+(f.nx?along:f.nz*side*1.4);return !meetsStreet(px,pz,2,2)&&!world.blockers.some(b=>b.enabled!==false&&circleIntersectsBox(px,pz,.76,b));}));
     if(!free)continue;
-    for(const side of [-1,1])world.yards.add(x,z,f.nz*side,f,area.id,f.nx*side);
+    const side=sites%2?1:-1;world.yards.add(x,z,f.nz*side,f,area.id,f.nx*side);
     sites++;break;
    }
-   if(sites>=(area.kind==='park'?2:1))break;
+   if(sites>=(area.kind==='park'?6:3))break;
   }
  }
  world.yards.finish();

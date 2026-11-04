@@ -28,7 +28,8 @@ test('fences belong to enclosed territories, gates stay open and every driving s
  for(const gate of e.gates){assert.ok(gate.width>=1.5);assert.equal(e.segments.some(f=>circleIntersectsBox(gate.x,gate.z,.35,f)),false,'gate blocked '+gate.territory);}
  assert.notEqual(e.areas.find(a=>a.id==='shop-back:0').gates[0].side,1,'a gate must not face the existing building at the east approach');
  for(const y of world.yards.yards){const area=e.areas.find(a=>a.id===y.territory);if(area.kind==='garage')assert.ok(y.props.every(p=>p.x>area.bounds.minX&&p.x<area.bounds.maxX&&p.z>area.bounds.minZ&&p.z<area.bounds.maxZ));const f=world.yards.fences.find(f=>f.id===y.fence);assert.ok(f.props.length>=2);}
- for(const kind of ['park','hospital','shop'])assert.ok(world.yards.fences.some(f=>f.kind===kind&&f.props.length>=4),'supports on both sides of '+kind);
+ for(const kind of ['park','hospital','shop'])assert.ok(world.yards.fences.some(f=>f.kind===kind&&f.props.length>=2),'supports for '+kind);
+ for(const f of world.yards.fences){const sides=new Set(f.props.map(p=>Math.sign((p.x-f.x)*f.nx+(p.z-f.z)*f.nz)));assert.equal(sides.size,1,'a return crossing must use another support site');}
  assert.ok(e.areas.find(a=>a.kind==='park').gates.length>=4);assert.ok(e.areas.find(a=>a.kind==='hospital').gates.length>=2);
  e.dispose();world.yards.dispose();scene.traverse(n=>{n.geometry?.dispose();n.material?.dispose();});
 });

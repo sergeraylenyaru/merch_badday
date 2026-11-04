@@ -36,12 +36,10 @@ export function createParkour(scene,world,state){
  const stored=state.parkour?.feetY;if(Number.isFinite(stored)&&stored>=world.groundHeight(pos.x,pos.z))pos.y=stored;
  const savedLadder=ladders.find(l=>l.id===state.parkour?.ladder);if(savedLadder){climb={ladder:savedLadder,mantle:null,startY:state.parkour.ladderStartY??pos.y};pos.x=savedLadder.x+savedLadder.nx*.35;pos.z=savedLadder.z+savedLadder.nz*.35;grounded=false;}
  function floorAt(x,z,ceiling=pos.y+.12){
-  let floor=world.groundHeight(x,z);
-  for(const b of world.blockers)if(b.enabled!==false&&b.h>2.5&&b.w>2&&b.d>2){const top=(b.y??b.h/2)+b.h/2;if(top<=ceiling+.03&&Math.abs(x-b.x)<b.w-.08&&Math.abs(z-b.z)<b.d-.08)floor=Math.max(floor,top);}
-  for(const roof of roofs)if(roof.y<=ceiling+.03&&Math.abs(x-roof.x)<roof.w-.08&&Math.abs(z-roof.z)<roof.d-.08)floor=Math.max(floor,roof.y);
-  for(const s of world.shopRoofs??[])if(s.y<=ceiling+.03&&Math.abs(x-s.x)<s.w&&Math.abs(z-s.z)<s.d)floor=Math.max(floor,s.y);
-  for(const s of [...world.garages,...world.parkourSurfaces])if(s.y<=ceiling+.03&&Math.abs(x-s.x)<s.w-.03&&Math.abs(z-s.z)<s.d-.03)floor=Math.max(floor,s.y);
-  for(const v of world.vehicles)if(v.mesh.visible&&!(v.police&&state.wanted<3)){const top=v.mesh.position.y+v.h;if(top<=ceiling+.03&&circleIntersectsBox(x,z,.01,vehicleBox(v)))floor=Math.max(floor,top);}
+  let floor=world.groundHeight(x,z);const radius=PLAYER_SHAPE.radius+.02;
+  for(const b of world.blockers)if(b.enabled!==false&&!b.vaultOnly&&b.h>.08&&(b.w>.25||b.d>.25)){const top=(b.y??b.h/2)+b.h/2;if(top<=ceiling+.03&&circleIntersectsBox(x,z,radius,b))floor=Math.max(floor,top);}
+  for(const s of [...roofs,...(world.shopRoofs??[]),...world.garages,...world.parkourSurfaces])if(s.y<=ceiling+.03&&circleIntersectsBox(x,z,radius,s))floor=Math.max(floor,s.y);
+  for(const v of world.vehicles)if(v.mesh.visible&&!(v.police&&state.wanted<3)){const top=v.mesh.position.y+v.h;if(top<=ceiling+.03&&circleIntersectsBox(x,z,radius,vehicleBox(v)))floor=Math.max(floor,top);}
   return floor;
  }
  grounded=Math.abs(pos.y-floorAt(pos.x,pos.z))<.1;

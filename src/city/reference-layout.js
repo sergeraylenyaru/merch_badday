@@ -4,22 +4,24 @@ export const MAP = {width:1672,height:941,scale:0.4,x:-334,z:-188};
 export const point = (u,v) => ({x:MAP.x+u*MAP.scale,z:MAP.z+v*MAP.scale});
 export const pixel = (x,z) => ({x:(x-MAP.x)/MAP.scale,y:(z-MAP.z)/MAP.scale});
 export const WORK_STOPS = [
- ['C1',110,285],['C2',110,562],['P1',754,173],['O1',1305,223],
+ ['C1',110,285],['C2',126,540.5],['P1',754,173],['O1',1305,223],
  ['O2',1300,575],['O3',1590,548],['P2',1034,273],['C3',407,622],['P3',735,585],
 ].map(([code,u,v],id)=>({id,code,u,v,...point(u,v)}));
 export const HOME = {...point(165,180)};
 export const HOME_CAR = {...point(167.5,171.5)};
-export const HOME_CAR_HEADING=-Math.PI/2;
+export const HOME_CAR_HEADING=Math.PI/2;
 export const START = {...HOME};
 // A permanent civic plot: saved cars and destroyed props must not move the hospital.
 export const HOSPITAL = {...point(1437,683),w:11,d:8};
+export const GARAGE_PLOTS=[48,90,710,744].flatMap(v=>Array.from({length:10},(_,i)=>({u:56+i*16,v,width:14,depth:26})));
 export const ROUNDABOUT={u:1390,v:337,radius:37,width:25};
 export const ROADS = [
+ [140,171.5,239,171.5,10],
  [0,337,1355,337,38],[1425,337,1672,337,38],
  [239,15,239,578,25],[239,578,273,600,22],[273,600,277,650,22],[277,650,277,685,22],[500,42,500,681,24],
  [1168,0,1168,710,27],[1390,0,1390,302,27],[1390,372,1390,941,27],
  [239,20,270,37,20],[710,65,1025,60,13],[1120,20,1168,20,13],
- [850,400,1030,440,13],[1145,490,1168,490,13],[1120,770,1185,750,14],
+ [1120,770,1185,750,14],
  [30,20,239,20,14],[270,37,500,37,20],[30,20,30,781,20],
  [30,685,335,685,20],[239,578,500,578,20],
  [335,578,335,742,19],[335,742,365,760,19],[365,760,475,760,19],[475,760,500,738,19],[500,738,500,681,19],
@@ -29,10 +31,12 @@ export const ROADS = [
  [1660,30,1660,780,14],
  // The two park bridges and the promenade retain their traced diagonals.
  [500,70,615,80,13],[615,80,660,65,13],[660,65,710,65,13],
- [1025,60,1120,20,13],[1030,440,1145,490,13],
+ [1025,60,1120,20,13],
  [650,770,1120,770,14],
  ...Array.from({length:32},(_,i)=>{const a=i*Math.PI/16,b=(i+1)*Math.PI/16;return [1390+Math.cos(a)*37,337+Math.sin(a)*37,1390+Math.cos(b)*37,337+Math.sin(b)*37,25];}),
 ];
+export const PEDESTRIAN_ROUTES=[[850,400,1030,440,10],[1030,440,1145,490,10],[1145,490,1168,490,10]];
+export const nearFootpath=(u,v,margin=0)=>PEDESTRIAN_ROUTES.some(([a,b,c,d,w])=>segmentDistance(u,v,a,b,c,d)<w/2+margin);
 export const PARK_PATHS=[[850,560,14,360],[850,400,340,14],[850,748,420,14],[775,110,14,80],[795,190,9,240],[850,76,260,9],[722,200,146,9],[1060,164,9,180],[1090,190,80,9],[1018,180,86,9]];
 export const PARK_BRIDGES=[{id:'west',...point(637,200),length:16,width:2.8,angle:0},{id:'east',...point(1117,190),length:16,width:2.8,angle:0},{id:'island',...point(1046,510),length:20,width:2.8,angle:Math.PI/2}];
 export const POND_ISLAND={u:1046,v:475,radius:10};
@@ -54,15 +58,17 @@ export function rawWater(u,v){
  if(((u-1015)/48)**2+((v-480)/50)**2<1)return true;
  return RIVERS.some((river,i)=>river.some((p,n)=>n>0&&segmentDistance(u,v,...river[n-1],...p)<(i?10:13)));
 }
-export const isReferenceWater=(u,v)=>rawWater(u,v)&&parkBridgeHeight(point(u,v).x,point(u,v).z)===-Infinity&&!nearRoad(u,v,0)&&segmentDistance(u,v,...PIER.slice(0,4))>PIER[4]/2&&!(u>837.5&&u<892.5&&v>870&&v<882);
+export const isReferenceWater=(u,v)=>rawWater(u,v)&&parkBridgeHeight(point(u,v).x,point(u,v).z)===-Infinity&&!nearRoad(u,v,0)&&!nearFootpath(u,v)&&segmentDistance(u,v,...PIER.slice(0,4))>PIER[4]/2&&!(u>837.5&&u<892.5&&v>870&&v<882);
 export const LOCAL_POINTS = [[560,210],[560,562],[1059,601],[850,708],[1305,716],[1508,713]];
 export const districtAt = x => x < point(640,0).x ? 0 : x < point(1150,0).x ? 1 : 2;
 export function nearRoad(u,v,margin=0) {
  return ROADS.some(([a,b,c,d,width])=>segmentDistance(u,v,a,b,c,d)<width/2+margin);
 }
 
-export const ROAD_BOXES=ROADS.map(([a,b,c,d,width])=>{const start=point(a,b),end=point(c,d);return {x:(start.x+end.x)/2,z:(start.z+end.z)/2,w:width*MAP.scale/2,d:Math.hypot(end.x-start.x,end.z-start.z)/2,heading:Math.atan2(end.x-start.x,end.z-start.z)};});
-export const meetsStreet=(x,z,w,d,heading=0)=>{const box={x,z,w:w/2,d:d/2,heading};return ROAD_BOXES.some(road=>boxesIntersect(box,road))||ROAD_JOINS.some(j=>circleIntersectsBox(j.x,j.z,j.radius,box));};
+const routeBox=([a,b,c,d,width])=>{const start=point(a,b),end=point(c,d);return {x:(start.x+end.x)/2,z:(start.z+end.z)/2,w:width*MAP.scale/2,d:Math.hypot(end.x-start.x,end.z-start.z)/2,heading:Math.atan2(end.x-start.x,end.z-start.z)};};
+export const WALK_BOXES=PEDESTRIAN_ROUTES.map(routeBox);
+export const ROAD_BOXES=ROADS.map(routeBox);
+export const meetsStreet=(x,z,w,d,heading=0)=>{const box={x,z,w:w/2,d:d/2,heading};return [...ROAD_BOXES,...WALK_BOXES].some(road=>boxesIntersect(box,road))||ROAD_JOINS.some(j=>circleIntersectsBox(j.x,j.z,j.radius,box));};
 
 // Centres of the pins already printed on the supplied image. Doors remain
 // separate navigation targets, so the tablet does not draw duplicate labels.

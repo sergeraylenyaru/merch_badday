@@ -1,4 +1,5 @@
-import { WORK_STOPS, START } from './city/reference-layout.js';
+import {ensureBackpack} from './city/backpack.js';
+import { WORK_STOPS, START, HOME_CAR, HOME_CAR_HEADING } from './city/reference-layout.js';
 import {makeShift,urgentReward,career,remember} from './city/shift.js';
 import { JOBS, newJob, jobDone, isShopUnlocked } from './jobs/catalog.js';
 import { newPlanogram } from './jobs/match3.js';
@@ -98,7 +99,7 @@ export const SHOPS = [
   required,
   task: JOBS[i].type,
 }));
-export const freshState = () => ({
+export const freshState = () => {const state=({
   version: 1,
   cityVersion: 3,
   overtime: false,
@@ -126,8 +127,10 @@ export const freshState = () => ({
   ending: null,
   selected: 0,
   awaitingShopChoice:false,
-  mapMode:'satellite',
-  supplyTrip:null,
+  mapMode:'schematic',
+  mapLayers:{shops:true,vendors:true,guards:false,leisure:false,health:true,parkour:false,collectibles:false},
+  backpack:null,wearing:null,layoutRevision:4,
+  supplyTrip:null,mapTarget:null,
   position: {...START},
   shops: SHOPS.map((shop) => ({
     carts: 0,
@@ -148,7 +151,7 @@ export const freshState = () => ({
   adventure:newAdventure(),
   sideWork:newSideWork(),
   weather: false,
-});
+});ensureBackpack(state);return state;};
 export function normalize(s) {
   s.health = Math.max(0, Math.min(100, s.health));
   s.stress = Math.max(0, Math.min(100, s.stress));
@@ -175,7 +178,7 @@ export function complete(s, id) {
   if (s.shops.every((x) => x.done)) finish(s);
   return true;
 }
-export function selectShop(state,id){if(!Number.isInteger(id)||!state.shops[id]||state.shops[id].done||!isShopUnlocked(state,id))return false;state.selected=id;state.awaitingShopChoice=false;state.supplyTrip=null;state.adventure.tracked=null;return true;}
+export function selectShop(state,id){if(!Number.isInteger(id)||!state.shops[id]||state.shops[id].done||!isShopUnlocked(state,id))return false;state.selected=id;state.awaitingShopChoice=false;state.supplyTrip=null;state.mapTarget=null;state.adventure.tracked=null;return true;}
 export function finish(s, quit = false) {
   const allDone = s.shops.every((p) => p.done);
   s.ending = quit
@@ -194,7 +197,7 @@ export function finish(s, quit = false) {
   return s.ending;
 }
 export function save(s, storage = localStorage) {
-  ensureAdventure(s);
+  ensureAdventure(s);ensureBackpack(s);
   storage.setItem("merch-badday-v1", JSON.stringify(s));
 }
 export function load(storage = localStorage) {
@@ -210,7 +213,7 @@ export function load(storage = localStorage) {
       Number.isFinite(s.position.z)
     ) {
       const v = { ...freshState(), ...s };
-      v.mapMode=v.mapMode==='schematic'?'schematic':'satellite';
+      v.wearing=s.wearing??null;v.mapMode=v.mapMode==='satellite'?'satellite':'schematic';v.mapLayers={...freshState().mapLayers,...s.mapLayers};
       if(s.shops.length===8&&Array.isArray(v.vehicles)){v.vehicles=[...v.vehicles];v.vehicles.splice(8,0,null);}
       const migrating = ![2,3].includes(s.missionVersion);
       v.missionVersion = 3;
@@ -253,7 +256,12 @@ export function load(storage = localStorage) {
       }
       if (v.carrying && (v.carrying.shop !== 4 || ![0, 1, 2].includes(v.carrying.box) || v.shops[4].job.delivered.includes(v.carrying.box))) v.carrying = null;
       if(v.carrying?.extra!==undefined&&(![0,1,2].includes(v.carrying.extra)||v.carrying.extra===v.carrying.box||v.shops[4].job.delivered.includes(v.carrying.extra))) delete v.carrying.extra;
-      normalize(v);ensureAdventure(v);
+      if((s.layoutRevision??0)<4){const old={x:-290,z:36.8},dx=SHOPS[1].x-old.x,dz=SHOPS[1].z-old.z,near=p=>p&&Math.abs(p.x-old.x)<31&&Math.abs(p.z-old.z)<20;
+        for(const p of v.vehicles??[]){if(near(p)&&!p.claimed){p.x+=dx;p.z+=dz;}if(p&&Math.hypot(p.x-HOME_CAR.x,p.z-HOME_CAR.z)<.8&&Math.abs((p.heading??0)+Math.PI/2)<.1)p.heading=HOME_CAR_HEADING;}
+        for(const p of v.carts??[])if(near(p)){p.x+=dx;p.z+=dz;}
+        if(near(v.position)){v.position.x+=dx;v.position.z+=dz;}v.layoutRevision=4;
+      }
+      normalize(v);ensureAdventure(v);ensureBackpack(v);
       return v;
     }
   } catch {}

@@ -60,12 +60,12 @@ test('path searches yield between frames instead of expanding thousands of nodes
 });
 
 test('the crowd pool follows the player, with a bounded local population',()=>{
-  const player={...point(200,200)},nodes=Array.from({length:30},(_,i)=>({x:player.x+20*Math.cos(i),z:player.z+20*Math.sin(i)}));
+  const player={...point(200,200)},nodes=[24,45,65,85].flatMap(r=>Array.from({length:12},(_,i)=>({x:player.x+r*Math.cos(i*Math.PI/6),z:player.z+r*Math.sin(i*Math.PI/6)})));
   const people=Array.from({length:24},()=>({kind:'civilian',stun:0,mesh:new T.Group(),home:new T.Vector3()}));
   const world={people,state:{wanted:0},blocked:()=>false,groundHeight:()=>0,walkways:{nodes},boroughs:{diagnostics:{urbanDetails:{placements:[]}}}};
   const life={assign(n){n.dailyRoute={};}},crowd=createLocalCrowd(world,life);
   crowd.update(player,0);assert.equal(crowd.diagnostics.active,CROWD_LIMIT);
-  for(const n of people.filter(n=>n.activePedestrian))assert.ok(Math.hypot(n.mesh.position.x-player.x,n.mesh.position.z-player.z)<42);
+  for(const n of people.filter(n=>n.activePedestrian))assert.ok(Math.hypot(n.mesh.position.x-player.x,n.mesh.position.z-player.z)<95);
   crowd.update({x:player.x+250,z:player.z},1);assert.equal(crowd.diagnostics.active,0);assert.ok(people.every(n=>!n.mesh.visible));
 });
 

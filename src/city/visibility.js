@@ -1,0 +1,2 @@
+export const CITY_FOG={near:45,far:110,wetNear:35,wetFar:95};
+export const POPULATION_SPAWN_DISTANCE=115,POPULATION_RECYCLE_DISTANCE=165;

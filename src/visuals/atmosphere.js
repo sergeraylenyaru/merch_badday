@@ -1,3 +1,4 @@
+import {CITY_FOG} from '../city/visibility.js';
 import * as T from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
@@ -28,7 +29,7 @@ export function createAtmosphere(scene, renderer) {
   generator.dispose();
   scene.environment = environment.texture;
   scene.environmentIntensity = 0.32;
-  scene.fog = new T.Fog("#d6e1df", 100, 245);
+  scene.fog = new T.Fog("#d6e1df",CITY_FOG.near,CITY_FOG.far);
   scene.background = new T.Color("#d6e1df");
 
   const uniforms = {
@@ -121,8 +122,8 @@ export function createAtmosphere(scene, renderer) {
       uniforms.cloudAmount.value = highQuality ? 0.28 : 0.12;
       scene.fog.color.copy(uniforms.horizon.value);
       scene.background.copy(uniforms.horizon.value);
-      scene.fog.near = weather ? 65 : 100;
-      scene.fog.far = weather ? 190 : 245;
+      scene.fog.near = weather?CITY_FOG.wetNear:CITY_FOG.near;
+      scene.fog.far = weather?CITY_FOG.wetFar:CITY_FOG.far;
       sun.color.copy(uniforms.sunTint.value);
       sun.intensity = T.MathUtils.lerp(sun.intensity, weather ? 1.2 : 3.1 - evening * 1.0, blend);
       hemisphere.color.copy(uniforms.top.value).lerp(uniforms.horizon.value, 0.7);
