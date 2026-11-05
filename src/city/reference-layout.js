@@ -45,6 +45,7 @@ export function parkBridgeHeight(x,z){let height=-Infinity;for(const b of PARK_B
 const joinMap=new Map();
 ROADS.forEach(([a,b,c,d,width],index)=>{for(const [u,v,end]of [[a,b,0],[c,d,1]]){const key=u.toFixed(3)+':'+v.toFixed(3),j=joinMap.get(key)??{...point(u,v),radius:0,roads:[]};j.radius=Math.max(j.radius,width*MAP.scale/2);j.roads.push({index,end});joinMap.set(key,j);}});
 export const ROAD_JOINS=[...joinMap.values()].filter(j=>j.roads.length>1);
+export const WALK_JOINS=PEDESTRIAN_ROUTES.slice(1).map(([u,v,,,width],i)=>({...point(u,v),radius:width*MAP.scale/2,roads:[{index:i,end:1},{index:i+1,end:0}]}));
 export const PIER=[865,810,865,880,22];
 export const RIVERS=[
  [[710,-20],[660,25],[640,70],[635,120],[637,200],[640,280],[641,340],[640,410],[623,480],[618,560],[608,625],[601,670],[585,710],[578,750],[593,800]],

@@ -11,7 +11,7 @@ export function createStreetActors(world,state,{notify=()=>{},dispatch=()=>null}
   if(car.police||car.rival||car.sunk)return null;let n=car.driver;if(n&&!n.insideCar)return n;const choices=[vehicleDoor(car,1),vehicleDoor(car,-1)],door=choices.find(p=>pointClear(p,car)&&Math.hypot(p.x-player.x,p.z-player.z)>.7)??choices.find(p=>pointClear(p,car));if(!door)return null;
   if(!n){n=freeDriver(player);if(!n)return null;attach(car,n);}
   const start=driverSeat(car);n.mesh.position.set(start.x,car.mesh.position.y,start.z);n.mesh.rotation.y=car.heading;n.mesh.visible=true;n.insideCar=false;n.seated=false;n.activeDriver=true;n.exitMotion={from:n.mesh.position.clone(),to:new T.Vector3(door.x,ground(door.x,door.z),door.z),elapsed:0,duration:.75};n.home.set(door.x,ground(door.x,door.z),door.z);n.fleeFrom=player.clone?.()??new T.Vector3(player.x,0,player.z);n.incident=reason==='pedestrian-hit';n.arrested=false;car.speed=0;car.crashed=true;car.trafficRoute=null;car.doorAnimation=1;exits++;
-  if(n.incident){incidents++;n.role='Виновник наезда';dispatch(n,player,yaw);notify('Водитель вышел после наезда. Полиция идёт к нему.');}else{n.role='Водитель угнанной машины';notify('Водитель выходит из машины и сообщает об угоне.');}return n;
+  if(n.incident){incidents++;n.role='Виновник наезда';dispatch(n,player,yaw);notify('Водитель вышел после наезда. Полиция идёт к нему.');}else{n.role='Водитель угнанной машины';notify('Водитель выходит из машины.');}return n;
  }
  return {exit,onPedestrianHit(car,player,yaw){return exit(car,'pedestrian-hit',player,yaw);},update(dt,time,player,yaw=0){
   for(const car of world.vehicles)if(car.traffic&&!car.rival&&!car.claimed&&!car.sunk&&car.mesh.visible&&!car.crashed&&!car.driver){const n=freeDriver(player);if(n)attach(car,n);}

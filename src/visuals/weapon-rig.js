@@ -12,7 +12,7 @@ const poses={
 };
 export function meleePose(id,remaining=0,strong=false,firstPerson=false){
  if(id==='slingshot')return {position:new T.Vector3(.18,1.4,.43),quaternion:new T.Quaternion(),phase:remaining>.25?'draw':'aim',progress:remaining>0?1-remaining/.5:0,twist:0,twoHanded:true};
- if(id==='water')return {position:new T.Vector3(.3,1.3,.4),quaternion:new T.Quaternion(),phase:'carry',progress:0,twist:0,twoHanded:false};
+ if(id==='water'||id==='pistol')return {position:new T.Vector3(.3,id==='pistol'?1.6:1.3,.4),quaternion:new T.Quaternion(),phase:'aim',progress:0,twist:0,twoHanded:false};
  const timing=MELEE_TIMING[id]?.[strong?'strong':'quick'];
  const rest=firstPerson?poses.first:id==='bat'?poses.batCarry:poses.carry;
  if(!timing||remaining<=0)return {position:new T.Vector3(...rest.p),quaternion:new T.Quaternion().setFromEuler(new T.Euler(...rest.r)),phase:'carry',progress:0,twist:0,twoHanded:false};
@@ -34,13 +34,14 @@ export function createWeaponRig(scene,owner,id,makeModel){
  const shoulder=owner.getObjectByName('RightArm'),side=shoulder?Math.sign(owner.worldToLocal(shoulder.getWorldPosition(new T.Vector3())).x)||1:1;
  const worldMatrix=new T.Matrix4();root.matrixAutoUpdate=false;
  const rig={root,id,right,left,twoHanded:false,phase:'carry',progress:0,twist:0,
-  update({remaining=0,strong=false,firstPerson=false,pitch=0,visible=true,gait=0,speed=0}={}){
+  update({remaining=0,strong=false,firstPerson=false,pitch=0,visible=true,gait=0,speed=0,aimAt=null}={}){
    const pose=meleePose(id,remaining,strong,firstPerson);if(remaining<=0&&!firstPerson){pose.position.z+=Math.sin(gait)*Math.min(1,speed/6.8)*.045;pose.position.y+=Math.sin(gait*2)*Math.min(1,speed/6.8)*.018;}if(side<0){pose.position.x*=-1;pose.quaternion.y*=-1;pose.quaternion.z*=-1;pose.twist*=-1;}Object.assign(rig,{twoHanded:pose.twoHanded,phase:pose.phase,progress:pose.progress,twist:pose.twist});
-   if(firstPerson||id==='slingshot'){viewTilt.setFromAxisAngle(new T.Vector3(1,0,0),T.MathUtils.clamp(pitch,-.7,.7));pose.position.sub(pivot).applyQuaternion(viewTilt).add(pivot);pose.quaternion.premultiply(viewTilt);}
+   if(firstPerson||id==='slingshot'||id==='water'){viewTilt.setFromAxisAngle(new T.Vector3(1,0,0),T.MathUtils.clamp(pitch,-1.3,1.3));pose.position.sub(pivot).applyQuaternion(viewTilt).add(pivot);pose.quaternion.premultiply(viewTilt);}
    owner.updateWorldMatrix(true,false);owner.getWorldQuaternion(rotation);position.copy(pose.position).applyQuaternion(rotation).add(owner.getWorldPosition(new T.Vector3()));
-   worldMatrix.compose(position,rotation.multiply(pose.quaternion),scale);scene.updateWorldMatrix(true,false);root.matrix.copy(scene.matrixWorld).invert().multiply(worldMatrix);root.matrix.decompose(root.position,root.quaternion,root.scale);root.visible=visible;root.updateMatrixWorld(true);
+   rotation.multiply(pose.quaternion);if(aimAt)rotation.setFromRotationMatrix(new T.Matrix4().lookAt(aimAt,position,new T.Vector3(0,1,0)));
+   worldMatrix.compose(position,rotation,scale);scene.updateWorldMatrix(true,false);root.matrix.copy(scene.matrixWorld).invert().multiply(worldMatrix);root.matrix.decompose(root.position,root.quaternion,root.scale);root.visible=visible;root.updateMatrixWorld(true);
   },
-  get diagnostics(){return {id,phase:rig.phase,progress:rig.progress,twoHanded:rig.twoHanded,visible:root.visible,position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray()};},
+  get diagnostics(){return {id,phase:rig.phase,progress:rig.progress,twoHanded:rig.twoHanded,visible:root.visible,position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray(),muzzle:root.getObjectByName('Muzzle')?.getWorldPosition(new T.Vector3()).toArray()??null};},
   dispose(){root.removeFromParent();},
  };
  return rig;

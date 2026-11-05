@@ -43,7 +43,7 @@ export function createPoliceResponse(world,state){
     if(alive<base+2&&deploy(player,yaw))saved.extra=Math.min(2,saved.extra+1);
    }
    const active=saved.roster.filter(id=>pool.some(n=>n.policeIndex===id&&!n.dead)).slice(0,base+(level>=3?saved.extra:0));
-   for(const n of pool){if(n.incidentReturning&&now>(n.incidentUntil??0)&&Math.hypot(n.mesh.position.x-player.x,n.mesh.position.z-player.z)>35&&concealed(player,n.mesh.position,yaw))n.incidentReturning=false;n.activePolice=active.includes(n.policeIndex)||!!n.incidentTarget||!!n.incidentReturning;if(!n.activePolice&&!n.dead){n.mesh.visible=false;n.attack=0;n.combat=null;}if(n.activePolice&&!n.roofPursuit&&!n.climb&&Math.hypot(n.mesh.position.x-player.x,n.mesh.position.z-player.z)>130&&concealed(player,n.mesh.position,yaw))place(n,player,yaw);}
+   for(const n of pool){if(n.incidentReturning&&now>(n.incidentUntil??0)&&Math.hypot(n.mesh.position.x-player.x,n.mesh.position.z-player.z)>35&&concealed(player,n.mesh.position,yaw))n.incidentReturning=false;n.activePolice=active.includes(n.policeIndex)||!!n.incidentTarget||!!n.incidentReturning||(n.waterFear?.until??0)>now;if(!n.activePolice&&!n.dead){n.mesh.visible=false;n.attack=0;n.combat=null;}if(n.activePolice&&!n.roofPursuit&&!n.climb&&Math.hypot(n.mesh.position.x-player.x,n.mesh.position.z-player.z)>130&&concealed(player,n.mesh.position,yaw))place(n,player,yaw);}
    saved.lastLevel=level;
   },
   get diagnostics(){return {base:policeLimit(state.wanted),active:pool.filter(n=>n.activePolice&&!n.dead).length,incidents:pool.filter(n=>n.incidentTarget).length,dead:pool.filter(n=>n.dead).length,nextReinforcement:state.wanted>=3?Math.max(0,saved.nextAt-state.time):null};},

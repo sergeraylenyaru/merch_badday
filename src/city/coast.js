@@ -3,8 +3,8 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {sceneBuilder} from './scene-builder.js';
 import {COAST_HOMES,MANSION,QUAY_RANGE,coastPixelAt,planCoastDecks,coastFloorAt,inMansionGrounds} from './coast-layout.js';
 import {point,MAP,isReferenceWater,pixel} from './reference-layout.js';
-import {clearSegment} from '../npc/navigation.js';
-import {policeCombat} from '../npc/police-combat.js';
+import {guardGun,GUARD_PISTOL} from '../npc/guard-gun.js';
+import {equipmentRay} from '../adventure/aim.js';
 export function createCoast(scene,world,state,{human}){
  const b=sceneBuilder(scene,world,'three-coastal-neighborhoods'),floors=planCoastDecks(),benches=[],guards=[],landmarks=[],graniteParts=[];
  const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const ctx=canvas.getContext('2d');let seed=73;const random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
@@ -60,9 +60,24 @@ export function createCoast(scene,world,state,{human}){
  for(const dx of [-16,16])for(const dz of [11,-10]){sphere(s.x+dx,.8,s.z+dz,1.3,.8,1.2,'#5d775a');lamp(s.x+dx,s.z+dz,3.8);}
  world.roofs.push({id:'coast-mansion-roof',x:s.x,z:s.z,w:s.buildingW,d:s.buildingD,y:8.22,kind:'mansion',ladder:{x:s.x-s.buildingW-.12,z:s.z-2,nx:-1,nz:0,exit:{x:s.x-s.buildingW+1.5,z:s.z-2,y:8.22}}});
  const posts=[[-4,-15.3],[4,-15.3],[-16,2],[16,1],[-14,13],[13,13]];
- for(const [i,[dx,dz]]of posts.entries()){const n=human(s.x+dx,s.z+dz,'#293f3b','guard');n.role=['Старший охраны','Охрана ворот','Охрана сада','Патруль особняка','Охрана террасы','Охрана берега'][i];n.mansionGuard=true;n.guardIndexLocal=i;n.shopName='Особняк на берегу';n.entrance={x:s.x+dx,z:s.z+dz};n.shopPosition={x:s.x,z:s.z};n.guardRoute=[{x:s.x+dx,z:s.z+dz},{x:s.x+dx*.8,z:s.z+dz*.8}];n.guardRouteIndex=0;world.people.push(n);guards.push(n);}
+ for(const [i,[dx,dz]]of posts.entries()){const n=human(s.x+dx,s.z+dz,'#293f3b','guard');n.role=['Старший охраны','Охрана ворот','Охрана сада','Патруль особняка','Охрана террасы','Охрана берега'][i];n.mansionGuard=true;n.weapon='pistol';n.guardIndexLocal=i;n.shopName='Особняк на берегу';n.entrance={x:s.x+dx,z:s.z+dz};n.shopPosition={x:s.x,z:s.z};n.guardRoute=[{x:s.x+dx,z:s.z+dz},{x:s.x+dx*.8,z:s.z+dz*.8}];n.guardRouteIndex=0;world.people.push(n);guards.push(n);}
  landmarks.push({x:s.x,z:s.z-s.d-1,id:s.id,name:s.name,detail:'Частная территория: ворота, сад и шесть охранников'});
  b.finish();
  const floorAt=(x,z)=>coastFloorAt(floors,x,z);let callbacks={},wasInside=false;
- return {setCallbacks(c){callbacks=c;},update(){const inside=inMansionGrounds(world.player.mesh.position);if(inside&&!wasInside)callbacks.notify?.('Частная территория. Охрана требует выйти; через 3 секунды начнётся задержание.');wasInside=inside;},addresses:COAST_HOMES.map(h=>({x:h.x,z:h.z+5,label:h.name+' · у калитки',coastal:true})),walkwayNodes:floors.filter(f=>f.kind!=='water-stair').map(f=>({x:f.x,z:f.z,kind:'walk',lookAt:{x:f.x,z:f.z+3}})).concat(COAST_HOMES.map(h=>({...point(h.u,coastPixelAt(h.u)-17),kind:'walk',lookAt:{x:h.x,z:h.z}}))),floorAt,walkable:(x,z)=>floorAt(x,z)>-Infinity,landmarks,guardIntent(n,player,dt,inVehicle=false){n.anger=Math.max(0,(n.anger??0)-dt);const privateArea=inMansionGrounds(player),p=n.mesh.position,d=p.distanceTo(player);if(privateArea||n.anger>0){n.guardAlert=(n.guardAlert??0)+dt;n.lookAt=player;if(n.guardAlert<3&&!n.anger)return {target:null,speed:0,damage:0};const result=policeCombat(n,{hostile:true,distance:d,clear:Math.abs(p.y-player.y)<1.2&&clearSegment(p,player,(x,z,r)=>world.blockedAt(x,z,r,null,p.y),.08),guarding:false,inVehicle},dt);n.attack=result.attack;return {target:d>1.5?player:null,speed:4.2,damage:result.damage?8:0};}n.guardAlert=0;n.attack=0;policeCombat(n,{hostile:false},dt);const route=n.guardRoute,target=route[n.guardRouteIndex];if(Math.hypot(p.x-target.x,p.z-target.z)<.3)n.guardRouteIndex=(n.guardRouteIndex+1)%route.length;return {target,speed:.9,damage:0};},get diagnostics(){return {quay:QUAY_RANGE,homes:COAST_HOMES,mansion:MANSION,benches,landmarks,stairs:24,floors: floors.map(f=>({...f})),guards:guards.length};},dispose:b.dispose};
+ return {setCallbacks(c){callbacks=c;},update(){const inside=inMansionGrounds(world.player.mesh.position);if(inside&&!wasInside)callbacks.notify?.('Частная территория. Охрана требует выйти; через 3 секунды откроет огонь.');wasInside=inside;},addresses:COAST_HOMES.map(h=>({x:h.x,z:h.z+5,label:h.name+' · у калитки',coastal:true})),walkwayNodes:floors.filter(f=>f.kind!=='water-stair').map(f=>({x:f.x,z:f.z,kind:'walk',lookAt:{x:f.x,z:f.z+3}})).concat(COAST_HOMES.map(h=>({...point(h.u,coastPixelAt(h.u)-17),kind:'walk',lookAt:{x:h.x,z:h.z}}))),floorAt,walkable:(x,z)=>floorAt(x,z)>-Infinity,landmarks,guardIntent(n,player,dt,inVehicle=false){
+  n.anger=Math.max(0,(n.anger??0)-dt);const privateArea=inMansionGrounds(player),p=n.mesh.position,d=p.distanceTo(player);
+  if(privateArea||n.anger>0){
+   n.guardAlert=(n.guardAlert??0)+dt;n.lookAt=player;
+   if(n.guardAlert<3&&!n.anger)return {target:null,speed:0,damage:0};
+   const to=player.clone().add(new T.Vector3(0,1,0));
+   n.weaponRig?.update({aimAt:to,visible:n.mesh.visible&&n.stun<=0});
+   const from=n.weaponRig?.root.getObjectByName('Muzzle')?.getWorldPosition(new T.Vector3())??p.clone().add(new T.Vector3(0,1.4,0)),direction=to.clone().sub(from),range=direction.length();
+   const clear=equipmentRay(world,from,direction.normalize(),range,{people:false}).distance>=range-.05;
+   const result=guardGun(n,{hostile:true,distance:d,clear},dt);n.attack=0;
+   return {target:d>GUARD_PISTOL.range-4||!clear?player:null,speed:4.2,damage:result.damage,shot:result.shot};
+  }
+  n.guardAlert=0;n.attack=0;n.lookAt=null;guardGun(n,{hostile:false},dt);
+  const route=n.guardRoute,target=route[n.guardRouteIndex];if(Math.hypot(p.x-target.x,p.z-target.z)<.3)n.guardRouteIndex=(n.guardRouteIndex+1)%route.length;
+  return {target,speed:.9,damage:0};
+ },get diagnostics(){return {quay:QUAY_RANGE,homes:COAST_HOMES,mansion:MANSION,benches,landmarks,stairs:24,floors: floors.map(f=>({...f})),guards:guards.length};},dispose:b.dispose};
 }

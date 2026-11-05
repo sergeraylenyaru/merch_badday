@@ -174,3 +174,22 @@ https://quaternius.com/packs/ultimatenature.html . Файлы получены �
 Местоположение следует береговой линии пользовательской карты.
 Персонажи на лавках, водители и охрана используют уже атрибутированные
 модели и анимации Quaternius (CC0); дополнительные файлы персонажей не скачивались.
+
+## Оружие и жилеты охраны
+
+В `public/models/equipment/` добавлены пять самостоятельных GLB:
+
+| Модель | Источник и доработка |
+| --- | --- |
+| `guard-pistol.glb` | Quaternius Survival Pack, `Pistol_1`: хват по центру ладони, ствол по +Z, точка `Muzzle` у среза дула |
+| `water-pistol.glb` | Kenney Blaster Kit, `blaster-a`: яркий пластиковый корпус, оранжевая рукоять и дуло, округлый бак для воды |
+| `wooden-stick.glb` | Kenney Survival Kit, `tree-log-small`: неровная геометрия дерева приведена к размеру палки и хвату |
+| `security-vest.glb` | Настоящая геометрия торса Quaternius SWAT: убраны руки и кожа, оболочка подогнана к телу и закреплена на кости Spine |
+| `baseball-bat.glb` | Оригинальная модель проекта: округлая деревянная бита с утолщением, набалдашником и обмоткой рукояти |
+
+Все внешние исходники имеют **CC0**. Пистолет взят из
+[quaternius-showcase, commit 722c39e](https://github.com/trebeljahr/quaternius-showcase/tree/722c39e964360beff2728a8ee4d103e2d11d457c/public/glb/survival_pack).
+Модели Kenney — из [коллекции shorepine/kenney, commit 3694c68](https://github.com/shorepine/kenney/tree/3694c6879e487c108f55677be7dd2ca75b07cc3b/3d).
+Исходные файлы, текстуры, лицензии и подтверждение CC0 находятся в
+`art/weapons/`; лицензии также поставляются с готовыми GLB.
+Воспроизводимый импорт: `blender -b --python scripts/import-equipment.py`.

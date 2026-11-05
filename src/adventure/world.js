@@ -1,3 +1,5 @@
+import {loadEquipmentModels} from '../visuals/equipment-models.js';
+import {equipmentRay,frightenWithWater} from './aim.js';
 import {rollPoliceLoot} from './police-loot.js';
 import * as T from 'three';
 import {createWeaponRig} from '../visuals/weapon-rig.js';
@@ -6,7 +8,8 @@ import {point,HOME_CAR} from '../city/reference-layout.js';
 import {clearSegment} from '../npc/navigation.js';
 import {WEAPONS,PACKS,EVENT_INFO,ensureAdventure,collectPack,pickupWeapon,bribeGuard,bribePrice,startEvent,finishEvent,buyGarage,crashCargo,tableCard} from './state.js';
 
-export function createAdventure(scene,world,state,callbacks){
+export async function createAdventure(scene,world,state,callbacks){
+ const equipment=await loadEquipmentModels(import.meta.env.BASE_URL);let lastWaterShot=null,waterShots=0;
  const a=ensureAdventure(state),root=new T.Group();root.name='city-adventures';scene.add(root);
  const geometries=new Map(),materials=new Map(),textures=[],items=[],used=[],effects=[];
  const geo=(key,make)=>{if(!geometries.has(key))geometries.set(key,make());return geometries.get(key);};
@@ -35,18 +38,12 @@ export function createAdventure(scene,world,state,callbacks){
   const item={kind,id,group,object,x:p.x,z:p.z,y:p.y??world.groundHeight(p.x,p.z),enabled,interaction,label:text,beam};items.push(item);return item;
  }
  function weaponModel(parent,id){
+  if(equipment.make(parent,id))return;
   if(id==='slingshot'){
    cylinder(parent,.035,.045,.25,0,0,0,'#a57840');for(const side of [-1,1]){const fork=cylinder(parent,.025,.035,.24,side*.07,.2,0,'#c39552');fork.rotation.z=-side*.6;const band=cylinder(parent,.008,.008,.18,side*.05,.31,-.04,'#ce9b51');band.rotation.z=side*.9;}box(parent,.07,.04,.025,0,.25,-.1,'#4b3d31');
   }else if(id==='stone'){if(!materials.has('held-stone-material'))materials.set('held-stone-material',new T.MeshStandardMaterial({vertexColors:true,roughness:1}));const rock=new T.Mesh(geo('held-stone',()=>world.stones.heldGeometry()),materials.get('held-stone-material'));rock.name='held-stone';parent.add(rock);
-  }else if(id==='water'){
-   box(parent,.17,.28,.46,0,.2,.08,'#29c7e9');box(parent,.10,.25,.12,0,0,-.02,'#f6ba45');cylinder(parent,.08,.08,.34,0,.33,.08,'#ff6159').rotation.x=Math.PI/2;
-   box(parent,.14,.13,.18,0,.25,.37,'#ffe469');
   }else if(id==='baton'){
    cylinder(parent,.028,.026,.65,0,.25,0,'#242c32');cylinder(parent,.033,.033,.18,0,0,0,'#141b20');cylinder(parent,.047,.047,.035,0,.11,0,'#38444c');
-  }else{
-   cylinder(parent,id==='bat'?.067:.035,id==='bat'?.031:.045,.9,0,.5,0,id==='bat'?'#c9a174':'#906b43');
-   cylinder(parent,.029,.029,.23,0,.005,0,'#39404a');cylinder(parent,.043,.043,.035,0,-.13,0,'#a78155');
-   if(id==='stick'){const branch=cylinder(parent,.022,.03,.25,.08,.72,0,'#906b43');branch.rotation.z=-.6;}
   }
  }
  const positions={bat:[195,185],stick:[770,440],water:[1450,610],slingshot:[995,135]};
@@ -85,18 +82,33 @@ export function createAdventure(scene,world,state,callbacks){
   const p=safe(footprint?{x:footprint.x+Math.min(4,footprint.w*.5),z:footprint.z+footprint.d+2}:guard.entrance);guard.mesh.position.set(p.x,world.groundHeight(p.x,p.z),p.z);guard.home.copy(guard.mesh.position);guard.guardIndex=i;
   const holder=new T.Group();label(holder,guard.mansionGuard?'ОХРАНА · E':'ОХРАНА · E · '+guard.role,'#ffe877').scale.set(guard.mansionGuard?2.2:3.8,guard.mansionGuard?.38:.65,1);
   const ring=new T.Mesh(geo('guard-ring',()=>new T.RingGeometry(.75,.86,24)),mat('#ead856',true));ring.rotation.x=-Math.PI/2;ring.position.y=-.46;holder.add(ring);
-  root.add(holder);const vest=new T.Group();box(vest,.63,.5,.42,0,1.4,0,guard.mansionGuard?'#293f3b':'#cfcc54');box(vest,.65,.07,.44,0,1.42,0,'#e9e5bc');guard.mesh.add(vest);guardLabels.push({guard,holder,vest});});
+  root.add(holder);const vest=equipment.dress(guard);guardLabels.push({guard,holder,vest});});
  function guardDialog(guard){const price=bribePrice(state);callbacks.dialog('Охранник · '+guard.role,`Убрать одну звезду: ${price} ₽. Каждая следующая сделка дороже на 50 ₽. Через 30 секунд после последней оплаты цена снова 50 ₽.`,[{label:`Дать ${price} ₽ · −1 звезда`,id:'bribe',disabled:state.wanted<=0||state.money<price,run(){if(bribeGuard(state)){callbacks.notify(`Охранник договорился: −1 звезда, −${price} ₽`);if(a.tracked?.startsWith('guard:'))a.tracked=null;}changed();callbacks.resume();}},{label:'Уйти',id:'leave',run:callbacks.resume}]);}
  const carriedParcel=new T.Group();box(carriedParcel,.55,.4,.4,0,0,0,'#c19a60');world.player.mesh.add(carriedParcel);carriedParcel.position.set(0,1,.7);
  let heldRig=null,heldId=null;
  function setHeld(id){if(id===heldId)return;heldRig?.dispose();heldId=id;heldRig=id?createWeaponRig(scene,world.player.mesh,id,weaponModel):null;}
  const policeRigs=world.people.filter(n=>n.kind==='police'&&n.weapon==='baton').map(person=>{const rig=createWeaponRig(scene,person.mesh,'baton',weaponModel);person.weaponRig=rig;return {person,rig};});
- const gunMaterial=new T.MeshBasicMaterial({color:'#42d7ff',transparent:true,opacity:.65});materials.set('water-jet',gunMaterial);
- function shootWater(origin,direction){
-  const target=world.people.filter(n=>n.mesh.visible&&!n.dead&&n.stun<=0).map(n=>({n,dx:n.mesh.position.x-origin.x,dz:n.mesh.position.z-origin.z})).filter(v=>{const d=Math.hypot(v.dx,v.dz);return d<10&&d>.1&&(v.dx*direction.x+v.dz*direction.z)/d>.94&&clearSegment(origin,v.n.mesh.position,world.blocked,.05);}).sort((p,q)=>Math.hypot(p.dx,p.dz)-Math.hypot(q.dx,q.dz))[0]?.n;
-  if(target){target.stun=.3;target.anger=2;if(target.kind==='police')callbacks.crime(1);callbacks.notify('Прямое попадание водой!');}
-  const length=target?Math.hypot(target.mesh.position.x-origin.x,target.mesh.position.z-origin.z):9;
-  const jet=new T.Mesh(geo('jet',()=>new T.CylinderGeometry(.035,.06,1,6)),gunMaterial);jet.position.set(origin.x+direction.x*length/2,origin.y+1.3,origin.z+direction.z*length/2);jet.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),new T.Vector3(direction.x,0,direction.z));jet.scale.y=length;root.add(jet);effects.push({mesh:jet,life:.16});if(effects.length>5)root.remove(effects.shift().mesh);
+ const guardRigs=guards.filter(person=>person.mansionGuard).map(person=>{const rig=createWeaponRig(scene,person.mesh,'pistol',weaponModel);person.weaponRig=rig;return {person,rig};});
+ const gunMaterial=new T.MeshBasicMaterial({color:'#42d7ff',transparent:true,opacity:.65,depthWrite:false});materials.set('water-jet',gunMaterial);
+ const tracerMaterial=new T.MeshBasicMaterial({color:'#ffdca0',transparent:true,opacity:.8,depthWrite:false});materials.set('guard-tracer',tracerMaterial);
+ function beam(from,to,material,life,radius){
+  const delta=to.clone().sub(from),length=delta.length();if(length<.005)return;
+  const jet=new T.Mesh(geo('jet',()=>new T.CylinderGeometry(1,1,1,8)),material);jet.position.copy(from).lerp(to,.5);jet.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),delta.normalize());jet.scale.set(radius,length,radius);root.add(jet);effects.push({mesh:jet,life});if(effects.length>16)root.remove(effects.shift().mesh);
+ }
+ function shootWater(camera){
+  if(!heldRig||heldRig.id!=='water')return;
+  const muzzle=heldRig.root.getObjectByName('Muzzle').getWorldPosition(new T.Vector3()),aim=new T.Raycaster();aim.setFromCamera(new T.Vector2(),camera);
+  const cameraHit=equipmentRay(world,aim.ray.origin,aim.ray.direction,18),direction=cameraHit.point.clone().sub(muzzle).normalize();
+  const hit=equipmentRay(world,muzzle,direction,Math.min(12,muzzle.distanceTo(cameraHit.point)+.08));
+  if(hit.person){frightenWithWater(hit.person,muzzle,state.time);callbacks.notify('Попадание водой! Прохожий убегает.');}
+  beam(muzzle,hit.point,gunMaterial,.22,.027);
+  lastWaterShot={from:muzzle.toArray(),to:hit.point.toArray(),target:hit.person?world.people.indexOf(hit.person):null,wanted:state.wanted};waterShots++;
+ }
+ function guardShot(person,player){
+  const entry=guardRigs.find(g=>g.person===person);if(!entry)return;
+  entry.rig.update({aimAt:player.clone().add(new T.Vector3(0,1,0)),visible:person.mesh.visible&&person.stun<=0});
+  const muzzle=entry.rig.root.getObjectByName('Muzzle').getWorldPosition(new T.Vector3());beam(muzzle,player.clone().add(new T.Vector3(0,1,0)),tracerMaterial,.075,.009);
+  const flash=new T.Mesh(geo('muzzle-flash',()=>new T.OctahedronGeometry(.075)),tracerMaterial);flash.position.copy(muzzle);root.add(flash);effects.push({mesh:flash,life:.075});
  }
  function addDrop(drop){const p={x:drop.x,z:drop.z};const item=pickup('money',drop.id,p,'#87f09b',`${drop.amount} ₽ · Пройдите рядом`,()=>!drop.taken,()=>{if(drop.taken)return;drop.taken=true;state.money+=drop.amount;callbacks.notify(`Подобрано ${drop.amount} ₽`);changed();});for(let i=0;i<3;i++)box(item.object,.5,.035,.24,i*.035,i*.05,0,'#8ab976');}
  for(const drop of a.drops)addDrop(drop);
@@ -158,14 +170,16 @@ export function createAdventure(scene,world,state,callbacks){
    changed();
   },
   dropMoney(person){const id='npc:'+world.people.indexOf(person);if(a.knocked.includes(id))return;a.knocked.push(id);const drop={id,x:person.mesh.position.x,z:person.mesh.position.z,amount:20+(world.people.indexOf(person)%5)*10,taken:false};a.drops.push(drop);addDrop(drop);changed();},
-  shootWater,
+  shootWater,guardShot,
   onCrash(speed,vehicle){const own=vehicle?.homeVehicle||vehicle?.id===a.garage.vanId,condition=a.garage.condition,wasCarrying=a.events.delivery.carrying,p=world.player.mesh.position;
    const drop={x:p.x+3,z:p.z+2};crashCargo(state,speed,world.blocked(drop.x,drop.z,.4)?p:drop);if(!own)a.garage.condition=condition;if(wasCarrying&&!a.events.delivery.carrying){a.tracked='delivery';callbacks.notify('Посылка выпала! Подберите её в подсвеченной зоне.');}changed();},
   speedMultiplier(vehicle){return vehicle.homeVehicle||vehicle.id===a.garage.vanId?(state.career.garage.engine?1.15:1)*(.55+.45*a.garage.condition/100):1;},
-  prepareWeapons({inVehicle=false,carrying=false,firstPerson=false,pitch=0,attack=0,attackKind='quick'}={}){
+  prepareWeapons({inVehicle=false,carrying=false,firstPerson=false,pitch=0,attack=0,attackKind='quick',camera=null}={}){
    setHeld(a.equipped);const visible=!!heldRig&&!inVehicle&&!carrying&&!a.events.delivery.carrying;
-   if(heldRig)heldRig.update({remaining:attack,strong:attackKind==='strong',firstPerson,pitch,visible,gait:(world.player.motion?.diagnostics.stride??0)*Math.PI*2,speed:world.player.motion?.diagnostics.speed??0});world.player.weaponRig=visible?heldRig:null;if(heldRig&&a.equipped==='stone')heldRig.root.traverse(n=>{if(n.name==='held-stone')n.visible=a.stones>0||attack>.38;});
+   const aimAt=camera&&a.equipped==='water'?camera.getWorldDirection(new T.Vector3()).multiplyScalar(18).add(camera.position):null;
+   if(heldRig)heldRig.update({aimAt,remaining:attack,strong:attackKind==='strong',firstPerson,pitch,visible,gait:(world.player.motion?.diagnostics.stride??0)*Math.PI*2,speed:world.player.motion?.diagnostics.speed??0});world.player.weaponRig=visible?heldRig:null;if(heldRig&&a.equipped==='stone')heldRig.root.traverse(n=>{if(n.name==='held-stone')n.visible=a.stones>0||attack>.38;});
    for(const {person,rig}of policeRigs)rig.update({remaining:person.attack??0,visible:person.mesh.visible&&!person.dead&&person.stun<=0&&!person.climb});
+   for(const {person,rig}of guardRigs)rig.update({aimAt:person.lookAt?new T.Vector3(person.lookAt.x,person.lookAt.y+1,person.lookAt.z):null,visible:person.mesh.visible&&!person.dead&&person.stun<=0&&(person.waterFear?.until??0)<=state.time});
   },
   update(dt,time,{inVehicle=false,carrying=false,firstPerson=false,camera=null,attack=0}={}){
    for(const [index,person]of world.people.entries())if(person.dead){const drop=rollPoliceLoot(state,person,index);if(drop){drop.y=world.parkour.floorAt(drop.x,drop.z,drop.y+.2);addWeaponDrop(drop);changed();}}
@@ -179,7 +193,7 @@ export function createAdventure(scene,world,state,callbacks){
    const near=Math.hypot(position.x-court.x,position.z-court.z)<55;if(near!==ballEnabled){ballBody.setEnabled(near);ballEnabled=near;}ball.visible=near;goalRoot.visible=near;
    if(near){ball.position.copy(ballBody.translation());ball.quaternion.copy(ballBody.rotation());if(flight){ballAge+=dt;const p=ballBody.translation();if(Math.hypot(p.x-goal.x,p.z-goal.z)<1.15&&p.y<world.groundHeight(goal.x,goal.z)+1.65){a.fun.goals++;flight=false;if(a.fun.goals>=3&&!a.fun.footballWon){a.fun.footballWon=true;state.money+=30;state.stress=Math.max(0,state.stress-12);callbacks.notify('Три гола! +30 ₽ · стресс −12');}else callbacks.notify(`Гол! ${Math.min(3,a.fun.goals)}/3`);changed();}else if(ballAge>5)flight=false;}}
   },
-  get diagnostics(){return {items:items.map(i=>({kind:i.kind,id:i.id,x:i.x,z:i.z,y:i.y,available:i.enabled(),visible:i.group.visible,beaconHeight:i.beam?PLAYER_SHAPE.height*2:0,hasBillboard:i.group.children.some(n=>n.isSprite)})),guards:guards.map(g=>({x:g.mesh.position.x,z:g.mesh.position.z,name:g.role,shopName:g.shopName})),goal:{...goal},court:{...court},equipped:a.equipped,heldVisible:!!heldRig?.root.visible,heldY:heldRig?.root.position.y??0,heldScale:heldRig?.root.scale.toArray()??[1,1,1],heldBounds:heldRig?new T.Box3().setFromObject(heldRig.root).getSize(new T.Vector3()).toArray():[0,0,0],weaponRig:heldRig?.diagnostics??null,policeWeapons:policeRigs.map(({person,rig})=>({officer:person.policeIndex,...rig.diagnostics})),activeEffects:effects.length};},
-  dispose(){heldRig?.dispose();for(const {rig}of policeRigs)rig.dispose();root.removeFromParent();for(const {vest}of guardLabels)vest.removeFromParent();carriedParcel.removeFromParent();world.physics.removeRigidBody(ballBody);for(const g of geometries.values())g.dispose();for(const m of materials.values())m.dispose();for(const t of textures)t.dispose();},
+  get diagnostics(){return {equipment:equipment.diagnostics,lastWaterShot,waterShots,guardWeapons:guardRigs.map(({person,rig})=>({guard:person.guardIndex,shots:person.gunCombat?.sequence??0,droppable:false,...rig.diagnostics})),vests:guardLabels.map(({guard,vest})=>({guard:guard.guardIndex,source:vest.name,boundTo:vest.parent.name,visible:guard.mesh.visible})),items:items.map(i=>({kind:i.kind,id:i.id,x:i.x,z:i.z,y:i.y,available:i.enabled(),visible:i.group.visible,beaconHeight:i.beam?PLAYER_SHAPE.height*2:0,hasBillboard:i.group.children.some(n=>n.isSprite)})),guards:guards.map(g=>({x:g.mesh.position.x,z:g.mesh.position.z,name:g.role,shopName:g.shopName})),goal:{...goal},court:{...court},equipped:a.equipped,heldVisible:!!heldRig?.root.visible,heldY:heldRig?.root.position.y??0,heldScale:heldRig?.root.scale.toArray()??[1,1,1],heldBounds:heldRig?new T.Box3().setFromObject(heldRig.root).getSize(new T.Vector3()).toArray():[0,0,0],weaponRig:heldRig?.diagnostics??null,policeWeapons:policeRigs.map(({person,rig})=>({officer:person.policeIndex,...rig.diagnostics})),activeEffects:effects.length};},
+  dispose(){heldRig?.dispose();for(const {rig}of [...policeRigs,...guardRigs])rig.dispose();equipment.dispose();root.removeFromParent();for(const {vest}of guardLabels)vest.removeFromParent();carriedParcel.removeFromParent();world.physics.removeRigidBody(ballBody);for(const g of geometries.values())g.dispose();for(const m of materials.values())m.dispose();for(const t of textures)t.dispose();},
  };
 }

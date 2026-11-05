@@ -12,7 +12,7 @@ try{
  ({page,context}=await app.scenario(photo,'beta-photo'));
  await page.keyboard.press('KeyM');await page.locator('.phone').waitFor();await page.locator('[data-tab="Фото"]').click();await page.locator('#takePhoto').click();await page.locator('#photoResult img').waitFor();assert.equal(await page.evaluate(()=>__MERCH__.state.shops[2].photo),true);await context.close();console.log('PASS photo report');
  const combat=freshState();combat.position={x:SHOPS[0].x,z:SHOPS[0].z-1};
- ({page,context}=await app.scenario(combat,'beta-combat'));
+ ({page,context}=await app.scenario(combat,'beta-combat',{random:.1}));
  await page.keyboard.press('KeyF');await advance(page,.1);assert.ok(await page.evaluate(()=>__MERCH__.state.wanted>=1));assert.equal(await page.evaluate(()=>__MERCH__.state.conflicts),1);
  await page.keyboard.press('Escape');await page.locator('#finish').click();await page.waitForFunction(()=>__MERCH__.mode==='end');assert.ok(await page.locator('#restart').count());await context.close();console.log('PASS combat, witnesses, wanted level and ending');
  const cart=freshState();cart.position={x:SHOPS[0].x+3,z:SHOPS[0].z+6.5};

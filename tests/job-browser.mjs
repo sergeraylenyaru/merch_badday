@@ -21,8 +21,9 @@ export async function startBrowser(port = 5204) {
   const errors = [];
   return {
     errors,
-    async scenario(state, name) {
+    async scenario(state, name, {random}={}) {
       const context = await browser.newContext({ viewport: { width: 900, height: 700 } });
+      if(Number.isFinite(random))await context.addInitScript(value=>{Math.random=()=>value;},random);
       await context.addInitScript(({ state, name }) => {
         if (sessionStorage.getItem(name)) return;
         localStorage.setItem('merch-badday-v1', JSON.stringify(state));

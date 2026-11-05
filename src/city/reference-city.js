@@ -8,7 +8,7 @@ import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {prepareCityAsset} from './city-assets.js';
 import {MAP_BUILDINGS} from './map-buildings.js';
-import { MAP, point, GARAGE_PLOTS, WORK_STOPS, ROADS,ROAD_JOINS, nearRoad, nearFootpath, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT, COAST, PARK_PATHS,PARK_SQUARE,HOSPITAL,PARK_BRIDGES,parkBridgeHeight } from './reference-layout.js';
+import { MAP, point, GARAGE_PLOTS, WORK_STOPS, ROADS,ROAD_JOINS,WALK_JOINS, nearRoad, nearFootpath, pixel, meetsStreet, rawWater, isReferenceWater, PIER, ROUNDABOUT, COAST, PARK_PATHS,PARK_SQUARE,HOSPITAL,PARK_BRIDGES,parkBridgeHeight } from './reference-layout.js';
 export {isReferenceWater} from './reference-layout.js';
 import { BOROUGHS, LOCAL_SHOPS } from './layout.js';
 import { createUrbanDetails } from './urban-details.js';
@@ -183,6 +183,11 @@ export function buildReferenceTerrain(world,scene){
  const joins={positions:[],uv:[]};
  for(const j of ROAD_JOINS){const polygon=Array.from({length:32},(_,i)=>({x:j.x+Math.cos(i*Math.PI/16)*j.radius,z:j.z+Math.sin(i*Math.PI/16)*j.radius}));for(const part of clipSurface(polygon,roadCuts))appendSurface(joins,part,roadHeight);roadCuts.push(polygon);}
  const joinGeometry=new T.BufferGeometry();joinGeometry.setAttribute('position',new T.Float32BufferAttribute(joins.positions,3));joinGeometry.setAttribute('uv',new T.Float32BufferAttribute(joins.uv,2));joinGeometry.setIndex(Array.from({length:joins.positions.length/3},(_,i)=>i));joinGeometry.computeVertexNormals();const joinMesh=new T.Mesh(joinGeometry,world.terrainMaterials.byColor.get('#414f59'));joinMesh.name='rounded-road-junctions';joinMesh.receiveShadow=true;scene.add(joinMesh);world.terrainCollider(joinGeometry);
+ // Fill the outside of pedestrian bends once, clipping the same footprints
+ // out of subsequent park and business-side paving.
+ const walkJoins={positions:[],uv:[]};
+ for(const j of WALK_JOINS){const poly=Array.from({length:24},(_,i)=>({x:j.x+Math.cos(i*Math.PI/12)*j.radius,z:j.z+Math.sin(i*Math.PI/12)*j.radius}));for(const part of clipSurface(poly,roadCuts))appendSurface(walkJoins,part,roadHeight);roadCuts.push(poly);}
+ const walkGeometry=new T.BufferGeometry();walkGeometry.setAttribute('position',new T.Float32BufferAttribute(walkJoins.positions,3));walkGeometry.setAttribute('uv',new T.Float32BufferAttribute(walkJoins.uv,2));walkGeometry.setIndex(Array.from({length:walkJoins.positions.length/3},(_,i)=>i));walkGeometry.computeVertexNormals();const walkMesh=new T.Mesh(walkGeometry,world.terrainMaterials.byColor.get('#bcad8e'));walkMesh.name='joined-pedestrian-bends';walkMesh.receiveShadow=true;scene.add(walkMesh);world.terrainCollider(walkGeometry);
  // A flat pedestrian pier and the roundabout match the original map.
  const pier=point(PIER[0],(PIER[1]+PIER[3])/2);world.box(pier.x,.06,pier.z,PIER[4]*MAP.scale,.12,(PIER[3]-PIER[1])*MAP.scale,'#c4b395');
  const dock=point(865,876);world.box(dock.x,.06,dock.z,55*MAP.scale,.12,12*MAP.scale,'#c4b395');
