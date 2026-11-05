@@ -5,6 +5,7 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 export function createWalkingBlocker(world){
   const cells=new Map(),cellSize=8;
   for(const b of world.blockers){
+    if((b.y??b.h/2)-b.h/2>2.05)continue;
     for(let x=Math.floor((b.x-b.w)/cellSize);x<=Math.floor((b.x+b.w)/cellSize);x++)
       for(let z=Math.floor((b.z-b.d)/cellSize);z<=Math.floor((b.z+b.d)/cellSize);z++){
         const key=x+','+z;if(!cells.has(key))cells.set(key,[]);cells.get(key).push(b);
@@ -12,7 +13,7 @@ export function createWalkingBlocker(world){
   }
   return (x,z,r=.32)=>{
     const p=pixel(x,z);
-    if(p.x<8||p.x>1664||p.y<8||p.y>930||isReferenceWater(p.x,p.y))return true;
+    if(p.x<8||p.x>1664||p.y<8||p.y>930||(isReferenceWater(p.x,p.y)&&!world.coast?.walkable(x,z)))return true;
     for(let cx=Math.floor((x-r)/cellSize);cx<=Math.floor((x+r)/cellSize);cx++)
       for(let cz=Math.floor((z-r)/cellSize);cz<=Math.floor((z+r)/cellSize);cz++)
         if((cells.get(cx+','+cz)??[]).some(b=>b.enabled!==false&&circleIntersectsBox(x,z,r,b)))return true;

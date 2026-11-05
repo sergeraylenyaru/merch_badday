@@ -37,7 +37,7 @@ export const ROADS = [
 ];
 export const PEDESTRIAN_ROUTES=[[850,400,1030,440,10],[1030,440,1145,490,10],[1145,490,1168,490,10]];
 export const nearFootpath=(u,v,margin=0)=>PEDESTRIAN_ROUTES.some(([a,b,c,d,w])=>segmentDistance(u,v,a,b,c,d)<w/2+margin);
-export const PARK_PATHS=[[895,610,90,8],[850,560,14,360],[850,400,340,14],[850,748,420,14],[775,110,14,80],[795,190,9,240],[850,76,260,9],[722,200,146,9],[1060,164,9,180],[1090,190,80,9],[1018,180,86,9]];
+export const PARK_PATHS=[[850,795,14,90],[1058,780,10,70],[710,777,10,64],[868,143,146,8],[905,223,8,160],[850,300,110,8],[755,278,80,8],[913,281,20,8],[895,610,90,8],[850,560,14,360],[850,400,340,14],[850,748,420,14],[775,110,14,80],[795,190,9,240],[850,76,260,9],[722,200,146,9],[1060,164,9,180],[1090,190,80,9],[1018,180,86,9]];
 export const PARK_BRIDGES=[{id:'west',...point(637,200),length:16,width:2.8,angle:0},{id:'east',...point(1117,190),length:16,width:2.8,angle:0}];
 export const POND_ISLAND={u:1046,v:475,radius:10,enabled:false};
 export const PARK_SQUARE={u:940,v:610,...point(940,610),radius:12};

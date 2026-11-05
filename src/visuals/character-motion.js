@@ -115,13 +115,21 @@ function comfortableGrip(c,contactWorld,barAxis,poleWorld){
  */
 export function createCharacterMotion(entity, model) {
   const root = entity.mesh;
-  const find = (name) => model.getObjectByName(name);
+  const find = (name) => {let result=model.getObjectByName(name);if(!result)model.traverse(n=>{if(!result&&n.name.startsWith(name)&&/^\.?\d+$/.test(n.name.slice(name.length)))result=n;});return result;};
   const names = ["Spine", "Head", "LeftLeg", "RightLeg", "LeftKnee", "RightKnee", "LeftFoot", "RightFoot", "LeftArm", "RightArm", "LeftElbow", "RightElbow", "LeftHand", "RightHand"];
   const joints = Object.fromEntries(names.map((name) => [name, joint(find(name))]));
   const records = Object.values(joints).filter(Boolean);
   model.traverse((node) => {
     if (node.isBone && !records.some((record) => record.node === node)) records.push(joint(node));
   });
+  // Blender's copied contact helpers acquire numeric suffixes and keep the
+  // source rig's offsets. Rebase those helpers onto the actual exported limbs.
+  for(const side of ['Left','Right'])for(const [prefix,endName,isFoot]of [['PalmGrip',side+'Hand',false],['FootContact',side+'Foot',true]]){
+    const name=prefix+side,contact=find(name),end=find(endName);if(!contact||!end||contact.name===name)continue;
+    root.updateWorldMatrix(true,true);const goal=end.getWorldPosition(new Vector3()),q=root.getWorldQuaternion(new Quaternion());
+    if(isFoot){goal.add(new Vector3(0,0,.05).applyQuaternion(q));goal.y=root.getWorldPosition(new Vector3()).y+.004;}else goal.add(new Vector3(0,-.025,.035).applyQuaternion(q));
+    contact.position.copy(contact.parent.worldToLocal(goal));contact.updateWorldMatrix(false,true);
+  }
   const arms = ["Left", "Right"].map((side) => chain(find(`${side}Arm`), find(`${side}Elbow`), find(`${side}Hand`), find(`PalmGrip${side}`), root));
   const legs = ["Left", "Right"].map((side) => chain(find(`${side}Leg`), find(`${side}Knee`), find(`${side}Foot`), find(`FootContact${side}`), root));
   const articulated = arms.every(Boolean) && legs.every(Boolean);
@@ -460,7 +468,7 @@ export function createCharacterMotion(entity, model) {
       }
     }
     model.updateWorldMatrix(true, true);
-    if (grounded && soleProbes.length) {
+    if (grounded && soleProbes.length && !(input.seatWeight>0)) {
       // SkinnedMesh.updateMatrixWorld refreshes bindMatrixInverse; the generic
       // updateWorldMatrix used by IK does not. Probe the exact rendered skin.
       model.updateMatrixWorld(true);
@@ -551,6 +559,14 @@ export function createCharacterMotion(entity, model) {
         arm.lower.quaternion.slerp(arm.gripLower, gripWeight);
         arm.end.quaternion.slerp(arm.gripEnd, gripWeight);
       }
+    }
+    if(input.seatWeight>0&&legs.every(Boolean)){
+      const weight=MathUtils.clamp(input.seatWeight,0,1),height=input.seatHeight??.56;
+      model.updateWorldMatrix(true,true);const hipY=(legs[0].upper.getWorldPosition(new Vector3()).y+legs[1].upper.getWorldPosition(new Vector3()).y)/2-root.position.y;
+      model.position.y+=(height-hipY)*weight/Math.max(rootScale.y,1e-6);model.updateWorldMatrix(true,true);
+      for(let i=0;i<2;i++){const leg=legs[i];target.set((i?1:-1)*.17*motionScale,input.inVehicle?Math.max(.35,height-.7):.02,.48*motionScale);root.localToWorld(target);leg.endQ.copy(entityQ).multiply(leg.neutralEndRotation);pole.set(0,0,1).applyQuaternion(entityQ);solve(leg,target,leg.endQ,pole);}
+      for(let i=0;i<2;i++){const arm=arms[i];if(!arm)continue;target.set((i?1:-1)*.23*motionScale,height+(input.inVehicle ? .5 : .18),input.inVehicle ? .55 : .26);root.localToWorld(target);arm.endQ.copy(entityQ).multiply(arm.neutralEndRotation);pole.set(i?1:-1,-.7,.4).applyQuaternion(entityQ);solve(arm,target,arm.endQ,pole);}
+      state=input.inVehicle?'drive':'sit';soleClearance=null;
     }
     if (held || gripWeight === 0) lastCart = held;
     if(input.defeated)state='defeated';else if(input.airKick>0)state='double-jump';

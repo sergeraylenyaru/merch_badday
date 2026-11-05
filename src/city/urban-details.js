@@ -1,3 +1,4 @@
+import {reservedNewPlot} from './new-places.js';
 import * as T from 'three';
 import { MAP_BUILDINGS } from './map-buildings.js';
 import { MAP, HOME, HOME_CAR, ROAD_BOXES, PARK_PATHS,PARK_SQUARE, WORK_STOPS, LOCAL_POINTS, isReferenceWater,meetsStreet } from './reference-layout.js';
@@ -789,6 +790,7 @@ export function createUrbanDetails(sceneRoot, world, point) {
   const wallRay=new T.Raycaster();wallRay.far=6;
   const homeApproach={x:(HOME.x+HOME_CAR.x)/2,z:(HOME.z+HOME_CAR.z)/2,w:Math.abs(HOME.x-HOME_CAR.x)/2+3,d:Math.abs(HOME.z-HOME_CAR.z)/2+3};
   function occupied(footprint, options={}) {
+    if(reservedNewPlot(footprint))return true;
     const u=(footprint.x-MAP.x)/MAP.scale,v=(footprint.z-MAP.z)/MAP.scale;
     const w=footprint.w/MAP.scale,d=footprint.d/MAP.scale;
     const region=options.region;
@@ -854,7 +856,7 @@ export function createUrbanDetails(sceneRoot, world, point) {
         if(occupied(approach))continue;
       }
       detailRoot.add(model);sourceGroups.push(model);
-      const prop=BREAKABLE_IDS.has(id)?{key:`urban:${id}:${cu.toFixed(2)}:${cv.toFixed(2)}`,id,x:center.x,z:center.z,footprint,instances:[],proxy:null}:null;
+      const prop=BREAKABLE_IDS.has(id)?{key:`urban:${id}:${cu.toFixed(2)}:${cv.toFixed(2)}`,id,x:center.x,z:center.z,heading:rotation,footprint,instances:[],proxy:null}:null;
       if(prop){model.userData.breakable=prop;breakables.push(prop);}
       placed.push({id,u:(p.x-MAP.x)/MAP.scale,v:(p.z-MAP.z)/MAP.scale,variant,rotation,wallGap,category:byId.get(id).category,footprint,approach,buildingIndex:options.buildingIndex??null,neighborhood:options.neighborhood??null,cluster:options.cluster??null,shopIndex:options.shopIndex??null,loadingShop:options.loadingShop??null,roadSurface:options.roadSurface===true});
       if(options.solid&&world?.box){

@@ -83,9 +83,9 @@ export function createAdventure(scene,world,state,callbacks){
  const guardLabels=[];
  guards.forEach((guard,i)=>{const footprint=guard.localShop&&world.blockers.find(b=>b.h>2&&Math.hypot(b.x-guard.shopPosition.x,b.z-guard.shopPosition.z)<.05);
   const p=safe(footprint?{x:footprint.x+Math.min(4,footprint.w*.5),z:footprint.z+footprint.d+2}:guard.entrance);guard.mesh.position.set(p.x,world.groundHeight(p.x,p.z),p.z);guard.home.copy(guard.mesh.position);guard.guardIndex=i;
-  const holder=new T.Group();label(holder,'ОХРАНА · E · '+guard.role,'#ffe877').scale.set(3.8,.65,1);
+  const holder=new T.Group();label(holder,guard.mansionGuard?'ОХРАНА · E':'ОХРАНА · E · '+guard.role,'#ffe877').scale.set(guard.mansionGuard?2.2:3.8,guard.mansionGuard?.38:.65,1);
   const ring=new T.Mesh(geo('guard-ring',()=>new T.RingGeometry(.75,.86,24)),mat('#ead856',true));ring.rotation.x=-Math.PI/2;ring.position.y=-.46;holder.add(ring);
-  root.add(holder);const vest=new T.Group();box(vest,.63,.5,.42,0,1.4,0,'#cfcc54');box(vest,.65,.07,.44,0,1.42,0,'#e9e5bc');guard.mesh.add(vest);guardLabels.push({guard,holder,vest});});
+  root.add(holder);const vest=new T.Group();box(vest,.63,.5,.42,0,1.4,0,guard.mansionGuard?'#293f3b':'#cfcc54');box(vest,.65,.07,.44,0,1.42,0,'#e9e5bc');guard.mesh.add(vest);guardLabels.push({guard,holder,vest});});
  function guardDialog(guard){const price=bribePrice(state);callbacks.dialog('Охранник · '+guard.role,`Убрать одну звезду: ${price} ₽. Каждая следующая сделка дороже на 50 ₽. Через 30 секунд после последней оплаты цена снова 50 ₽.`,[{label:`Дать ${price} ₽ · −1 звезда`,id:'bribe',disabled:state.wanted<=0||state.money<price,run(){if(bribeGuard(state)){callbacks.notify(`Охранник договорился: −1 звезда, −${price} ₽`);if(a.tracked?.startsWith('guard:'))a.tracked=null;}changed();callbacks.resume();}},{label:'Уйти',id:'leave',run:callbacks.resume}]);}
  const carriedParcel=new T.Group();box(carriedParcel,.55,.4,.4,0,0,0,'#c19a60');world.player.mesh.add(carriedParcel);carriedParcel.position.set(0,1,.7);
  let heldRig=null,heldId=null;

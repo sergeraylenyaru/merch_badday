@@ -12,6 +12,7 @@ export function createCityLife(world){
     if(p.id.startsWith('bench-'))add({...point(p.u,p.v),z:point(p.u,p.v).z+1.4},'rest',point(p.u,p.v));
     if(p.id==='information-board')add({...point(p.u,p.v),z:point(p.u,p.v).z+1.6},'notice',point(p.u,p.v));
   }
+  for(const site of world.food?.entrances()??[])add(site.approach,'shop',point(site.u,site.v));
   for(const [u,v] of LOCAL_POINTS)add(point(u,v+22),'shop',point(u,v));
   for(const u of [215,520,1130,1410])add(point(u+10,305),'bus',point(u,305));
   for(const seat of world.park?.diagnostics.square?.seats??[])add(seat,'rest',seat.lookAt);

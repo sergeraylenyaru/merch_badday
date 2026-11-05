@@ -16,7 +16,7 @@ export function stepSinking(car,dt,bed){
 }
 export function createWater(world,state){
  const clock={seconds:0};let headUnder=false;
- const isWater=(x,z)=>{const p=pixel(x,z);return isReferenceWater(p.x,p.y);};
+ const isWater=(x,z)=>{const p=pixel(x,z);return isReferenceWater(p.x,p.y)&&(world.coast?.floorAt(x,z)??-Infinity)<=WATER_LEVEL;};
  function carTick(car,dt){
   if(car.sunk)return false;
   if(car.nameplate)car.nameplate.visible=false;

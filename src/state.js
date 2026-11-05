@@ -128,7 +128,7 @@ export const freshState = () => {const state=({
   selected: 0,
   awaitingShopChoice:false,
   mapMode:'satellite',
-  mapLayers:{shops:true,vendors:true,guards:false,leisure:false,health:true,parkour:false,collectibles:false},
+  mapLayers:{shops:true,vendors:true,food:true,hideouts:true,guards:false,leisure:false,health:true,parkour:false,collectibles:false},
   backpack:null,wearing:null,rewards:{firstJobBoots:false},preferencesRevision:2,layoutRevision:4,
   supplyTrip:null,mapTarget:null,
   position: {...START},

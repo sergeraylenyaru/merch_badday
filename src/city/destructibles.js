@@ -54,7 +54,7 @@ export function createDestructibles(scene,world){
     hide(prop);saved.add(prop.key);state.brokenProps=[...saved];fragments(prop,direction,power);return true;
   }
   return {
-    register(record){const prop={...record,hp:record.id==='ball'?Infinity:2,broken:false};records.push(prop);if(prop.id==='ball'){if(saved.delete(prop.key))state.brokenProps=[...saved];}else if(saved.has(prop.key))hide(prop);return prop;},
+    register(record){const prop={...record,hp:record.id==='ball'?Infinity:2,broken:false};records.push(prop);if(prop.id.startsWith('bench-')){world.seats??=[];world.seats.push({id:prop.key,x:prop.x,z:prop.z,height:record.seatHeight??.56,baseY:record.seatBaseY??world.groundHeight?.(prop.x,prop.z)??0,heading:record.heading??0});}if(prop.id==='ball'){if(saved.delete(prop.key))state.brokenProps=[...saved];}else if(saved.has(prop.key))hide(prop);return prop;},
     hit(position,reach,power,direction){
       const nearby=records.filter(p=>{const q=p.id==='ball'?ballPosition(p):p;return !p.broken&&Math.hypot(q.x-position.x,q.z-position.z)<reach+Math.min(p.footprint.w,p.footprint.d);})
         .filter(p=>Math.abs((position.y??0)-(world.groundHeight?.(p.x,p.z)??0))<2.5)

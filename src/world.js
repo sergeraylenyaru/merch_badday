@@ -1,3 +1,6 @@
+import {createCoast} from './city/coast.js';
+import {createFoodPlaces} from './city/food.js';
+import {createUnfinishedMall} from './city/unfinished-mall.js';
 import {createParkDetails} from './city/park-details.js';
 import {createScaffolding} from './city/scaffolding.js';
 import {createTerrainMaterials,tileBoxUV} from './city/terrain-materials.js';
@@ -95,11 +98,13 @@ export async function createWorld(scene, state) {
     const body = physics.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x, height / 2, z));
     physics.createCollider(RAPIER.ColliderDesc.cuboid(width / 2, height / 2, depth / 2), body);
   }
+  let coastHeight=null;
   function groundHeight(x, z) {
     let height = roadHeight(x,z);
     if(ROAD_BOXES.some(r=>circleIntersectsBox(x,z,0,r))||ROAD_JOINS.some(j=>Math.hypot(x-j.x,z-j.z)<=j.radius))return height;
     for (const surface of surfaces) if (Math.abs(x - surface.x) <= surface.w && Math.abs(z - surface.z) <= surface.d)
       height = Math.max(height, surface.height);
+    if(coastHeight)height=Math.max(height,coastHeight(x,z));
     return height;
   }
   const terrain=buildReferenceTerrain({box,terrainMaterials,terrainCollider},scene);
@@ -370,7 +375,7 @@ export async function createWorld(scene, state) {
   for (const v of vehicles) v.mesh.position.y = groundHeight(v.mesh.position.x, v.mesh.position.z);
   function blocked(x, z, r = PLAYER_SHAPE.radius, ignoreCar = null) {
     const p=pixel(x,z);
-    if(p.x<8||p.x>1664||p.y<8||p.y>930||isReferenceWater(p.x,p.y))return true;
+    if(p.x<8||p.x>1664||p.y<8||p.y>930||(isReferenceWater(p.x,p.y)&&!(coastHeight&&Number.isFinite(coastHeight(x,z)))))return true;
     if (
       blockers.some(
         (b) => b.enabled !== false && circleIntersectsBox(x, z, r, b),
@@ -400,7 +405,7 @@ export async function createWorld(scene, state) {
     terrain,
     physics,
     terrainCollider,
-    parkourSurfaces:[],
+    parkourSurfaces:[],seats:[],
     disposeTerrain:()=>terrainMaterials.dispose(),
     RAPIER,
     box,
@@ -436,7 +441,10 @@ export async function createWorld(scene, state) {
   if(savedHomeCar){homeCar.mesh.position.set(savedHomeCar.x,groundHeight(savedHomeCar.x,savedHomeCar.z),savedHomeCar.z);homeCar.heading=savedHomeCar.heading;homeCar.mesh.rotation.y=savedHomeCar.heading;}
   world.shopRoofs=SHOPS.map(s=>({x:s.x,z:s.z-3,w:14.5,d:6,y:6.8}));
   world.water=createWater(world,state);
+  world.food=await createFoodPlaces(scene,world,state);
+  world.mall=createUnfinishedMall(scene,world);
   world.park=await createParkDetails(scene,world);
+  world.coast=createCoast(scene,world,state,{human});coastHeight=world.coast.floorAt;
   world.yards=createServiceYards(scene,world);
   world.cables=createCables(scene,world);
   world.roofs.push(...world.shopRoofs.map((r,i)=>({...r,id:'shop-work:'+i,kind:'shop',wallBounds:{x:r.x,z:r.z,w:r.w,d:5.5}})));
@@ -444,13 +452,17 @@ export async function createWorld(scene, state) {
   world.scaffolding=createScaffolding(scene,world);
   for(const v of vehicles){const saved=state.vehicles[v.id];if(saved&&(!v.traffic||saved.claimed)){v.claimed=!!saved.claimed;v.mesh.position.set(saved.x,groundHeight(saved.x,saved.z),saved.z);v.heading=saved.heading;v.mesh.rotation.y=v.heading;v.sunk=!!saved.sunk;v.waterTime=saved.waterTime??0;v.waterStartY=saved.waterStartY??0;v.waterDistance=saved.waterDistance??0;if(v.waterTime&&!v.sunk&&Number.isFinite(saved.y))v.mesh.position.y=saved.y;}}
   world.parkour=createParkour(scene,world,state);
+  world.driverPool=[];world.residentPool=[];
+  for(let i=0;i<6;i++){const p=human(START.x,START.z,'#9c7959','driver');p.role='Водитель';p.driverIndex=i;p.activeDriver=false;p.mesh.visible=false;world.driverPool.push(p);people.push(p);}
+  for(let i=0;i<8;i++){const p=human(START.x,START.z,'#a18467','resident');p.role='Отдыхает на лавке';p.residentIndex=i;p.mesh.visible=false;p.activeResident=false;world.residentPool.push(p);people.push(p);}
   world.visuals = await createVisuals(scene, world, shopDecor);
   world.traffic=createTraffic(world);
   const carLabel=label('ВАША МАШИНА · E',0,0,0,'#ffe5ab',1.2);homeCar.mesh.add(carLabel);homeCar.nameplate=carLabel;carLabel.position.set(0,3,0);carLabel.visible=!homeCar.sunk&&!homeCar.waterTime;
   for(const employee of people.filter(n=>n.kind==='employee')){const badge=label(employee.role,0,0,0,'#dae9de',.9);employee.mesh.add(badge);badge.position.set(0,3,0);}
   world.jobs = createJobWorld(scene, world, state);
   world.enclosures=createEnclosures(scene,world);
-  world.walkways=createWalkways(scene,world,world.boroughs.diagnostics.urbanDetails.placements);
+  world.walkways=createWalkways(scene,world,[...world.boroughs.diagnostics.urbanDetails.placements,...world.food.entrances()]);
+  world.walkways.nodes.push(...world.coast.walkwayNodes);world.walkways.diagnostics.nodes=world.walkways.nodes.length;
   world.roadWear=await createRoadWear(scene);
   world.homeYard=createHomeYard(scene,world);
   world.homeTarget=()=>state.selected!==0||state.onboarding.carTaken||state.shops[0].job.paid?null:{x:homeCar.mesh.position.x,z:homeCar.mesh.position.z,label:'Ваша машина · парковка у дома'};

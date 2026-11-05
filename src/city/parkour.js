@@ -22,7 +22,7 @@ export function createParkour(scene,world,state){
   // Vehicles can move between saves; ladder anchors belong to the building.
   const baseFree=(x,z)=>!world.blockers.some(b=>b.h>.04&&circleIntersectsBox(x,z,.36,b));
   const base=roof.ladder??options.find(p=>baseFree(p.x+p.nx*.5,p.z+p.nz*.5)&&baseFree(p.x+p.nx*1.4,p.z+p.nz*1.4));
-  if(!base)continue;const y0=world.groundHeight(base.x,base.z),height=roof.y-y0;if(height<1.8)continue;
+  if(!base)continue;const y0=base.y0??world.groundHeight(base.x,base.z),height=roof.y-y0;if(height<1.8)continue;
   const angle=Math.atan2(base.nx,base.nz),tx=base.nz,tz=-base.nx,key=Math.floor(base.x/48)+','+Math.floor(base.z/48);
   const ladder={id:roof.id,...base,y0,top:roof.y,angle,roof,exit:base.exit??{x:base.x-base.nx*1.55,z:base.z-base.nz*1.55,y:roof.y}};ladders.push(ladder);
   for(const side of [-1,1])box(base.x+tx*.43*side,y0+height/2+.8,base.z+tz*.43*side,.065,height+1.6,.09,angle,key);

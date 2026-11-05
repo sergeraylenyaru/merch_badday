@@ -53,5 +53,4 @@ try{
  }
  assert.deepEqual(app.errors,[]);console.log('PASS both main bridges: movement, shared visual/physics elevations, no browser errors');
 }finally{await app.close();}
-await import('./beta-actions.e2e.mjs');
-await import('./urban-details.e2e.mjs');
+if(!process.env.CORE_ONLY){await import('./beta-actions.e2e.mjs');await import('./urban-details.e2e.mjs');}

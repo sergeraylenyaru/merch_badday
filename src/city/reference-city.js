@@ -1,3 +1,5 @@
+import {coastPixelAt} from './coast-layout.js';
+import {reservedNewPlot} from './new-places.js';
 import {PARK_RIDES} from './park-details.js';
 import {gridTerrain,ROAD_PROFILES,WALK_PROFILES,WATER_LEVEL,roadHeight} from './terrain.js';
 import {clipSurface,appendSurface,roadPolygon,rectanglePolygon,SurfaceIndex} from './planar-surfaces.js';
@@ -25,6 +27,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  const traced=[];world.roofs=[];world.treeSpots=[];
  const clearShop=(u,v,r=0)=>WORK_STOPS.every(s=>Math.abs(u-s.u)>52+r || Math.abs(v-s.v)>44+r);
  function add(name,u,v,scale=1,angle=0,solid=false,force=false){
+   if(reservedNewPlot({...point(u,v),w:2,d:2},1))return;
    if(!force && (!clearShop(u,v,14) || nearRoad(u,v,12)||nearFootpath(u,v,12))) return;
    const list=placements.get(name)||[];list.push({u,v,scale,angle,solid});placements.set(name,list);
  }
@@ -58,7 +61,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  let seed=1971;const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
  for(let i=0;i<1400;i++){
   const u=35+random()*1600,v=30+random()*740;
-  const p=point(u,v);if(Math.abs(p.x-HOSPITAL.x)<HOSPITAL.w+4&&Math.abs(p.z-HOSPITAL.z)<HOSPITAL.d+4)continue;
+  const p=point(u,v);if(reservedNewPlot({...p,w:2.5,d:2.5},1))continue;if(Math.abs(p.x-HOSPITAL.x)<HOSPITAL.w+4&&Math.abs(p.z-HOSPITAL.z)<HOSPITAL.d+4)continue;
   if(Math.hypot(p.x-PARK_SQUARE.x,p.z-PARK_SQUARE.z)<PARK_SQUARE.radius+5||!clearShop(u,v,8)||nearRoad(u,v,20)||nearFootpath(u,v,10)||isReferenceWater(u,v)||parkBridgeHeight(p.x,p.z)>-Infinity||PARK_RIDES.some(r=>Math.abs(u-r.u)<r.w/MAP.scale+10&&Math.abs(v-r.v)<r.d/MAP.scale+10)||PARK_PATHS.some(([x,y,w,d])=>Math.abs(u-x)<w/2+6&&Math.abs(v-y)<d/2+6))continue;
   if([...placements].some(([n,list])=>!['tree','shrub','bench','trash_bin','streetlight','bus_stop'].includes(n)&&list.some(p=>(p.width?Math.abs(u-p.u)<p.width/2+12&&Math.abs(v-p.v)<p.depth/2+12:Math.hypot(u-p.u,v-p.v)<45))))continue;
   add(i%5?'tree':'shrub',u,v,.85+random()*.45);
@@ -77,7 +80,8 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
   add('parking_lot',u,v,1,0,false);
   for(let i=0;i<3;i++){const p=point(u+(i-1)*14,v);if(!clearShop(u+(i-1)*14,v,12))continue;world.vehicles.push(car(p.x,p.z,i%3,world.vehicles.length));}
  }
- for(let i=0;i<6;i++){const [u,v]=[[160,215],[320,210],[370,540],[720,455],[910,420],[1430,290]][i];if(!clearShop(u,v))continue;const p=point(u,v);const person=human(p.x,.5+p.z,'#82806e','resident');person.role=i<3?'Жительница у подъезда':'Отдыхает в парке';person.seated=true;person.activity={id:'bench-'+i,clip:'Drive',duration:1,remaining:1};world.people.push(person);}
+ let parkShrubs=0;
+ for(const [u,v,w,d]of PARK_PATHS){const horizontal=w>d,length=Math.max(w,d);for(let along=12;along<length-8&&parkShrubs<48;along+=24)for(const side of [-1,1]){const x=u+(horizontal?along-length/2:side*(w/2+5)),y=v+(horizontal?side*(d/2+5):along-length/2),p=point(x,y);if((x>=650&&x<=1110&&y>coastPixelAt(x)-32)||nearRoad(x,y,10)||isReferenceWater(x,y)||reservedNewPlot({...p,w:1,d:1},1)||Math.hypot(p.x-PARK_SQUARE.x,p.z-PARK_SQUARE.z)<PARK_SQUARE.radius+2||PARK_RIDES.some(r=>Math.abs(x-r.u)<r.w/MAP.scale+4&&Math.abs(y-r.v)<r.d/MAP.scale+4))continue;if([...placements].some(([name,list])=>!['tree','shrub','bench','trash_bin','streetlight'].includes(name)&&list.some(b=>Math.hypot(x-b.u,y-b.v)<25)))continue;add('shrub',x,y,.58,0,false,true);parkShrubs++;}}
  const loader=new GLTFLoader(),materialPool=createCityMaterialPool();
  const cacheWasEnabled=T.Cache.enabled,previousKeys=new Set(Object.keys(T.Cache.files));T.Cache.enabled=true;
  try {
@@ -119,7 +123,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
     if(p.solid){const pos=point(p.u,p.v),h=(name.startsWith('panel')||(name.startsWith('shop_')||name==='cafe')?roofHeight:nativeH)*p.scale;let wall={...pos,w:p.worldWidth/2,d:p.worldDepth/2};
      if(name.startsWith('panel')){const body=new T.Box3(),rotation=new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),p.angle),center=b.getCenter(new T.Vector3());center.y=b.min.y;const origin=center.multiply(p.scaleVector).applyQuaternion(rotation).negate().add(new T.Vector3(pos.x,.006,pos.z)),matrix=new T.Matrix4().compose(origin,rotation,p.scaleVector);for(const batch of asset.batches)if(batch.material.name==='panel'){batch.geometry.computeBoundingBox();body.union(batch.geometry.boundingBox.clone().applyMatrix4(matrix));}if(!body.isEmpty()){const c=body.getCenter(new T.Vector3()),size=body.getSize(new T.Vector3());wall={x:c.x,z:c.z,w:size.x/2,d:size.z/2};}world.roofs.find(r=>r.id===`roof:${p.u}:${p.v}`).wallBounds=wall;}
      const proxy=world.box(wall.x,h/2,wall.z,wall.w*2,h,wall.d*2,'#70796d',true);proxy.visible=false;proxy.userData.blocker.buildingIndex=MAP_BUILDINGS.findIndex(row=>row[0]===name&&row[1]===p.u&&row[2]===p.v);collision.push(proxy);p.proxy=proxy;}
-    if(name==='bench'){const pos=point(p.u,p.v);p.breakable={key:`city-bench:${p.u}:${p.v}`,id:'bench-wood',x:pos.x,z:pos.z,footprint:{...pos,w:p.worldWidth/2,d:p.worldDepth/2},proxy:p.proxy,instances:[]};}
+    if(name==='bench'){const pos=point(p.u,p.v);p.breakable={key:`city-bench:${p.u}:${p.v}`,id:'bench-wood',x:pos.x,z:pos.z,footprint:{...pos,w:p.worldWidth/2,d:p.worldDepth/2},heading:p.angle,seatHeight:.55*p.scale,seatBaseY:.006,proxy:p.proxy,instances:[]};}
   }
   const matrix=new T.Matrix4(),q=new T.Quaternion(),center=b.getCenter(new T.Vector3());center.y=b.min.y;
   const chunks=new Map();
@@ -148,7 +152,7 @@ export async function createReferenceCity(scene,world,{human,car,label}) {
  }
  materialPool.finishLoading();
  const urbanDetails=createUrbanDetails(scene,world,point);
- return {diagnostics:{assetRevision:"pbr-4-streets",roadsideShrubs,wheelScale:4,housingStyles:HOUSING_STYLES,garageStyles:GARAGE_STYLES,garages:world.garages,resources:materialPool.diagnostics,boroughs:BOROUGHS,localShops:LOCAL_SHOPS,source:'user-map',modelTypes:placements.size,placements:placedCount,tracedBuildings:traced,urbanDetails:urbanDetails.diagnostics},update(dt){hub.rotation.z+=dt*.09;for(const cabin of animated)cabin.rotation.z=-hub.rotation.z;world.props.update(dt);},dispose(){urbanDetails.dispose();world.props.dispose();preparedAssets.forEach(a=>a.dispose());housing.dispose();garageStyles.dispose();materialPool.dispose();root.traverse(n=>{if(n.isInstancedMesh)n.dispose();if(n.isMesh&&!n.isInstancedMesh){n.geometry?.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}});root.removeFromParent();}};
+ return {diagnostics:{assetRevision:"pbr-4-streets",parkShrubs,roadsideShrubs,wheelScale:4,housingStyles:HOUSING_STYLES,garageStyles:GARAGE_STYLES,garages:world.garages,resources:materialPool.diagnostics,boroughs:BOROUGHS,localShops:LOCAL_SHOPS,source:'user-map',modelTypes:placements.size,placements:placedCount,tracedBuildings:traced,urbanDetails:urbanDetails.diagnostics},update(dt){hub.rotation.z+=dt*.09;for(const cabin of animated)cabin.rotation.z=-hub.rotation.z;world.props.update(dt);},dispose(){urbanDetails.dispose();world.props.dispose();preparedAssets.forEach(a=>a.dispose());housing.dispose();garageStyles.dispose();materialPool.dispose();root.traverse(n=>{if(n.isInstancedMesh)n.dispose();if(n.isMesh&&!n.isInstancedMesh){n.geometry?.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}});root.removeFromParent();}};
 }
 
 export function buildReferenceTerrain(world,scene){

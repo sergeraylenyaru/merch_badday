@@ -1,3 +1,5 @@
+import {FOOD_SITES,MALL_SITE} from './new-places.js';
+import {COAST_HOMES,MANSION,coastPixelAt} from './coast-layout.js';
 import {MAP,ROADS,PEDESTRIAN_ROUTES,RIVERS,COAST,PARK_PATHS,PARK_BRIDGES,POND_ISLAND,PARK_SQUARE,WORK_STOPS,pixel} from './reference-layout.js';
 import {MAP_BUILDINGS} from './map-buildings.js';
 /** A cached navigator layer built from the same coordinates as the 3D city. */
@@ -11,7 +13,11 @@ export function createSchematicMap({labels=true}={}){
  polygon([...COAST,[MAP.width,MAP.height],[0,MAP.height]],'#7bcdf1');
  c.lineCap='round';c.lineJoin='round';for(const [i,river]of RIVERS.entries()){c.beginPath();river.forEach(([x,y],n)=>n?c.lineTo(x,y):c.moveTo(x,y));c.strokeStyle='#72c6ed';c.lineWidth=(i?20:26)+4;c.stroke();c.strokeStyle='#7bcdf1';c.lineWidth=i?20:26;c.stroke();}
  c.beginPath();c.ellipse(1015,480,48,50,0,0,Math.PI*2);c.fillStyle='#7bcdf1';c.fill();if(POND_ISLAND.enabled){c.beginPath();c.arc(POND_ISLAND.u,POND_ISLAND.v,POND_ISLAND.radius,0,Math.PI*2);c.fillStyle='#bee09f';c.fill();}
+ c.beginPath();for(let u=650;u<=1110;u+=10){if(u===650)c.moveTo(u,coastPixelAt(u)-30);else c.lineTo(u,coastPixelAt(u)-30);}for(let u=1110;u>=650;u-=10)c.lineTo(u,coastPixelAt(u)+5);c.closePath();c.fillStyle='#b9b2a1';c.fill();
+ for(const h of COAST_HOMES){c.fillStyle=h.color;c.fillRect(h.u-h.w/MAP.scale,h.v-h.d/MAP.scale,h.w*2/MAP.scale,h.d*2/MAP.scale);}c.fillStyle='#98aa86';c.fillRect(MANSION.u-MANSION.w/MAP.scale,MANSION.v-MANSION.d/MAP.scale,MANSION.w*2/MAP.scale,MANSION.d*2/MAP.scale);c.fillStyle='#d4c5ab';c.fillRect(MANSION.u-MANSION.buildingW/MAP.scale,MANSION.v-MANSION.buildingD/MAP.scale,MANSION.buildingW*2/MAP.scale,MANSION.buildingD*2/MAP.scale);
  for(const [name,x,y,w,h,angle]of MAP_BUILDINGS){c.save();c.translate(x,y);c.rotate(angle*Math.PI/180);c.fillStyle='#d1d2d4';c.strokeStyle='#c9cccf';c.lineWidth=1.2;c.fillRect(-w/2,-h/2,w,h);c.strokeRect(-w/2,-h/2,w,h);c.restore();}
+ for(const site of FOOD_SITES){c.fillStyle='#d5bd92';c.strokeStyle='#a28b6c';c.lineWidth=1.2;c.fillRect(site.u-site.w/MAP.scale,site.v-site.d/MAP.scale,site.w*2/MAP.scale,site.d*2/MAP.scale);c.strokeRect(site.u-site.w/MAP.scale,site.v-site.d/MAP.scale,site.w*2/MAP.scale,site.d*2/MAP.scale);}
+ const mall=pixel(MALL_SITE.x,MALL_SITE.z),mw=MALL_SITE.w/MAP.scale,md=MALL_SITE.d/MAP.scale;c.fillStyle='#c3c1b7';c.strokeStyle='#938b79';c.lineWidth=1.1;c.fillRect(mall.x-mw,mall.y-md,mw*2,md*2);c.strokeRect(mall.x-mw,mall.y-md,mw*2,md*2);for(let i=1;i<4;i++){c.beginPath();c.moveTo(mall.x-mw+i*mw/2,mall.y-md);c.lineTo(mall.x-mw+i*mw/2,mall.y+md);c.stroke();}c.beginPath();c.moveTo(mall.x-mw,mall.y);c.lineTo(mall.x+mw,mall.y);c.stroke();
  for(const shop of WORK_STOPS){c.fillStyle='#dfcbb3';c.strokeStyle='#b29b7d';c.lineWidth=1.5;c.fillRect(shop.u-36.25,shop.v-21,72.5,29);c.strokeRect(shop.u-36.25,shop.v-21,72.5,29);}
  for(const [a,b,x,y,width]of ROADS){c.beginPath();c.moveTo(a,b);c.lineTo(x,y);c.strokeStyle='#b9c0bd';c.lineWidth=width+5;c.stroke();c.strokeStyle=width>=25&&((Math.abs(b-337)<1&&Math.abs(y-337)<1)||a===1390&&x===1390)?'#fff0b3':'#fffefa';c.lineWidth=width;c.stroke();}
  for(const [a,b,x,y,width]of PEDESTRIAN_ROUTES){c.beginPath();c.moveTo(a,b);c.lineTo(x,y);c.strokeStyle='#c8d0c1';c.lineWidth=width+2;c.stroke();c.strokeStyle='#fffef5';c.lineWidth=width;c.stroke();}

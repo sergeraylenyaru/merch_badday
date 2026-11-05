@@ -133,7 +133,7 @@ export async function createVisuals(scene, world, shopDecor) {
   replace(world.player, "hero", true);
   world.people.forEach((person, index) => {
     const female = person.role === 'elder' || (person.kind === 'staff' ? [0, 2, 6, 8].includes(person.shop) : person.kind !== 'police' && index % 2 === 0);
-    const profile=person.kind==='guard'?'tall':person.kind==='civilian'?['stocky','short','tall','elder','bandit','staff','hero'][index%7]:person.kind==='resident'?'elder':null;
+    const profile=person.kind==='guard'?'tall':person.kind==='civilian'?['stocky','short','tall','elder','bandit','staff','hero'][index%7]:person.kind==='resident'?['elder','short','stocky','staff'][index%4]:person.kind==='driver'?['hero','stocky','bandit','tall'][index%4]:null;
     person.personType=profile??(female?'staff':'hero');
     replace(person, person.kind==='police' ? 'officer' : profile??(female?'staff':'hero'), true);
   });
@@ -289,8 +289,8 @@ export async function createVisuals(scene, world, shopDecor) {
         if (input.active === false) continue;
         let animationDt=dt;if(!isPlayer&&entity.mesh.position.distanceToSquared(world.player.mesh.position)>75*75){actor.farElapsed=(actor.farElapsed??0)+dt;if(actor.farElapsed<.12)continue;animationDt=actor.farElapsed;actor.farElapsed=0;}
         entity.motion.update(animationDt, {
-          ...(isPlayer ? input : { active: entity.stun <= 0, grounded: !entity.climb,climb:entity.climb??null,fists:entity.kind==='police'&&!entity.weapon, crouch: false, attack: entity.attack??0, attackKind:entity.attackKind??'quick', guard: false,
-            staff: entity.kind === 'staff', social: entity.social, activity: entity.activity, lookAt: entity.lookAt }),
+          ...(isPlayer ? input : { active: entity.stun <= 0, grounded: !entity.climb,climb:entity.climb??null,fists:entity.kind==='police'&&!entity.weapon||!!entity.mansionGuard, crouch: false, attack: entity.attack??0, attackKind:entity.attackKind??'quick', guard: false,
+            seatWeight:entity.seatWeight??0,seatHeight:entity.seatHeight??.56,inVehicle:!!entity.insideCar,staff: entity.kind === 'staff', social: entity.social, activity: entity.activity, lookAt: entity.lookAt }),
           active: isPlayer ? !input.inVehicle : entity.stun <= 0,
           velocity, facing: entity.mesh.rotation.y,
           heldCart: isPlayer ? input.heldCart : null,
