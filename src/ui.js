@@ -26,6 +26,9 @@ export function createUI(state, actions) {
   const stats=root.querySelector('.statbox');stats.classList.add('player-status');
   stats.insertAdjacentHTML('afterbegin','<div class="hand-status"><span>СЕЙЧАС В РУКАХ</span><div class="held-item"><i id="handIcon"></i><strong id="handItem">Кулаки</strong></div><small class="weapon-keys">1 Кулаки · 2 Бита · 3 Палка · 4 Вода · 5 Камни · 6 Рогатка · 7 Дубинка · 8 Лопата</small></div>');
   root.querySelector('.clock').append(stats);
+  const vitals=document.createElement('section');vitals.className='vitals-panel panel';vitals.setAttribute('aria-label','Здоровье и стресс');
+  for(const row of [...stats.querySelectorAll('.stat')])vitals.append(row);
+  root.querySelector('#hud').append(vitals);
   const schematicMap=createSchematicMap(),miniSchematicMap=createSchematicMap({labels:false});let satelliteMap=null,currentVehicle=null,mapHits=[];
   let toastTimer,
     tab = "Карта", overlayEpoch = 0, currentWorld=null;

@@ -1,5 +1,5 @@
 import {FOOD_SITES,MALL_SITE} from './new-places.js';
-import {COAST_HOMES,MANSION,coastPixelAt} from './coast-layout.js';
+import {COAST_HOMES,MANSION,coastPixelAt,planCoastDecks} from './coast-layout.js';
 import {MAP,ROADS,PEDESTRIAN_ROUTES,RIVERS,COAST,PARK_PATHS,PARK_BRIDGES,POND_ISLAND,PARK_SQUARE,WORK_STOPS,pixel} from './reference-layout.js';
 import {MAP_BUILDINGS} from './map-buildings.js';
 /** A cached navigator layer built from the same coordinates as the 3D city. */
@@ -13,7 +13,7 @@ export function createSchematicMap({labels=true}={}){
  polygon([...COAST,[MAP.width,MAP.height],[0,MAP.height]],'#7bcdf1');
  c.lineCap='round';c.lineJoin='round';for(const [i,river]of RIVERS.entries()){c.beginPath();river.forEach(([x,y],n)=>n?c.lineTo(x,y):c.moveTo(x,y));c.strokeStyle='#72c6ed';c.lineWidth=(i?20:26)+4;c.stroke();c.strokeStyle='#7bcdf1';c.lineWidth=i?20:26;c.stroke();}
  c.beginPath();c.ellipse(1015,480,48,50,0,0,Math.PI*2);c.fillStyle='#7bcdf1';c.fill();if(POND_ISLAND.enabled){c.beginPath();c.arc(POND_ISLAND.u,POND_ISLAND.v,POND_ISLAND.radius,0,Math.PI*2);c.fillStyle='#bee09f';c.fill();}
- c.beginPath();for(let u=650;u<=1110;u+=10){if(u===650)c.moveTo(u,coastPixelAt(u)-30);else c.lineTo(u,coastPixelAt(u)-30);}for(let u=1110;u>=650;u-=10)c.lineTo(u,coastPixelAt(u)+5);c.closePath();c.fillStyle='#b9b2a1';c.fill();
+ for(const floor of planCoastDecks().filter(f=>f.kind==='granite-quay'))polygon(floor.polygon.map(p=>{const q=pixel(p.x,p.z);return [q.x,q.y];}),'#b9b2a1');
  for(const h of COAST_HOMES){c.fillStyle=h.color;c.fillRect(h.u-h.w/MAP.scale,h.v-h.d/MAP.scale,h.w*2/MAP.scale,h.d*2/MAP.scale);}c.fillStyle='#98aa86';c.fillRect(MANSION.u-MANSION.w/MAP.scale,MANSION.v-MANSION.d/MAP.scale,MANSION.w*2/MAP.scale,MANSION.d*2/MAP.scale);c.fillStyle='#d4c5ab';c.fillRect(MANSION.u-MANSION.buildingW/MAP.scale,MANSION.v-MANSION.buildingD/MAP.scale,MANSION.buildingW*2/MAP.scale,MANSION.buildingD*2/MAP.scale);
  for(const [name,x,y,w,h,angle]of MAP_BUILDINGS){c.save();c.translate(x,y);c.rotate(angle*Math.PI/180);c.fillStyle='#d1d2d4';c.strokeStyle='#c9cccf';c.lineWidth=1.2;c.fillRect(-w/2,-h/2,w,h);c.strokeRect(-w/2,-h/2,w,h);c.restore();}
  for(const site of FOOD_SITES){c.fillStyle='#d5bd92';c.strokeStyle='#a28b6c';c.lineWidth=1.2;c.fillRect(site.u-site.w/MAP.scale,site.v-site.d/MAP.scale,site.w*2/MAP.scale,site.d*2/MAP.scale);c.strokeRect(site.u-site.w/MAP.scale,site.v-site.d/MAP.scale,site.w*2/MAP.scale,site.d*2/MAP.scale);}

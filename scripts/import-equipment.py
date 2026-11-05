@@ -109,5 +109,12 @@ for o in vest:
 marker('TorsoAnchor',(0,0,0));save('security-vest','Quaternius · CC0 · Ultimate Animated Character Pack SWAT torso armour')
 
 clear()
-source(pathlib.Path('art/weapons/kenney-survival/tool-shovel.glb'),lambda p:Vector((p.x*4,(.25-p.y)*4,-p.z*4)))
-marker('Palm',(0,0,0));save('shovel','Kenney · CC0 · Survival Kit tool-shovel; palm-centred full-size shovel')
+parts=source(pathlib.Path('art/weapons/shovel-wood-source.glb'),lambda p:Vector((p.x*.35,(.30-p.y)*.35,-p.z*.35)))
+for o in parts:
+    for m in o.data.materials:
+        shader=m.node_tree.nodes.get('Principled BSDF')
+        if m.name.startswith('DarkWood'):
+            shader.inputs['Base Color'].default_value=(.26,.135,.055,1);shader.inputs['Roughness'].default_value=.78
+        if m.name.startswith('Grey'):
+            shader.inputs['Metallic'].default_value=.6;shader.inputs['Roughness'].default_value=.5
+marker('Palm',(0,0,0));marker('HandleGripRight',(0,0,0));marker('HandleGripLeft',(0,-.23,0));save('shovel','Quaternius · CC0 · Survival Pack Shovel; oak shaft with two handle grips')

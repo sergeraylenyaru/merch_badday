@@ -2,7 +2,7 @@ import * as T from 'three';
 
 /** Clothing accessories follow the authored head/spine, with world-size fitting. */
 export function addUniform(person,owned){
- if(!person.patrolPolice&&person.kind!=='worker')return;
+ if(person.kind!=='worker')return;
  const owner=person.mesh,head=owner.getObjectByName('Head');if(!head)return;owner.updateWorldMatrix(true,true);
  const position=head.getWorldPosition(new T.Vector3()),hat=new T.Group(),police=!!person.patrolPolice;
  const material=new T.MeshStandardMaterial({color:police?'#254f89':'#edb23c',roughness:.7}),dark=new T.MeshStandardMaterial({color:police?'#102d50':'#d58924',roughness:.65});owned.materials.add(material);owned.materials.add(dark);

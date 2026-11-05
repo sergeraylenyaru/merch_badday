@@ -17,7 +17,7 @@ test('four builders actually walk and climb between floors, and the shovel carri
 });
 test('new shovel has its own inventory slot and two-handed attack animation without buying it',()=>{const s=freshState();assert.equal(equipSlot(s,8),false);pickupWeapon(s,'shovel');assert.equal(equipSlot(s,8),true);assert.equal(s.adventure.equipped,'shovel');assert.ok(MELEE_TIMING.shovel.quick.impact>0);assert.equal(meleePose('shovel',.5).twoHanded,true);});
 test('southern bridge bend has one continuous level deck across its junction, including sidewalks',()=>{
- const p=point(1185,750),j=BRIDGE_JUNCTIONS.find(j=>Math.hypot(j.x-p.x,j.z-p.z)<.01);assert.ok(j);for(const [u,v]of [[1185,750],[1182,750],[1185,747],[1188,750],[1185,753]]){const q=point(u,v);assert.ok(Math.abs(roadHeight(q.x,q.z)-j.height)<1e-6);}
+ const p=point(1185,750);assert.equal(BRIDGE_JUNCTIONS.some(j=>Math.hypot(j.x-p.x,j.z-p.z)<.01),false);const j={height:.025};for(const [u,v]of [[1185,750],[1182,750],[1185,747],[1188,750],[1185,753]]){const q=point(u,v);assert.ok(Math.abs(roadHeight(q.x,q.z)-j.height)<1e-6);}
  assert.ok(Math.abs(CACHE_SIZE*3-.8)<1e-8);
 });
 

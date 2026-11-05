@@ -1,9 +1,23 @@
-import {COAST,point,MAP} from './reference-layout.js';
+import {ROAD_PROFILES} from './terrain.js';
+import {clipSurface,roadPolygon} from './planar-surfaces.js';
+import {COAST,RIVERS,point,MAP} from './reference-layout.js';
 export function coastPixelAt(u){for(let i=1;i<COAST.length;i++){const a=COAST[i-1],b=COAST[i];if(u<=b[0])return a[1]+(b[1]-a[1])*(u-a[0])/(b[0]-a[0]);}return COAST.at(-1)[1];}
-export const QUAY_RANGE={from:650,to:1110,inner:30,outer:5};
+function riverUAt(river,v){let a=river[0],b=river[1];for(let i=1;i<river.length;i++){a=river[i-1];b=river[i];if(v<=b[1])break;}return a[0]+(b[0]-a[0])*(v-a[1])/(b[1]-a[1]);}
+export function quayEnds(offset){
+ const solve=(river,side,radius,lo,hi)=>{for(let i=0;i<36;i++){const u=(lo+hi)/2,bank=riverUAt(river,coastPixelAt(u)-offset)+side*(radius+3);if(u>bank)hi=u;else lo=u;}return (lo+hi)/2;};
+ return {from:solve(RIVERS[0],1,13,560,665),to:solve(RIVERS[1],-1,10,1030,1170)};
+}
+export const QUAY_INNER_ENDS=quayEnds(30),QUAY_OUTER_ENDS=quayEnds(-5);
+export const QUAY_RANGE={from:Math.min(QUAY_INNER_ENDS.from,QUAY_OUTER_ENDS.from),to:Math.max(QUAY_INNER_ENDS.to,QUAY_OUTER_ENDS.to),inner:30,outer:5};
 export const COAST_HOMES=[90,175,270,375,450].map((u,i)=>({id:'coast-home:'+i,name:'Причальная, '+(i+1),u,v:coastPixelAt(u)-38,...point(u,coastPixelAt(u)-38),w:3.8,d:3.4,color:['#ab8067','#a1b8a6','#d4bc8e','#9caeb8','#b6957c'][i]}));
 export const MANSION={id:'coast-mansion',name:'Особняк на берегу',u:1487,v:839,...point(1487,839),w:22,d:17,buildingW:11.5,buildingD:6.8,guards:6};
-export function planCoastDecks(){const result=[];const strip=(from,to,inner,outer,y,kind)=>{for(let u=from;u<to;u+=12){const end=Math.min(u+12,to),a=point(u,coastPixelAt(u)-(inner-outer)/2),b=point(end,coastPixelAt(end)-(inner-outer)/2),dx=b.x-a.x,dz=b.z-a.z;const polygon=[point(u,coastPixelAt(u)-inner),point(end,coastPixelAt(end)-inner),point(end,coastPixelAt(end)+outer),point(u,coastPixelAt(u)+outer)];result.push({polygon,x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:(inner+outer)*MAP.scale/2,d:Math.hypot(dx,dz)/2+.05,heading:Math.atan2(dx,dz),y,kind});}};strip(55,650,20,-14,.06,'residential-path');strip(650,1110,30,5,.08,'granite-quay');result.push({...point(865,845),w:4.4,d:14,y:.12,heading:0,kind:'public-pier'},{...point(865,876),w:11,d:2.4,y:.12,heading:0,kind:'public-pier'},{...point(270,(coastPixelAt(270)-16+907)/2),w:1.3,d:(907-(coastPixelAt(270)-16))*.2,y:.1,heading:0,kind:'village-pier'});for(const u of [735,1010])for(let i=0;i<12;i++)result.push({...point(u,coastPixelAt(u)+5+(i+.5)*1.125),w:1.35,d:.225,y:.08-i*.1,heading:0,kind:'water-stair'});return result;}
+export function planCoastDecks(){const result=[];const strip=(from,to,inner,outer,y,kind)=>{for(let u=from;u<to;u+=12){const end=Math.min(u+12,to),a=point(u,coastPixelAt(u)-(inner-outer)/2),b=point(end,coastPixelAt(end)-(inner-outer)/2),dx=b.x-a.x,dz=b.z-a.z;const polygon=[point(u,coastPixelAt(u)-inner),point(end,coastPixelAt(end)-inner),point(end,coastPixelAt(end)+outer),point(u,coastPixelAt(u)+outer)];result.push({polygon,x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:(inner+outer)*MAP.scale/2,d:Math.hypot(dx,dz)/2+.05,heading:Math.atan2(dx,dz),y,kind});}};strip(55,quayEnds(17).from,20,-14,.06,'residential-path');
+ const steps=Math.ceil((QUAY_RANGE.to-QUAY_RANGE.from)/12);
+ for(let i=0;i<steps;i++){const a=i/steps,b=(i+1)/steps,ui=t=>QUAY_INNER_ENDS.from+(QUAY_INNER_ENDS.to-QUAY_INNER_ENDS.from)*t,uo=t=>QUAY_OUTER_ENDS.from+(QUAY_OUTER_ENDS.to-QUAY_OUTER_ENDS.from)*t;
+  const polygon=[point(ui(a),coastPixelAt(ui(a))-30),point(ui(b),coastPixelAt(ui(b))-30),point(uo(b),coastPixelAt(uo(b))+5),point(uo(a),coastPixelAt(uo(a))+5)],cx=polygon.reduce((n,p)=>n+p.x,0)/4,cz=polygon.reduce((n,p)=>n+p.z,0)/4,dx=(polygon[1].x+polygon[2].x-polygon[0].x-polygon[3].x)/2,dz=(polygon[1].z+polygon[2].z-polygon[0].z-polygon[3].z)/2;
+  const pieces=clipSurface(polygon,ROAD_PROFILES.map(roadPolygon));for(const [partIndex,part]of pieces.entries())result.push({polygon:part,outerEdge:partIndex===0?[polygon[3],polygon[2]]:null,x:cx,z:cz,w:35*MAP.scale/2,d:Math.hypot(dx,dz)/2,heading:Math.atan2(dx,dz),y:.08,kind:'granite-quay'});
+ }
+ result.push({...point(865,845),w:4.4,d:14,y:.12,heading:0,kind:'public-pier'},{...point(865,876),w:11,d:2.4,y:.12,heading:0,kind:'public-pier'},{...point(270,(coastPixelAt(270)-16+907)/2),w:1.3,d:(907-(coastPixelAt(270)-16))*.2,y:.1,heading:0,kind:'village-pier'});for(const u of [735,1010])for(let i=0;i<12;i++)result.push({...point(u,coastPixelAt(u)+5+(i+.5)*1.125),w:1.35,d:.225,y:.08-i*.1,heading:0,kind:'water-stair'});return result;}
 export function inMansionGrounds(position){return Math.abs(position.x-MANSION.x)<MANSION.w-.3&&Math.abs(position.z-MANSION.z)<MANSION.d-.3;}
 
 export function coastFloorAt(floors,x,z){let y=-Infinity;for(const f of floors){let inside;if(f.polygon){inside=false;for(let i=0,j=f.polygon.length-1;i<f.polygon.length;j=i++){const a=f.polygon[i],b=f.polygon[j];if((a.z>z)!==(b.z>z)&&x<(b.x-a.x)*(z-a.z)/(b.z-a.z)+a.x)inside=!inside;}}else{const c=Math.cos(f.heading),s=Math.sin(f.heading),dx=x-f.x,dz=z-f.z;inside=Math.abs(c*dx-s*dz)<=f.w+.001&&Math.abs(s*dx+c*dz)<=f.d+.001;}if(inside)y=Math.max(y,f.y);}return y;}

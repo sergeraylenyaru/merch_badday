@@ -1,3 +1,4 @@
+import {ZIPLINE_SPEED} from './traversal-speeds.js';
 import * as T from 'three';
 import {cablePoint} from './cables.js';
 export function createTraversal(scene,world,state,onComplete=()=>{}){
@@ -24,7 +25,7 @@ export function createTraversal(scene,world,state,onComplete=()=>{}){
    if(a.kind==='vault'){const t=Math.min(1,a.elapsed/.95),from=new T.Vector3().fromArray(a.from),to=new T.Vector3().fromArray(a.to),mix=T.MathUtils.smoothstep(t,0,1);pos.lerpVectors(from,to,mix);pos.y+=(a.top-(from.y+to.y)/2)*Math.sin(Math.PI*t);world.player.mesh.rotation.y=Math.atan2(to.x-from.x,to.z-from.z);if(t===1){pos.copy(to);active=null;onComplete('vault');return {grounded:true};}return {grounded:false};}
    const w=world.cables.wires.find(w=>w.id===a.id),start=cablePoint(w,a.progress);
    if(a.phase==='reach'){const t=Math.min(1,a.elapsed/1.15),from=new T.Vector3().fromArray(a.from),to=new T.Vector3(start.x,start.y-2.12,start.z);pos.lerpVectors(from,to,T.MathUtils.smoothstep(t,0,1));if(t===1){a.phase='ride';a.elapsed=0;}}
-   else{a.progress=T.MathUtils.clamp(a.progress+(a.side?-1:1)*dt*6.5/w.length,.6/w.length,1-.6/w.length);const p=cablePoint(w,a.progress);pos.set(p.x,p.y-2.12,p.z);grip.visible=true;grip.position.set(p.x,p.y-.02,p.z);if((a.side&&a.progress<=.6/w.length)||(!a.side&&a.progress>=1-.6/w.length)){active=null;grip.visible=false;onComplete('zipline');}}
+   else{a.progress=T.MathUtils.clamp(a.progress+(a.side?-1:1)*dt*ZIPLINE_SPEED/w.length,.6/w.length,1-.6/w.length);const p=cablePoint(w,a.progress);pos.set(p.x,p.y-2.12,p.z);grip.visible=true;grip.position.set(p.x,p.y-.02,p.z);if((a.side&&a.progress<=.6/w.length)||(!a.side&&a.progress>=1-.6/w.length)){active=null;grip.visible=false;onComplete('zipline');}}
    world.player.mesh.rotation.y=Math.atan2((w.b.x-w.a.x)*(a.side?-1:1),(w.b.z-w.a.z)*(a.side?-1:1));grip.rotation.y=world.player.mesh.rotation.y;return {grounded:false};
   },
   context(){if(active)return active.kind==='zipline'?'По проводу · E — отпустить':'Перелезаем через забор';const c=candidates()[0];return c?c.kind==='zipline'?'Space + E · Зацепиться за провод':'Space + E · Перелезть через забор с ящика или бака':'';},

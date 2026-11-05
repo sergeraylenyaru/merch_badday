@@ -17,7 +17,7 @@ const original = (file) => `${base}models/original/${file}.glb?rig=2`;
 // Envelopes fit local models. Cars feed their measured body footprint back to
 // the world; entity identities, saved positions and physical bodies stay intact.
 export const MODEL_MANIFEST = {
-  patrol:{url: `${base}models/characters/merch-male.glb?rig=6`,size:[1.3,2.1,.9]},
+  patrol:{url: `${base}models/characters/police-patrol.glb?rig=1`,size:[1.3,2.1,.9]},
   hero: { url: `${base}models/characters/merch-male.glb?rig=6`, size: [1.3, 2.1, 0.9] },
   staff: { url: `${base}models/characters/civilian-female.glb?rig=4`, size: [1.3, 2.1, 0.9] },
   officer: {url: `${base}models/characters/police-officer.glb?rig=2`,size:[1.3,2.1,.9]},

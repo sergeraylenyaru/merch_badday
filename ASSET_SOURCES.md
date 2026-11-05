@@ -198,11 +198,13 @@ https://quaternius.com/packs/ultimatenature.html . Файлы получены �
 
 ## Стройка, патрули и император
 
-`public/models/equipment/shovel.glb` — Kenney Survival Kit,
-[`tool-shovel.glb`, commit 3694c68](https://github.com/shorepine/kenney/blob/3694c6879e487c108f55677be7dd2ca75b07cc3b/3d/survival/tool-shovel.glb),
-**CC0**. Исходник с оригинальным атласом сохранён в `art/weapons/kenney-survival/`.
-Лопата приведена к длине 1,16 м и хвату по центру ладони; одна и та же модель
-используется строителем, выпавшим предметом и героем.
+`public/models/equipment/shovel.glb` — Quaternius Survival Pack,
+[`Shovel.glb`, commit 722c39e](https://github.com/trebeljahr/quaternius-showcase/blob/722c39e964360beff2728a8ee4d103e2d11d457c/public/glb/survival_pack/Shovel.glb),
+**CC0**. Исходник сохранён в `art/weapons/shovel-wood-source.glb`;
+полный текст лицензии — `art/weapons/LICENSE.txt`. Длина адаптации 1,35 м,
+две точки хвата расположены на деревянном черенке. Модель общая
+для строителя, выпавшего предмета и героя. Предыдущая Kenney-лопата
+сохранена только как исходник предыдущей версии.
 
 `public/models/estate/emperor.glb` — новая фигура императора, созданная для игры:
 бронза, лавровый венок, плащ, скипетр и каменный пьедестал. Для лица,
@@ -211,8 +213,12 @@ Iskander Kinzhibayev / aktobe-2000s (**MIT**), без копирования м�
 Лицензия находится рядом в `AKTOBE_LICENSE.txt`; воспроизведение:
 `node scripts/create-emperor-statue.mjs`.
 
-Рабочие используют существующий Quaternius Worker / civilian-stocky (CC0),
-синие патрульные — существующий скелет и модель героя Quaternius (CC0).
-Каски, фуражки, жетоны и изменение цвета одежды созданы в проекте.
-Новые файлы персонажей не скачивались. Балкон, бассейн, детали фасада,
+Рабочие используют существующий Quaternius Worker / civilian-stocky (CC0).
+Отдельная модель `public/models/characters/police-patrol.glb` собрана
+из формы Quaternius Swat и головы Suit, уже сохранённых в проекте (CC0,
+источники и лицензия — `art/quaternius/README.md`). Синяя одежда,
+фуражка с изогнутым козырьком, погоны, жетоны и надпись «ПОЛИЦИЯ»
+адаптированы в `scripts/import-patrol-uniform.py`; детали привязаны
+к скелету, сохранены 18 анимаций. Старые отдельные примитивы шапок
+патрульных больше не используются. Балкон, бассейн, детали фасада,
 стройматериалы, узкие балки и знак тайников — геометрия/текстуры проекта.

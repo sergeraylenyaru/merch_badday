@@ -1,3 +1,4 @@
+import {NPC_LADDER_SPEED,NPC_MANTLE_SECONDS} from '../city/traversal-speeds.js';
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 export function createRoofPursuit(world){
  const ladders=world.parkour.diagnostics.ladders.map(l=>({...l,nx:l.nx??(l.x-l.exit.x)/1.55,nz:l.nz??(l.z-l.exit.z)/1.55})),roofs=world.roofs;
@@ -33,14 +34,14 @@ export function createRoofPursuit(world){
    if(route.phase==='climb'){
     n.mesh.rotation.y=facing(l);const direction=route.direction;
     const occupied=distance(p,player)<.9&&(player.y-p.y)*direction>0&&Math.abs(player.y-p.y)<2.45||world.people.some(o=>o!==n&&o.roofPursuit?.id===l.id&&distance(p,o.mesh.position)<.9&&(o.mesh.position.y-p.y)*direction>0&&Math.abs(o.mesh.position.y-p.y)<2.45);
-    const step=occupied?0:direction*2.15*dt;p.y=Math.max(l.y0+.1,Math.min(l.top,p.y+step));route.travel+=Math.abs(step);
+    const step=occupied?0:direction*NPC_LADDER_SPEED*dt;p.y=Math.max(l.y0+.1,Math.min(l.top,p.y+step));route.travel+=Math.abs(step);
     n.climb={phase:route.travel*5.5,moving:!occupied,reach:.30,ladder:l.id};
     if(direction>0&&p.y>=l.top-.2){route.phase='mantle';route.elapsed=0;route.from={x:p.x,y:p.y,z:p.z};route.to=l.exit;}
     if(direction<0&&p.y<=l.y0+.11){p.y=world.groundHeight(p.x,p.z);n.roofPursuit=null;n.climb=null;}
     return {handled:true};
    }
    if(route.phase==='mantle'){
-    route.elapsed+=dt;const t=Math.min(1,route.elapsed/.55),u=t*t*(3-2*t);
+    route.elapsed+=dt;const t=Math.min(1,route.elapsed/NPC_MANTLE_SECONDS),u=t*t*(3-2*t);
     p.set(route.from.x+(route.to.x-route.from.x)*u,route.from.y+(route.to.y-route.from.y)*u,route.from.z+(route.to.z-route.from.z)*u);
     n.mesh.rotation.y=facing(l);n.climb={phase:route.travel*5.5,moving:true,reach:.30,ladder:l.id};
     if(t===1){route.phase=route.direction>0?'roof':'climb';n.climb=null;}

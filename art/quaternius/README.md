@@ -55,3 +55,12 @@ elder (Farmer, grey hair and beard), bandit (Punk). Runtime standing heights:
 did not label the source people with these ages or roles.
 
 Rebuild: `blender --background --threads 2 --python-exit-code 1 --python scripts/import-extra-people.py`.
+### Blue street patrol adaptation
+
+`public/models/characters/police-patrol.glb` combines the existing CC0 Swat
+uniform and Suit head. `scripts/import-patrol-uniform.py` creates the blue
+materials, fitted skinned peaked cap and visor, epaulettes, badges and mesh
+lettering. It preserves all 18 recorded clips and corrected hand/foot contact
+anchors. Rebuild after the base character imports:
+
+    blender -b --threads 4 --python scripts/import-patrol-uniform.py

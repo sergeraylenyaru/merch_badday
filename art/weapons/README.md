@@ -1,5 +1,9 @@
 # Equipment source assets
 
+- `shovel-wood-source.glb`: Quaternius **Survival Pack / Shovel.glb**, CC0.
+  https://github.com/trebeljahr/quaternius-showcase/blob/722c39e964360beff2728a8ee4d103e2d11d457c/public/glb/survival_pack/Shovel.glb
+  Adapted to 1.35 metres, with both palm markers on the wooden shaft.
+  The older Kenney shovel remains archived in `kenney-survival/`.
 - `pistol-source.glb`: Quaternius **Survival Pack / Pistol_1.glb**, CC0.
   https://github.com/trebeljahr/quaternius-showcase/blob/722c39e964360beff2728a8ee4d103e2d11d457c/public/glb/survival_pack/Pistol_1.glb
 - `kenney-blaster/blaster-a.glb` and its original `Textures/colormap.png`:

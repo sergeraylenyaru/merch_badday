@@ -1,3 +1,4 @@
+import {HERO_LADDER_SPEED,HERO_MANTLE_SECONDS} from './traversal-speeds.js';
 import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {PLAYER_SHAPE,circleIntersectsBox,vehicleBox} from '../spatial.js';
@@ -62,8 +63,8 @@ export function createParkour(scene,world,state){
   advanceClimb(dt,keys){
    if(traversal.active){const result=traversal.advance(dt);grounded=result?.grounded===true;if(grounded)extraUsed=false;saveHeight();return true;}
    if(!climb)return false;const l=climb.ladder;
-   if(climb.mantle){const m=climb.mantle;m.t=Math.min(1,m.t+dt/.45);const t=T.MathUtils.smoothstep(m.t,0,1);pos.lerpVectors(m.from,m.to,t);if(m.t===1){if(l.top-(climb.startY??l.y0)>1.5)complete('ladder');climb=null;grounded=true;extraUsed=false;}saveHeight();return true;}
-   const move=(keys.has('KeyW')?1:0)-(keys.has('KeyS')?1:0),step=move*1.85*dt;climbDistance+=Math.abs(step);pos.y=T.MathUtils.clamp(pos.y+step,l.y0+.1,l.top+.05);world.player.mesh.rotation.y=Math.atan2(-l.nx,-l.nz);
+   if(climb.mantle){const m=climb.mantle;m.t=Math.min(1,m.t+dt/HERO_MANTLE_SECONDS);const t=T.MathUtils.smoothstep(m.t,0,1);pos.lerpVectors(m.from,m.to,t);if(m.t===1){if(l.top-(climb.startY??l.y0)>1.5)complete('ladder');climb=null;grounded=true;extraUsed=false;}saveHeight();return true;}
+   const move=(keys.has('KeyW')?1:0)-(keys.has('KeyS')?1:0),step=move*HERO_LADDER_SPEED*dt;climbDistance+=Math.abs(step);pos.y=T.MathUtils.clamp(pos.y+step,l.y0+.1,l.top+.05);world.player.mesh.rotation.y=Math.atan2(-l.nx,-l.nz);
    if(pos.y>=l.top-.2&&move>0)climb.mantle={t:0,from:pos.clone(),to:new T.Vector3(l.exit.x,l.top,l.exit.z)};
    if(pos.y<=l.y0+.11&&move<0){climb=null;grounded=true;pos.y=world.groundHeight(pos.x,pos.z);extraUsed=false;}
    saveHeight();return true;
@@ -72,7 +73,7 @@ export function createParkour(scene,world,state){
   reset(feetY=world.groundHeight(pos.x,pos.z)){traversal.detach(true);climb=null;grounded=Math.abs(feetY-floorAt(pos.x,pos.z,feetY+.12))<.1;extraUsed=false;airKick=0;pos.y=feetY;saveHeight();},
   context(){const special=traversal.context();if(special)return special;const l=nearest();if(climb)return 'W / S · Лезть вверх / вниз · E — отпустить';return l&&Math.hypot(pos.x-l.x,pos.z-l.z)<2.6&&pos.y<=l.top+.9?'Space + E · Зацепиться за лестницу':'';},
   get motion(){return traversal.motion??(climb?{phase:climbDistance*5.5,moving:!climb.mantle,ladder:climb.ladder.id}:null);},
-  get diagnostics(){return {grounded,extraUsed,completed,lastCompleted,doubleJumpHeight:DOUBLE_JUMP_HEIGHT,heightAboveGround:pos.y-world.groundHeight(pos.x,pos.z),climbing:climb?.ladder.id??traversal.saved?.id??null,traversal:traversal.saved,airKick,ladders:ladders.map(({id,x,z,nx,nz,y0,top,exit})=>({id,x,z,nx,nz,y0,top,exit})),roofs:roofs.map(r=>({...r}))};},
+  get diagnostics(){return {ladderSpeed:HERO_LADDER_SPEED,grounded,extraUsed,completed,lastCompleted,doubleJumpHeight:DOUBLE_JUMP_HEIGHT,heightAboveGround:pos.y-world.groundHeight(pos.x,pos.z),climbing:climb?.ladder.id??traversal.saved?.id??null,traversal:traversal.saved,airKick,ladders:ladders.map(({id,x,z,nx,nz,y0,top,exit})=>({id,x,z,nx,nz,y0,top,exit})),roofs:roofs.map(r=>({...r}))};},
   dispose(){traversal.dispose();root.removeFromParent();owned.forEach(g=>g.dispose());metal.dispose();},
  };
 }

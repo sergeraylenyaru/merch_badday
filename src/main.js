@@ -656,10 +656,10 @@ try {
       if(car.homeVehicle)state.onboarding.carTaken=true;
       if(state.adventure.tracked==='van'&&car.id===state.adventure.garage.vanId)state.adventure.tracked=null;
       if (!car.claimed&&!car.homeVehicle) {
-        streetActors.exit(car,'theft',world.player.mesh.position,yaw);
+        const exitingDriver=streetActors.exit(car,'theft',world.player.mesh.position,yaw);
         car.claimed = true;
         const reported=crime(1,'theft');
-        message(`Вы забрали ${car.displayName}. ${reported?'Водитель сообщил об угоне.':'Угон пока остался незамеченным.'}`);
+        message(`Вы забрали ${car.displayName}. ${reported?(exitingDriver?'Водитель сообщил об угоне.':'Угон заметили очевидцы.'):'Угон пока остался незамеченным.'}`);
       }
       walkingVelocity.set(0, 0, 0);
       held = null;
@@ -1136,10 +1136,10 @@ try {
           if(state.health===0)policeDefeatLevel=state.wanted;
           notify(`Удар полицейского: −${fighting.damage} здоровья. Q — блок, F — ответный удар.`);
         }
-        if(offender){target=n.attack>0||policeDistance<1.45?null:policeTarget;n.lookAt=policeTarget;speed=4.5;}else if (state.wanted > 0) {
+        if(offender){target=n.attack>0||policeDistance<1.45?null:policeTarget;n.lookAt=policeTarget;speed=policeRunningSpeed(state,n);}else if (state.wanted > 0) {
           target = carContact?(n.attack>0||carContact.distance<.7?null:policeTarget):pursuit.approach??(n.attack>0||d<1.45 ? null : player);
           n.lookAt=player;
-          speed = policeRunningSpeed(state);
+          speed = policeRunningSpeed(state,n);
           if(d<20)state.wantedElapsed=0;
         } else {target = n.patrolPolice?policeResponse.patrolIntent(n):n.home;n.lookAt=null;}
       } else if(n.mansionGuard){const intent=world.coast.guardIntent(n,player,dt,!!vehicle);target=intent.target?new T.Vector3(intent.target.x,n.mesh.position.y,intent.target.z):null;speed=intent.speed;if(intent.shot)world.adventure.guardShot(n,player);if(intent.damage){const damage=intent.damage;state.health=Math.max(0,state.health-damage);state.stress=Math.min(100,state.stress+2);notify('Выстрел охраны: −'+damage+' здоровья. Выйдите за ворота или спрячьтесь за укрытием.');}

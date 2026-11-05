@@ -5,6 +5,8 @@ const smooth=t=>T.MathUtils.smoothstep(t,0,1);
 const poses={
  carry:{p:[.36,1.35,.3],r:[.15,0,-2.7]},
  batCarry:{p:[.36,1.35,.3],r:[.15,0,Math.PI-2.7]},
+ shovelCarry:{p:[.16,1.14,.4],r:[0,0,-Math.PI/2]},
+ shovelFirst:{p:[.12,1.4,.54],r:[0,0,-Math.PI/2]},
  first:{p:[.28,1.51,.45],r:[.65,0,-.35]},
  ready:{p:[.25,1.47,.22],r:[-.7,0,-.9]},
  windup:{p:[.28,1.52,.13],r:[-1.05,0,-.95]},
@@ -14,12 +16,12 @@ export function meleePose(id,remaining=0,strong=false,firstPerson=false){
  if(id==='slingshot')return {position:new T.Vector3(.18,1.4,.43),quaternion:new T.Quaternion(),phase:remaining>.25?'draw':'aim',progress:remaining>0?1-remaining/.5:0,twist:0,twoHanded:true};
  if(id==='water'||id==='pistol')return {position:new T.Vector3(.3,id==='pistol'?1.6:1.3,.4),quaternion:new T.Quaternion(),phase:'aim',progress:0,twist:0,twoHanded:false};
  const timing=MELEE_TIMING[id]?.[strong?'strong':'quick'];
- const rest=firstPerson?poses.first:['bat','shovel'].includes(id)?poses.batCarry:poses.carry;
- if(!timing||remaining<=0)return {position:new T.Vector3(...rest.p),quaternion:new T.Quaternion().setFromEuler(new T.Euler(...rest.r)),phase:'carry',progress:0,twist:0,twoHanded:false};
+ const rest=id==='shovel'?(firstPerson?poses.shovelFirst:poses.shovelCarry):firstPerson?poses.first:id==='bat'?poses.batCarry:poses.carry;
+ if(!timing||remaining<=0)return {position:new T.Vector3(...rest.p),quaternion:new T.Quaternion().setFromEuler(new T.Euler(...rest.r)),phase:'carry',progress:0,twist:0,twoHanded:id==='shovel'};
  const t=T.MathUtils.clamp(1-remaining/timing.duration,0,1);
  const keys=[{t:0,pose:rest,twist:0},{t:.18,pose:poses.ready,twist:.18},{t:.37,pose:poses.windup,twist:.42},{t:.65,pose:poses.follow,twist:-.48},{t:1,pose:rest,twist:0}];
  const next=keys.findIndex(k=>k.t>=t),a=keys[Math.max(0,next-1)],b=keys[Math.max(1,next)],mix=smooth((t-a.t)/(b.t-a.t));
- return {position:new T.Vector3(...a.pose.p).lerp(new T.Vector3(...b.pose.p),mix),quaternion:new T.Quaternion().setFromEuler(new T.Euler(...a.pose.r)).slerp(new T.Quaternion().setFromEuler(new T.Euler(...b.pose.r)),mix),phase:t<.37?'windup':t<.65?'strike':'recover',progress:t,twist:T.MathUtils.lerp(a.twist,b.twist,mix),twoHanded:['bat','shovel'].includes(id)&&t>=.18&&t<.75};
+ return {position:new T.Vector3(...a.pose.p).lerp(new T.Vector3(...b.pose.p),mix),quaternion:new T.Quaternion().setFromEuler(new T.Euler(...a.pose.r)).slerp(new T.Quaternion().setFromEuler(new T.Euler(...b.pose.r)),mix),phase:t<.37?'windup':t<.65?'strike':'recover',progress:t,twist:T.MathUtils.lerp(a.twist,b.twist,mix),twoHanded:id==='shovel'||id==='bat'&&t>=.18&&t<.75};
 }
 
 // The handle origin is the right palm. The left palm has its own grip below
@@ -29,6 +31,7 @@ export function createWeaponRig(scene,owner,id,makeModel){
  const right=new T.Object3D();right.name='WeaponGripRight';root.add(right);
  const left=new T.Object3D();left.name='WeaponGripLeft';left.position.y=-.11;root.add(left);
  if(id==='slingshot')left.position.set(0,.25,-.1);
+ if(id==='shovel')left.position.y=-.23;
  const rotation=new T.Quaternion(),scale=new T.Vector3(1,1,1),position=new T.Vector3();
  const viewTilt=new T.Quaternion(),pivot=new T.Vector3(0,1.5,0);
  const shoulder=owner.getObjectByName('RightArm'),side=shoulder?Math.sign(owner.worldToLocal(shoulder.getWorldPosition(new T.Vector3())).x)||1:1;

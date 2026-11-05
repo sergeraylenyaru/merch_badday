@@ -31,7 +31,7 @@ export function createTraffic(world){
     const reason=initial?'initial-traffic':concealed(player,p,yaw,{height:v.h??3,radius:Math.max(v.w,v.l),eye});if(!reason)continue;candidates.push({route,p,reason,score:Math.abs(d-(32+index%3*12))+Math.max(0,25-spread)*2+((e.id+serial)%7)});
    }
   }const chosen=candidates.sort((a,b)=>a.score-b.score)[0];if(!chosen)return false;
-  v.trafficRoute=chosen.route;v.mesh.position.set(chosen.p.x,world.groundHeight(chosen.p.x,chosen.p.z),chosen.p.z);v.heading=chosen.p.heading;v.mesh.rotation.y=v.heading;v.mesh.visible=true;v.stalled=0;v.backing=0;v.impactBrake=0;v.crashed=false;v.impactMotion=null;v.speed=5;lastSpawn={id:v.id,distance:Math.hypot(chosen.p.x-player.x,chosen.p.z-player.z),reason:chosen.reason};serial++;return true;
+  v.trafficRoute=chosen.route;v.cameFromTraffic=true;v.mesh.position.set(chosen.p.x,world.groundHeight(chosen.p.x,chosen.p.z),chosen.p.z);v.heading=chosen.p.heading;v.mesh.rotation.y=v.heading;v.mesh.visible=true;v.stalled=0;v.backing=0;v.impactBrake=0;v.crashed=false;v.impactMotion=null;v.speed=5;lastSpawn={id:v.id,distance:Math.hypot(chosen.p.x-player.x,chosen.p.z-player.z),reason:chosen.reason};serial++;return true;
  }
  return {prime(player,time=0,yaw=0){lastPlayer=player;let count=0;for(const v of pool)if(!v.claimed&&!v.sunk&&count<3&&spawn(v,player,count,yaw,null,true))count++;lastRefresh=time;nextSpawn=time+1.2;},update(dt,player,time,yaw=0,eye=null){
   lastPlayer=player;const eligible=pool.filter(v=>!v.claimed&&!v.sunk&&!v.waterTime);

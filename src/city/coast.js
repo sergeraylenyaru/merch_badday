@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {sceneBuilder} from './scene-builder.js';
-import {COAST_HOMES,MANSION,QUAY_RANGE,coastPixelAt,planCoastDecks,coastFloorAt,inMansionGrounds} from './coast-layout.js';
+import {COAST_HOMES,MANSION,QUAY_RANGE,QUAY_OUTER_ENDS,quayEnds,coastPixelAt,planCoastDecks,coastFloorAt,inMansionGrounds} from './coast-layout.js';
 import {point,MAP,isReferenceWater,pixel} from './reference-layout.js';
 import {guardGun,GUARD_PISTOL} from '../npc/guard-gun.js';
 import {equipmentRay} from '../adventure/aim.js';
@@ -23,17 +23,17 @@ export async function createCoast(scene,world,state,{human}){
  for(const floor of floors){
   const colour=floor.kind==='granite-quay'?'#afa99e':floor.kind==='water-stair'?'#908f85':floor.kind==='residential-path'?'#b7ac95':'#b5a47d';
   let g;
-  if(floor.polygon){const positions=[];for(const i of [0,2,1,0,3,2]){const p=floor.polygon[i];positions.push(p.x,floor.y,p.z);}g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setIndex([0,1,2,3,4,5]);g.computeVertexNormals();world.terrainCollider(g);b.owned.push(g);if(floor.kind==='granite-quay'){const uv=[];for(let i=0;i<g.attributes.position.count;i++)uv.push(g.attributes.position.getX(i)/2,g.attributes.position.getZ(i)/2);g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));graniteParts.push(g.clone());}else b.geometry(g,colour);}
+  if(floor.polygon){const positions=[];for(let t=1;t<floor.polygon.length-1;t++)for(const i of [0,t+1,t]){const p=floor.polygon[i];positions.push(p.x,floor.y,p.z);}g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setIndex(Array.from({length:positions.length/3},(_,i)=>i));g.computeVertexNormals();world.terrainCollider(g);b.owned.push(g);if(floor.kind==='granite-quay'){const uv=[];for(let i=0;i<g.attributes.position.count;i++)uv.push(g.attributes.position.getX(i)/2,g.attributes.position.getZ(i)/2);g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));graniteParts.push(g.clone());}else b.geometry(g,colour);}
   else{g=new T.PlaneGeometry(floor.w*2,floor.d*2).rotateX(-Math.PI/2).rotateY(floor.heading).translate(floor.x,floor.y,floor.z);world.terrainCollider(g);b.owned.push(g);if(floor.kind!=='public-pier')b.geometry(new T.BoxGeometry(floor.w*2,.12,floor.d*2),colour,new T.Vector3(floor.x,floor.y-.06,floor.z),new T.Euler(0,floor.heading,0));}
-  if(floor.kind==='granite-quay'){
-   const nx=Math.cos(floor.heading),nz=-Math.sin(floor.heading),x=floor.x-nx*floor.w,z=floor.z-nz*floor.w;
-   b.geometry(new T.BoxGeometry(.45,1.8,floor.d*2+.08),'#8e918a',new T.Vector3(x,-.85,z),new T.Euler(0,floor.heading,0));
+  if(floor.kind==='granite-quay'&&floor.outerEdge){
+   const [a,c]=floor.outerEdge,dx=c.x-a.x,dz=c.z-a.z;
+   b.geometry(new T.BoxGeometry(.45,1.8,Math.hypot(dx,dz)+.02),'#8e918a',new T.Vector3((a.x+c.x)/2,-.85,(a.z+c.z)/2),new T.Euler(0,Math.atan2(dx,dz),0));
   }
  }
  if(graniteParts.length){const geometry=mergeGeometries(graniteParts),material=new T.MeshStandardMaterial({map:graniteTexture,color:'#a7b2b4',roughness:1}),mesh=new T.Mesh(geometry,material);mesh.receiveShadow=true;b.root.add(mesh);b.owned.push(geometry);b.materials.push(material);graniteParts.forEach(g=>g.dispose());}
  // The waterside rail follows the actual shore and leaves both stair openings.
- for(let u=650;u<1110;u+=12){const end=Math.min(u+12,1110),a=point(u,coastPixelAt(u)+3.4),c=point(end,coastPixelAt(end)+3.4);fence(a,c,1.05,'#304b46',(x,z)=>[735,1010].some(s=>Math.abs(x-point(s,0).x)<1.55)||Math.abs(x-point(865,0).x)<4.8);}
- for(let u=675;u<1110;u+=50){const p=point(u,coastPixelAt(u)-17);lamp(p.x,p.z);if(u%100===75){const q=point(u+10,coastPixelAt(u+10)-21);bench(q.x,q.z,0,'quay-bench:'+u);}}
+ for(let u=QUAY_OUTER_ENDS.from;u<QUAY_OUTER_ENDS.to;u+=12){const end=Math.min(u+12,QUAY_OUTER_ENDS.to),a=point(u,coastPixelAt(u)+3.4),c=point(end,coastPixelAt(end)+3.4);fence(a,c,1.05,'#304b46',(x,z)=>[735,1010].some(s=>Math.abs(x-point(s,0).x)<1.55)||Math.abs(x-point(865,0).x)<4.8);}
+ for(let u=Math.ceil((quayEnds(17).from+15)/25)*25;u<quayEnds(17).to-10;u+=50){const p=point(u,coastPixelAt(u)-17);lamp(p.x,p.z);if(u%100===75){const q=point(u+10,coastPixelAt(u+10)-21);bench(q.x,q.z,0,'quay-bench:'+u);}}
  for(const u of [735,1010]){const p=point(u,coastPixelAt(u)+4);for(const side of [-1,1])for(let i=0;i<12;i++){const z=p.z+(i+.5)*.45,y=.08-i*.1;box(p.x+side*1.5,y+.43,z,.07,.86,.47,'#445b53');}}
  // Decorative mooring bollards give the central pier a purpose without lights per prop.
  for(const u of [854,876])for(const v of [851,872]){const p=point(u,v);cyl(p.x,.28,p.z,.14,.4,'#4c5b54');box(p.x,.43,p.z,.6,.12,.16,'#4c5b54');}
