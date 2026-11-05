@@ -25,8 +25,9 @@ export function createParkour(scene,world,state){
   if(!base)continue;const y0=base.y0??world.groundHeight(base.x,base.z),height=roof.y-y0;if(height<1.8)continue;
   const angle=Math.atan2(base.nx,base.nz),tx=base.nz,tz=-base.nx,key=Math.floor(base.x/48)+','+Math.floor(base.z/48);
   const ladder={id:roof.id,...base,y0,top:roof.y,angle,roof,exit:base.exit??{x:base.x-base.nx*1.55,z:base.z-base.nz*1.55,y:roof.y}};ladders.push(ladder);
-  for(const side of [-1,1])box(base.x+tx*.43*side,y0+height/2+.8,base.z+tz*.43*side,.065,height+1.6,.09,angle,key);
-  for(let y=.28;y<height+1.53;y+=.32)box(base.x,y0+y,base.z,.85,.055,.09,angle,key);
+  const half=(base.width??.86)/2;
+  for(const side of [-1,1])box(base.x+tx*half*side,y0+height/2+.8,base.z+tz*half*side,.065,height+1.6,.09,angle,key);
+  for(let y=.28;y<height+1.53;y+=.32)box(base.x,y0+y,base.z,half*2,.055,.09,angle,key);
  }
  for(const list of chunks.values()){const geometry=mergeGeometries(list);list.forEach(g=>g.dispose());owned.push(geometry);const mesh=new T.Mesh(geometry,metal);mesh.castShadow=mesh.receiveShadow=true;root.add(mesh);}
  const pos=world.player.mesh.position;let grounded=true,extraUsed=state.parkour?.extraUsed===true,airKick=0,climb=null,climbDistance=0;
@@ -38,7 +39,7 @@ export function createParkour(scene,world,state){
  function floorAt(x,z,ceiling=pos.y+.12){
   let floor=world.groundHeight(x,z);const radius=PLAYER_SHAPE.radius+.02;
   for(const b of world.blockers)if(b.enabled!==false&&!b.vaultOnly&&b.h>.08&&(b.w>.25||b.d>.25)){const top=(b.y??b.h/2)+b.h/2;if(top<=ceiling+.03&&circleIntersectsBox(x,z,radius,b))floor=Math.max(floor,top);}
-  for(const s of [...roofs,...(world.shopRoofs??[]),...world.garages,...world.parkourSurfaces])if(s.y<=ceiling+.03&&circleIntersectsBox(x,z,radius,s))floor=Math.max(floor,s.y);
+  for(const s of [...roofs,...(world.shopRoofs??[]),...world.garages,...world.parkourSurfaces])if(s.y<=ceiling+.03&&circleIntersectsBox(x,z,s.narrow?.07:radius,s))floor=Math.max(floor,s.y);
   for(const v of world.vehicles)if(v.mesh.visible&&!(v.police&&state.wanted<3)){const top=v.mesh.position.y+v.h;if(top<=ceiling+.03&&circleIntersectsBox(x,z,radius,vehicleBox(v)))floor=Math.max(floor,top);}
   return floor;
  }

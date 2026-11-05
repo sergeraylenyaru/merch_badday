@@ -1,6 +1,6 @@
 import * as T from 'three';
 
-export const MELEE_TIMING={stone:{quick:{duration:.6,impact:.22},strong:{duration:.6,impact:.22}},bat:{quick:{duration:.68,impact:.34},strong:{duration:1,impact:.53}},stick:{quick:{duration:.58,impact:.29},strong:{duration:.88,impact:.46}},baton:{quick:{duration:.64,impact:.32},strong:{duration:.64,impact:.32}}};
+export const MELEE_TIMING={shovel:{quick:{duration:.76,impact:.38},strong:{duration:1.04,impact:.55}},stone:{quick:{duration:.6,impact:.22},strong:{duration:.6,impact:.22}},bat:{quick:{duration:.68,impact:.34},strong:{duration:1,impact:.53}},stick:{quick:{duration:.58,impact:.29},strong:{duration:.88,impact:.46}},baton:{quick:{duration:.64,impact:.32},strong:{duration:.64,impact:.32}}};
 const smooth=t=>T.MathUtils.smoothstep(t,0,1);
 const poses={
  carry:{p:[.36,1.35,.3],r:[.15,0,-2.7]},
@@ -14,12 +14,12 @@ export function meleePose(id,remaining=0,strong=false,firstPerson=false){
  if(id==='slingshot')return {position:new T.Vector3(.18,1.4,.43),quaternion:new T.Quaternion(),phase:remaining>.25?'draw':'aim',progress:remaining>0?1-remaining/.5:0,twist:0,twoHanded:true};
  if(id==='water'||id==='pistol')return {position:new T.Vector3(.3,id==='pistol'?1.6:1.3,.4),quaternion:new T.Quaternion(),phase:'aim',progress:0,twist:0,twoHanded:false};
  const timing=MELEE_TIMING[id]?.[strong?'strong':'quick'];
- const rest=firstPerson?poses.first:id==='bat'?poses.batCarry:poses.carry;
+ const rest=firstPerson?poses.first:['bat','shovel'].includes(id)?poses.batCarry:poses.carry;
  if(!timing||remaining<=0)return {position:new T.Vector3(...rest.p),quaternion:new T.Quaternion().setFromEuler(new T.Euler(...rest.r)),phase:'carry',progress:0,twist:0,twoHanded:false};
  const t=T.MathUtils.clamp(1-remaining/timing.duration,0,1);
  const keys=[{t:0,pose:rest,twist:0},{t:.18,pose:poses.ready,twist:.18},{t:.37,pose:poses.windup,twist:.42},{t:.65,pose:poses.follow,twist:-.48},{t:1,pose:rest,twist:0}];
  const next=keys.findIndex(k=>k.t>=t),a=keys[Math.max(0,next-1)],b=keys[Math.max(1,next)],mix=smooth((t-a.t)/(b.t-a.t));
- return {position:new T.Vector3(...a.pose.p).lerp(new T.Vector3(...b.pose.p),mix),quaternion:new T.Quaternion().setFromEuler(new T.Euler(...a.pose.r)).slerp(new T.Quaternion().setFromEuler(new T.Euler(...b.pose.r)),mix),phase:t<.37?'windup':t<.65?'strike':'recover',progress:t,twist:T.MathUtils.lerp(a.twist,b.twist,mix),twoHanded:id==='bat'&&t>=.18&&t<.75};
+ return {position:new T.Vector3(...a.pose.p).lerp(new T.Vector3(...b.pose.p),mix),quaternion:new T.Quaternion().setFromEuler(new T.Euler(...a.pose.r)).slerp(new T.Quaternion().setFromEuler(new T.Euler(...b.pose.r)),mix),phase:t<.37?'windup':t<.65?'strike':'recover',progress:t,twist:T.MathUtils.lerp(a.twist,b.twist,mix),twoHanded:['bat','shovel'].includes(id)&&t>=.18&&t<.75};
 }
 
 // The handle origin is the right palm. The left palm has its own grip below

@@ -1,3 +1,4 @@
+import {policeVehicleContact} from './npc/police-vehicle.js';
 import {reportCrime} from './adventure/crime.js';
 import {waterEscapeGoal} from './adventure/aim.js';
 import {createStreetActors} from './npc/street-actors.js';
@@ -811,7 +812,7 @@ try {
       return;
     }
     if (mode !== "play") return;
-    if(/^(Digit|Numpad)[0-7]$/.test(e.code)){
+    if(/^(Digit|Numpad)[0-8]$/.test(e.code)){
       const slot=Number(e.code.at(-1))||1;
       if(equipSlot(state,slot)){pendingSwing=null;attack=0;world.adventure.action('equip',state.adventure.equipped);notify(state.adventure.equipped?WEAPONS[state.adventure.equipped].name:'Кулаки');}else notify('Сначала найдите и подберите этот предмет');return;
     }
@@ -1101,11 +1102,12 @@ try {
         if(n.kind==='police'){policeCombat(n,{stunned:true},dt);n.attack=0;}
         n.stun = Math.max(0,n.stun-dt);
         n.mesh.rotation.z = n.dead?1.45*Math.min(1,(state.time-n.deadAt)/.5):1.25;
-        const p=n.mesh.position,roof=world.roofs.find(r=>p.y>=r.y-.2&&Math.abs(p.x-r.x)<r.w&&Math.abs(p.z-r.z)<r.d),floor=roof?.y??world.groundHeight(p.x,p.z);
+        const p=n.mesh.position,roof=world.roofs.find(r=>p.y>=r.y-.2&&Math.abs(p.x-r.x)<r.w&&Math.abs(p.z-r.z)<r.d),floor=world.parkour.floorAt(p.x,p.z,p.y+.1);
         if(n.climb){n.climb=null;n.roofPursuit=null;n.airborne={speed:0};}
         n.fallSpeed=(n.fallSpeed??0)+18*dt;p.y=Math.max(floor+.2,p.y-n.fallSpeed*dt);if(n.airborne)n.airborne.speed=-n.fallSpeed;if(p.y<=floor+.2){n.fallSpeed=0;n.airborne=null;}
         continue;
       }
+      if(n.kind==='worker'){n.mesh.rotation.z=0;world.mall.updateWorker(n,dt);continue;}
       n.mesh.rotation.z = 0;
       if(n.kind==='civilian'||n.kind==='police'){n.activity=null;n.social=false;}
       const waterScared=(n.waterFear?.until??0)>state.time;
@@ -1120,11 +1122,12 @@ try {
         const goal=waterEscapeGoal(n,(x,z,r)=>walkingBlocked(x,z,r)||world.water.isWater(x,z));
         target=goal?new T.Vector3(goal.x,n.mesh.position.y,goal.z):null;speed=4.5;
       } else if (n.kind === "police") {
-        const offender=n.incidentTarget,policeTarget=offender?.mesh.position??player,policeDistance=n.mesh.position.distanceTo(policeTarget);
+        const offender=n.incidentTarget,carContact=!offender&&vehicle?policeVehicleContact(n.mesh.position,vehicle):null,policeTarget=offender?.mesh.position??(carContact?new T.Vector3(carContact.x,n.mesh.position.y,carContact.z):player),policeDistance=carContact?.distance??n.mesh.position.distanceTo(policeTarget);
         const fighting=policeCombat(n,{hostile:!!offender||state.wanted>0,distance:policeDistance,
           clear:policeDistance<2.5&&Math.abs(n.mesh.position.y-policeTarget.y)<1.2&&clearSegment(n.mesh.position,policeTarget,pursuit.onRoof?(x,z,r)=>world.blockedAt(x,z,r,null,n.mesh.position.y):walkingBlocked,.1),
           guarding:!offender&&keys.has('KeyQ'),inVehicle:!offender&&!!vehicle},dt);
         n.attack=fighting.attack;n.attackKind='quick';
+        if(fighting.vehicleHit&&vehicle){vehicle.policeHits=(vehicle.policeHits??0)+1;if(!(vehicle.policeHitTime>0))vehicle.policeBaseRoll=vehicle.mesh.rotation.z;vehicle.policeHitTime=.18;if(vehicle.homeVehicle||vehicle.id===state.adventure.garage.vanId)state.adventure.garage.condition=Math.max(0,state.adventure.garage.condition-1);beep(95,.045);if(fighting.eject){const before=vehicle;interact();if(vehicle!==before){knockdownTime=1.1;state.health=Math.max(0,state.health-3);notify('Полицейский выбил вас из машины!');}}}
         if(fighting.damage&&offender){offender.health=Math.max(0,(offender.health??30)-fighting.damage);offender.stun=.45;if(offender.health===0){offender.arrested=true;offender.incident=false;offender.stun=9;n.incidentTarget=null;n.incidentUntil=state.time+8;n.incidentReturning=true;notify('Полиция задержала виновника наезда.');}}
         if(fighting.damage&&!offender&&policeHitCooldown===0){
           state.health=Math.max(0,state.health-fighting.damage);policeHitCooldown=.45;
@@ -1134,11 +1137,11 @@ try {
           notify(`Удар полицейского: −${fighting.damage} здоровья. Q — блок, F — ответный удар.`);
         }
         if(offender){target=n.attack>0||policeDistance<1.45?null:policeTarget;n.lookAt=policeTarget;speed=4.5;}else if (state.wanted > 0) {
-          target = pursuit.approach??(n.attack>0||d<1.45 ? null : player);
+          target = carContact?(n.attack>0||carContact.distance<.7?null:policeTarget):pursuit.approach??(n.attack>0||d<1.45 ? null : player);
           n.lookAt=player;
           speed = policeRunningSpeed(state);
           if(d<20)state.wantedElapsed=0;
-        } else {target = n.home;n.lookAt=null;}
+        } else {target = n.patrolPolice?policeResponse.patrolIntent(n):n.home;n.lookAt=null;}
       } else if(n.mansionGuard){const intent=world.coast.guardIntent(n,player,dt,!!vehicle);target=intent.target?new T.Vector3(intent.target.x,n.mesh.position.y,intent.target.z):null;speed=intent.speed;if(intent.shot)world.adventure.guardShot(n,player);if(intent.damage){const damage=intent.damage;state.health=Math.max(0,state.health-damage);state.stress=Math.min(100,state.stress+2);notify('Выстрел охраны: −'+damage+' здоровья. Выйдите за ворота или спрячьтесь за укрытием.');}
       } else if(n.kind==='driver'||n.kind==='resident'){const intent=streetActors.intent(n);target=intent.target;speed=intent.speed;
       } else if (n.anger > 0) {
@@ -1340,10 +1343,10 @@ try {
     if (state.stress < 60) stressEvent = false;
     for (const item of world.secrets) {
       if (item.taken) continue;
-      item.mesh.rotation.y += dt;
-      if (item.mesh.position.distanceTo(world.player.mesh.position) < 2) {
+      if (item.mesh.position.distanceTo(world.player.mesh.position) < .95) {
         item.taken = true;
         item.mesh.visible = false;
+        state.adventure.takenCaches??=[];state.adventure.takenCaches.push(item.index);
         state.money += 150;
         state.bonus += 50;
         notify("Тайник коллеги: +150 ₽ и записка «держись, брат».");
@@ -1539,6 +1542,7 @@ try {
     updateCamera(dt);
     world.adventure.update(mode==='play'?dt:0,visualTime,{inVehicle:!!vehicle,carrying:!!state.carrying||!!held,firstPerson,camera,attack});
     world.stones.update(mode==='play'?dt:0);world.park.update(mode==='play'?dt:0);
+    for(const v of world.vehicles){if(v.policeHitTime>0){v.policeHitTime=Math.max(0,v.policeHitTime-dt);v.mesh.rotation.z=(v.policeBaseRoll??0)+Math.sin(v.policeHitTime*90)*v.policeHitTime*.05;}else if(Number.isFinite(v.policeBaseRoll)){v.mesh.rotation.z=v.policeBaseRoll;delete v.policeBaseRoll;}}
     policeHealthBars.update(camera);
     flyerSellers.update(mode==='play'?dt:0,visualTime);
     ui.update(world, vehicle);
@@ -1588,24 +1592,24 @@ try {
     get vehicles() {
       return world.vehicles.map((v) => ({ id: v.id, type: v.type, model: v.visualModel, name: v.displayName,
         traffic: v.traffic, claimed: v.claimed,sunk:!!v.sunk,waterTime:v.waterTime??0,visible:v.mesh.visible, controlled: v === vehicle,
-        position: v.mesh.position.toArray(), heading: v.heading, speed:v.speed,impactMoving:!!v.impactMotion,halfWidth: v.w, halfLength: v.l, height: v.h }));
+        position: v.mesh.position.toArray(), heading: v.heading, speed:v.speed,policeHits:v.policeHits??0,impactMoving:!!v.impactMotion,halfWidth: v.w, halfLength: v.l, height: v.h }));
     },
     get navigation() {
       return { streetObstructions: world.streetObstructions.map(({ x, z, w, d }) => ({ x, z, w, d })),
         obstacles: [ ...world.blockers.filter((b) => b.enabled !== false&&world.player.mesh.position.y<(b.y??b.h/2)+b.h/2-.04&&world.player.mesh.position.y+PLAYER_SHAPE.height>(b.y??b.h/2)-b.h/2+.04).map(({ x, z, w, d }) => ({ x, z, w, d, heading: 0 })),
           ...world.vehicles.filter((v) => v.mesh.visible && !(v.police && state.wanted < 3)).map((v) => vehicleBox(v)) ] };
     },
-    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,water:world.water.diagnostics,traffic:world.traffic.diagnostics,hospital:world.hospital.diagnostics,yards:world.yards.diagnostics,enclosures:world.enclosures.diagnostics,cables:world.cables.diagnostics,billboards:world.billboards.diagnostics,scaffolding:world.scaffolding.diagnostics,coast:world.coast.diagnostics,food:world.food.diagnostics,mall:world.mall.diagnostics,hideout:world.hideout.diagnostics,streetActors:streetActors.diagnostics,park:world.park.diagnostics,vendors:world.vendors.diagnostics,policeResponse:policeResponse.diagnostics,parkour:world.parkour.diagnostics,orchard:world.orchard.diagnostics,walkways:world.walkways.diagnostics,roadWear:world.roadWear.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,stones:world.stones.diagnostics,sideWork:world.sideWork.diagnostics,flyers:flyerSellers.diagnostics}));},
+    get city() {return JSON.parse(JSON.stringify({...world.boroughs.diagnostics,caches:world.secrets.map(s=>({index:s.index,size:s.size,taken:s.taken,position:s.mesh.position.toArray(),mark:'М'})),water:world.water.diagnostics,traffic:world.traffic.diagnostics,hospital:world.hospital.diagnostics,yards:world.yards.diagnostics,enclosures:world.enclosures.diagnostics,cables:world.cables.diagnostics,billboards:world.billboards.diagnostics,scaffolding:world.scaffolding.diagnostics,coast:world.coast.diagnostics,food:world.food.diagnostics,mall:world.mall.diagnostics,hideout:world.hideout.diagnostics,streetActors:streetActors.diagnostics,park:world.park.diagnostics,vendors:world.vendors.diagnostics,policeResponse:policeResponse.diagnostics,parkour:world.parkour.diagnostics,orchard:world.orchard.diagnostics,walkways:world.walkways.diagnostics,roadWear:world.roadWear.diagnostics,crowd:localCrowd.diagnostics,planner:pedestrianNavigator.diagnostics,destructibles:world.props.diagnostics,adventure:world.adventure.diagnostics,stones:world.stones.diagnostics,sideWork:world.sideWork.diagnostics,flyers:flyerSellers.diagnostics}));},
     get jobs() { return JSON.parse(JSON.stringify(world.jobs.diagnostics)); },
     get people() { return world.people.map((n) => ({ kind: n.kind, shop: n.shop, position: n.mesh.position.toArray(), heading: n.mesh.rotation.y, patrol: n.patrol ? { ...n.patrol } : null,
-      insideCar:!!n.insideCar,activeDriver:!!n.activeDriver,driverCarId:n.driverCarId??null,exitMotion:!!n.exitMotion,seated:!!n.seated,seatHeight:n.seatHeight??null,seatId:n.seat?.id??null,incidentTarget:n.incidentTarget?.driverIndex??null,arrested:!!n.arrested,health:n.health??null,dead:!!n.dead,activePolice:!!n.activePolice,personType:n.personType,role:n.role,weapon:n.weapon??null,waterFear:Math.max(0,(n.waterFear?.until??0)-state.time),mansionGuard:!!n.mansionGuard,gunShots:n.gunCombat?.sequence??0,policeIndex:n.policeIndex??null,visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,roofPursuit:n.roofPursuit?{...n.roofPursuit}:null,climb:n.climb??null,motion:n.motion?.diagnostics??null,
+      insideCar:!!n.insideCar,activeDriver:!!n.activeDriver,driverCarId:n.driverCarId??null,exitMotion:!!n.exitMotion,seated:!!n.seated,seatHeight:n.seatHeight??null,seatId:n.seat?.id??null,incidentTarget:n.incidentTarget?.driverIndex??null,arrested:!!n.arrested,health:n.health??null,dead:!!n.dead,activePolice:!!n.activePolice,personType:n.personType,role:n.role,weapon:n.weapon??null,patrolPolice:!!n.patrolPolice,workerIndex:n.workerIndex??null,workerStep:n.workerStep??null,waterFear:Math.max(0,(n.waterFear?.until??0)-state.time),mansionGuard:!!n.mansionGuard,gunShots:n.gunCombat?.sequence??0,policeIndex:n.policeIndex??null,visible:n.mesh.visible,activePedestrian:!!n.activePedestrian,attack:n.attack??0,combat:n.combat?{...n.combat}:null,roofPursuit:n.roofPursuit?{...n.roofPursuit}:null,climb:n.climb??null,motion:n.motion?.diagnostics??null,
       dailyRoute:n.dailyRoute?{index:n.dailyRoute.index,wait:n.dailyRoute.wait,visits:n.dailyRoute.visits,stops:n.dailyRoute.stops}:null,
       navigation:n.navigation?{waypoints:n.navigation.path.length,stuck:n.navigation.stuck}:null })); },
   };
   // BFCache preserves the page and its GPU resources. Dispose only on a real exit.
   addEventListener("pagehide", (event) => {
     if (!event.persisted) {
-      world.parkour.dispose();world.cables.dispose();world.enclosures.dispose();world.yards.dispose();world.hospital.dispose();world.orchard.dispose();world.roadWear.dispose();world.billboards.dispose();world.scaffolding.dispose();world.park.dispose();world.stones.dispose();world.vendors.dispose();policeHealthBars.dispose();
+      world.parkour.dispose();world.cables.dispose();world.enclosures.dispose();world.yards.dispose();world.hospital.dispose();world.orchard.dispose();world.roadWear.dispose();world.billboards.dispose();world.scaffolding.dispose();world.park.dispose();world.stones.dispose();world.vendors.dispose();policeHealthBars.dispose();for(const cache of world.secrets)cache.mark.dispose();
       world.homeYard.dispose();
       world.boroughs.dispose();
       world.adventure.dispose();world.sideWork.dispose();goalFill.geometry.dispose();goalFill.material.dispose();goalRing.geometry.dispose();goalRing.material.dispose();

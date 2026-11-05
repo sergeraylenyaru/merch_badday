@@ -5,7 +5,8 @@ import {COAST_HOMES,MANSION,QUAY_RANGE,coastPixelAt,planCoastDecks,coastFloorAt,
 import {point,MAP,isReferenceWater,pixel} from './reference-layout.js';
 import {guardGun,GUARD_PISTOL} from '../npc/guard-gun.js';
 import {equipmentRay} from '../adventure/aim.js';
-export function createCoast(scene,world,state,{human}){
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+export async function createCoast(scene,world,state,{human}){
  const b=sceneBuilder(scene,world,'three-coastal-neighborhoods'),floors=planCoastDecks(),benches=[],guards=[],landmarks=[],graniteParts=[];
  const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const ctx=canvas.getContext('2d');let seed=73;const random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
  for(let x=0;x<4;x++)for(let y=0;y<4;y++){const shade=165+Math.floor(random()*22);ctx.fillStyle=`rgb(${shade},${shade+5},${shade+8})`;ctx.fillRect(x*32,y*32,32,32);}for(let i=0;i<1800;i++){const shade=random()>.5?225:95;ctx.fillStyle=`rgba(${shade},${shade},${shade},.2)`;ctx.fillRect(Math.floor(random()*128),Math.floor(random()*128),1,1);}ctx.strokeStyle='#747c7c';ctx.lineWidth=1;for(let i=0;i<=128;i+=32){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,128);ctx.moveTo(0,i);ctx.lineTo(128,i);ctx.stroke();}const graniteTexture=new T.CanvasTexture(canvas);graniteTexture.wrapS=graniteTexture.wrapT=T.RepeatWrapping;graniteTexture.colorSpace=T.SRGBColorSpace;b.textures.push(graniteTexture);
@@ -50,6 +51,18 @@ export function createCoast(scene,world,state,{human}){
  const s=MANSION;
  box(s.x,.012,s.z,s.w*2,.024,s.d*2,'#72836c');box(s.x,3.8,s.z,s.buildingW*2,7.6,s.buildingD*2,'#d1c5aa',true);box(s.x,7.85,s.z,s.buildingW*2+1,.5,s.buildingD*2+1,'#d8d0b7');box(s.x,8.16,s.z,s.buildingW*2,.12,s.buildingD*2,'#63786d');
  for(const side of [-1,1])for(const y of [2.1,5.8])for(const dx of [-8,-4,0,4,8]){box(s.x+dx,y,s.z+side*(s.buildingD+.04),1.6,2.1,.08,'#718886');box(s.x+dx,y+1.17,s.z+side*(s.buildingD+.1),1.95,.19,.32,'#e8ddc0');box(s.x+dx,y-1.17,s.z+side*(s.buildingD+.1),1.95,.16,.3,'#e8ddc0');}
+ // Pale dressed stone, pilasters, cornices and a usable entrance balcony.
+ for(const y of [.28,4.2,7.65])box(s.x,y,s.z,s.buildingW*2+.42,.22,s.buildingD*2+.4,'#e6dcc4');
+ for(const dx of [-10.8,-6,6,10.8])for(const side of [-1,1]){box(s.x+dx,3.9,s.z+side*(s.buildingD+.14),.42,7.4,.22,'#ded1b3');box(s.x+dx,7.45,s.z+side*(s.buildingD+.22),.66,.28,.4,'#e8ddc4');}
+ const balcony={x:s.x,z:s.z-s.buildingD-1.35,w:6.1,d:1.4,y:4.35};
+ box(balcony.x,4.2,balcony.z,12.2,.3,2.8,'#d6c9a9',true);world.parkourSurfaces.push(balcony);
+ for(const dx of [-5.6,5.6]){cyl(s.x+dx,2.0,balcony.z-.7,.21,4,'#e4d7ba');cyl(s.x+dx,.16,balcony.z-.7,.36,.3,'#c4b696');}
+ for(const dx of [-5.8,5.8])box(s.x+dx,4.85,balcony.z,.12,1,2.6,'#39564f');
+ for(let dx=-5.8;dx<=5.8;dx+=.38){box(s.x+dx,4.85,balcony.z-1.3,.045,.94,.045,'#39564f');sphere(s.x+dx,5.34,balcony.z-1.3,.055,.055,.055,'#9e946e');}
+ box(s.x,5.34,balcony.z-1.3,12,.08,.09,'#39564f');
+ const pediment=new T.Shape();pediment.moveTo(-6,0);pediment.lineTo(0,2.1);pediment.lineTo(6,0);pediment.closePath();const pedimentGeometry=new T.ExtrudeGeometry(pediment,{depth:.45,bevelEnabled:true,bevelThickness:.06,bevelSize:.06,bevelSegments:1,steps:1});b.geometry(pedimentGeometry,'#d6c9aa',new T.Vector3(s.x,7.9,s.z-s.buildingD-.25));
+ b.sign(b.root,'СЕМЕЙНАЯ РЕЗИДЕНЦИЯ',5.4,.36,s.x,7.12,s.z-s.buildingD-.19,{heading:Math.PI,color:'#e6d7ad',background:'#354c43'});
+ world.roofs.push({...balcony,id:'coast-mansion-balcony',kind:'balcony',ladder:{x:s.x-6.2,z:balcony.z,nx:-1,nz:0,exit:{x:s.x-5.4,z:balcony.z,y:balcony.y}}});
  for(const dx of [-6,-2,2,6]){cyl(s.x+dx,3.25,s.z+s.buildingD+1.9,.22,6.5,'#dfd4b9');cyl(s.x+dx,.2,s.z+s.buildingD+1.9,.42,.4,'#d8ceb1');}box(s.x,6.75,s.z+s.buildingD+1.8,15,.35,4.4,'#d5c9ab');
  b.sign(b.root,'ЧАСТНАЯ ТЕРРИТОРИЯ',8,.65,s.x,2.1,s.z-s.buildingD-.08,{background:'#3d554b',color:'#e3d2aa',heading:Math.PI});
  const nw={x:s.x-s.w,z:s.z-s.d},ne={x:s.x+s.w,z:s.z-s.d},sw={x:s.x-s.w,z:s.z+s.d},se={x:s.x+s.w,z:s.z+s.d};fence(nw,ne,2.1,'#334a42',x=>Math.abs(x-s.x)<4.3);fence(ne,se,2.1,'#334a42');fence(se,sw,2.1,'#334a42');fence(sw,nw,2.1,'#334a42');
@@ -58,6 +71,14 @@ export function createCoast(scene,world,state,{human}){
  // Driveway and an open eight-metre gate connect the grounds to the road.
  box(s.x,.018,s.z-s.d-.5,8,.036,1.3,'#b0aa97');box(s.x,.025,s.z-14.6,4,.05,5,'#a9a28e');box(s.x+8,.025,s.z-12.6,20,.05,4,'#a9a28e');box(s.x+16,.025,s.z+1,4,.05,30,'#a9a28e');box(s.x+7,.025,s.z+12,22,.05,4,'#bdb49e');
  for(const dx of [-16,16])for(const dz of [11,-10]){sphere(s.x+dx,.8,s.z+dz,1.3,.8,1.2,'#5d775a');lamp(s.x+dx,s.z+dz,3.8);}
+ const pool={x:s.x+4.2,z:s.z+11.8,w:5.4,d:2.1,waterY:.48};
+ box(pool.x,.08,pool.z,13,.16,6.5,'#cbbd9d');world.addSurface(pool.x,pool.z,13,6.5,.16);box(pool.x,.12,pool.z,10.8,.08,4.2,'#6aa6ab');
+ for(const side of [-1,1]){box(pool.x+side*5.55,.35,pool.z,.3,.7,4.8,'#ece0c6',true);box(pool.x,.35,pool.z+side*2.25,11.4,.7,.3,'#ece0c6',true);}
+ const poolMaterial=new T.MeshStandardMaterial({color:'#4ab8cc',transparent:true,opacity:.84,metalness:.25,roughness:.22}),poolGeometry=new T.PlaneGeometry(10.8,4.2).rotateX(-Math.PI/2),poolMesh=new T.Mesh(poolGeometry,poolMaterial);poolMesh.position.set(pool.x,pool.waterY,pool.z);poolMesh.name='mansion-swimming-pool';b.root.add(poolMesh);b.materials.push(poolMaterial);b.owned.push(poolGeometry);
+ for(let i=0;i<3;i++)box(pool.x-3,.1+i*.12,pool.z+3.2-i*.25,1.5,.2+i*.24,.4,'#c7bba0',true);
+ for(const dx of [-2.8,0]){box(s.x+dx, .45,s.z+15,1.4,.1,1.1,'#e0d4b6');const lounge=new T.BoxGeometry(1.4,.08,.85);b.geometry(lounge,'#d8c9a8',new T.Vector3(s.x+dx,.70,s.z+15.7),new T.Euler(-.65,0,0));}
+ const statue=await new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/estate/emperor.glb`);statue.scene.position.set(s.x-15.8,.02,s.z+6.3);statue.scene.rotation.y=0;statue.scene.traverse(n=>{if(n.isMesh){n.castShadow=n.receiveShadow=true;b.owned.push(n.geometry);for(const m of Array.isArray(n.material)?n.material:[n.material])b.materials.push(m);}});b.root.add(statue.scene);
+ box(s.x-15.8,.65,s.z+6.3,2.2,1.3,2.2,'#c6b99b',true);b.sign(b.root,'ИМПЕРАТОР',1.2,.25,s.x-15.8,.73,s.z+5.18,{heading:Math.PI,background:'#536b5a',color:'#ded1a3'});
  world.roofs.push({id:'coast-mansion-roof',x:s.x,z:s.z,w:s.buildingW,d:s.buildingD,y:8.22,kind:'mansion',ladder:{x:s.x-s.buildingW-.12,z:s.z-2,nx:-1,nz:0,exit:{x:s.x-s.buildingW+1.5,z:s.z-2,y:8.22}}});
  const posts=[[-4,-15.3],[4,-15.3],[-16,2],[16,1],[-14,13],[13,13]];
  for(const [i,[dx,dz]]of posts.entries()){const n=human(s.x+dx,s.z+dz,'#293f3b','guard');n.role=['Старший охраны','Охрана ворот','Охрана сада','Патруль особняка','Охрана террасы','Охрана берега'][i];n.mansionGuard=true;n.weapon='pistol';n.guardIndexLocal=i;n.shopName='Особняк на берегу';n.entrance={x:s.x+dx,z:s.z+dz};n.shopPosition={x:s.x,z:s.z};n.guardRoute=[{x:s.x+dx,z:s.z+dz},{x:s.x+dx*.8,z:s.z+dz*.8}];n.guardRouteIndex=0;world.people.push(n);guards.push(n);}
@@ -79,5 +100,5 @@ export function createCoast(scene,world,state,{human}){
   n.guardAlert=0;n.attack=0;n.lookAt=null;guardGun(n,{hostile:false},dt);
   const route=n.guardRoute,target=route[n.guardRouteIndex];if(Math.hypot(p.x-target.x,p.z-target.z)<.3)n.guardRouteIndex=(n.guardRouteIndex+1)%route.length;
   return {target,speed:.9,damage:0};
- },get diagnostics(){return {quay:QUAY_RANGE,homes:COAST_HOMES,mansion:MANSION,benches,landmarks,stairs:24,floors: floors.map(f=>({...f})),guards:guards.length};},dispose:b.dispose};
+ },get diagnostics(){return {quay:QUAY_RANGE,homes:COAST_HOMES,mansion:{...MANSION,balcony,pool,statue:{x:s.x-15.8,z:s.z+6.3,model:'models/estate/emperor.glb'}},benches,landmarks,stairs:24,floors: floors.map(f=>({...f})),guards:guards.length};},dispose:b.dispose};
 }

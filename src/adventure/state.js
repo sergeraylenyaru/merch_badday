@@ -3,7 +3,8 @@ export const WEAPONS={bat:{name:'Бита',reach:3.5,power:3,color:'#ffba45'},st
 WEAPONS.stone={name:'Камни',reach:35,power:1,color:'#b4b5a0'};
 WEAPONS.slingshot={name:'Рогатка',reach:60,power:1,color:'#ffce63'};
 WEAPONS.baton={name:'Полицейская дубинка',reach:2.8,power:2,color:'#7eb6cc'};
-export const WEAPON_SLOTS=[null,'bat','stick','water','stone','slingshot','baton'];
+WEAPONS.shovel={name:'Лопата',reach:3.5,power:3,color:'#e8a657'};
+export const WEAPON_SLOTS=[null,'bat','stick','water','stone','slingshot','baton','shovel'];
 export function equipSlot(state,slot){const id=WEAPON_SLOTS[slot-1];if(slot<1||slot>WEAPON_SLOTS.length||id&&!state.adventure.inventory.includes(id))return false;state.adventure.equipped=id;return true;}
 export const PACKS=['Красная','Синяя','Зелёная','Жёлтая','Фиолетовая','Оранжевая','Бирюзовая','Розовая','Белая','Чёрная'].map((name,id)=>({id,name,color:['#f04d52','#4c8cff','#54cd72','#ffe268','#b67aff','#ff9e46','#49e1cf','#ff79bb','#e7edf4','#43495c'][id]}));
 PACKS.push(...['Бордовая','Лимонная','Мятная','Лазурная','Сиреневая','Медная','Салатовая','Индиго','Коралловая','Серебряная'].map((name,i)=>({id:i+10,name,color:['#922b47','#d3df55','#9be4b5','#39b8df','#d8abef','#b98250','#95c948','#5354a8','#ff997f','#bbc7d0'][i],rooftop:true})));

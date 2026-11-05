@@ -8,7 +8,7 @@ const fresh=()=>{const s=freshState();s.onboarding.callReceived=true;return s;};
 let page,context,city;
 try{
  ({page,context}=await app.scenario(fresh(),'concept-catalog'));await advance(page,.1);city=await page.evaluate(()=>__MERCH__.city);
- const cops=await page.evaluate(()=>__MERCH__.people.filter(n=>n.kind==='police'));assert.equal(cops.length,12);assert.deepEqual(cops.filter(n=>n.weapon==='baton').map(n=>n.policeIndex),[4,9]);
+ const cops=await page.evaluate(()=>__MERCH__.people.filter(n=>n.kind==='police'&&!n.patrolPolice));assert.equal(cops.length,12);assert.deepEqual(cops.filter(n=>n.weapon==='baton').map(n=>n.policeIndex),[4,9]);
  assert.equal(await page.evaluate(()=>__MERCH__.renderer.art.passes),2);assert.equal(await page.evaluate(()=>__MERCH__.visuals.assets.failed),0);
  if(run('home')){
   const car=await page.evaluate(()=>__MERCH__.vehicles.find(v=>v.claimed&&Math.hypot(v.position[0]-__MERCH__.state.position.x,v.position[2]-__MERCH__.state.position.z)<5));assert.ok(car,'owned car beside the home');

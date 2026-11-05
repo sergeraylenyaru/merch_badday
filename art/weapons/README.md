@@ -30,3 +30,13 @@ bat with a wrapped grip; the baseball bat is **project-made**, not an external
 asset. Internet searches of Kenney Weapon Kit and Quaternius Survival/Medieval
 Weapons packs supplied suitable guns and wood, but no suitable baseball bat.
 All runtime GLBs embed any required textures; the game makes no vendor requests.
+
+The second equipment revision replaces the adapted blaster with an original,
+compact toy water pistol: rounded casing, straight barrel, palm-centred grip,
+trigger guard and oval water tank. The archived Kenney blaster remains as the
+source of the previous revision. The current `water-pistol.glb` is project art.
+
+The builder's shovel comes from Kenney Survival Kit `tool-shovel.glb`, at the
+same pinned collection commit as the log. The source and original colormap are
+stored together under `kenney-survival/`; the import script enlarges the tool to
+1.16 m and places the grip at the palm origin. It is also the dropped/player model.

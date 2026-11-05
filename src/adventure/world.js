@@ -1,3 +1,4 @@
+import {createWaterSpray} from './water-spray.js';
 import {loadEquipmentModels} from '../visuals/equipment-models.js';
 import {equipmentRay,frightenWithWater} from './aim.js';
 import {rollPoliceLoot} from './police-loot.js';
@@ -50,7 +51,7 @@ export async function createAdventure(scene,world,state,callbacks){
  for(const [id,uv] of Object.entries(positions)){
   const def=WEAPONS[id],p=safe(point(...uv));const item=pickup('weapon',id,p,def.color,'E · '+def.name,()=>!a.pickedWeapons.includes(id),()=>{pickupWeapon(state,id);callbacks.notify(def.name+' подобрано · 1 — кулаки, 2 — бита, 3 — палка, 4 — пистолет, 6 — рогатка');changed();});weaponModel(item.object,id);item.object.scale.setScalar(1.15);
  }
- function addWeaponDrop(drop){const item=pickup('weapon-drop',drop.id,drop,WEAPONS[drop.weapon].color,'E · '+WEAPONS[drop.weapon].name,()=>!drop.taken,()=>{drop.taken=true;pickupWeapon(state,drop.weapon);callbacks.notify('Дубинка подобрана · 7 — выбрать');changed();});weaponModel(item.object,drop.weapon);}
+ function addWeaponDrop(drop){const item=pickup('weapon-drop',drop.id,drop,WEAPONS[drop.weapon].color,'E · '+WEAPONS[drop.weapon].name,()=>!drop.taken,()=>{drop.taken=true;pickupWeapon(state,drop.weapon);callbacks.notify(WEAPONS[drop.weapon].name+' подобрана · '+(drop.weapon==='shovel'?8:7)+' — выбрать');changed();});weaponModel(item.object,drop.weapon);}
  for(const drop of a.weaponDrops)addWeaponDrop(drop);
  const packSites=[[105,200],[300,130],[370,500],[550,650],[740,230],[935,430],[960,690],[1230,140],[1500,460],[1470,730]];
  const packRoofs=[...world.roofs].filter(r=>r.kind==='residential'&&world.parkour.diagnostics.ladders.some(l=>l.id===r.id||l.id===r.scaffoldAccess)).sort((a,b)=>a.id.localeCompare(b.id));
@@ -88,8 +89,9 @@ export async function createAdventure(scene,world,state,callbacks){
  let heldRig=null,heldId=null;
  function setHeld(id){if(id===heldId)return;heldRig?.dispose();heldId=id;heldRig=id?createWeaponRig(scene,world.player.mesh,id,weaponModel):null;}
  const policeRigs=world.people.filter(n=>n.kind==='police'&&n.weapon==='baton').map(person=>{const rig=createWeaponRig(scene,person.mesh,'baton',weaponModel);person.weaponRig=rig;return {person,rig};});
+ const workerRigs=world.people.filter(person=>person.kind==='worker'&&person.weapon==='shovel').map(person=>{const rig=createWeaponRig(scene,person.mesh,'shovel',weaponModel);person.weaponRig=rig;return {person,rig};});
  const guardRigs=guards.filter(person=>person.mansionGuard).map(person=>{const rig=createWeaponRig(scene,person.mesh,'pistol',weaponModel);person.weaponRig=rig;return {person,rig};});
- const gunMaterial=new T.MeshBasicMaterial({color:'#42d7ff',transparent:true,opacity:.65,depthWrite:false});materials.set('water-jet',gunMaterial);
+ const waterSpray=createWaterSpray(root);
  const tracerMaterial=new T.MeshBasicMaterial({color:'#ffdca0',transparent:true,opacity:.8,depthWrite:false});materials.set('guard-tracer',tracerMaterial);
  function beam(from,to,material,life,radius){
   const delta=to.clone().sub(from),length=delta.length();if(length<.005)return;
@@ -101,7 +103,7 @@ export async function createAdventure(scene,world,state,callbacks){
   const cameraHit=equipmentRay(world,aim.ray.origin,aim.ray.direction,18),direction=cameraHit.point.clone().sub(muzzle).normalize();
   const hit=equipmentRay(world,muzzle,direction,Math.min(12,muzzle.distanceTo(cameraHit.point)+.08));
   if(hit.person){frightenWithWater(hit.person,muzzle,state.time);callbacks.notify('Попадание водой! Прохожий убегает.');}
-  beam(muzzle,hit.point,gunMaterial,.22,.027);
+  waterSpray.emit(muzzle,hit.point);
   lastWaterShot={from:muzzle.toArray(),to:hit.point.toArray(),target:hit.person?world.people.indexOf(hit.person):null,wanted:state.wanted};waterShots++;
  }
  function guardShot(person,player){
@@ -110,7 +112,7 @@ export async function createAdventure(scene,world,state,callbacks){
   const muzzle=entry.rig.root.getObjectByName('Muzzle').getWorldPosition(new T.Vector3());beam(muzzle,player.clone().add(new T.Vector3(0,1,0)),tracerMaterial,.075,.009);
   const flash=new T.Mesh(geo('muzzle-flash',()=>new T.OctahedronGeometry(.075)),tracerMaterial);flash.position.copy(muzzle);root.add(flash);effects.push({mesh:flash,life:.075});
  }
- function addDrop(drop){const p={x:drop.x,z:drop.z};const item=pickup('money',drop.id,p,'#87f09b',`${drop.amount} ₽ · Пройдите рядом`,()=>!drop.taken,()=>{if(drop.taken)return;drop.taken=true;state.money+=drop.amount;callbacks.notify(`Подобрано ${drop.amount} ₽`);changed();});for(let i=0;i<3;i++)box(item.object,.5,.035,.24,i*.035,i*.05,0,'#8ab976');}
+ function addDrop(drop){const p={x:drop.x,z:drop.z,y:drop.y};const item=pickup('money',drop.id,p,'#87f09b',`${drop.amount} ₽ · Пройдите рядом`,()=>!drop.taken,()=>{if(drop.taken)return;drop.taken=true;state.money+=drop.amount;callbacks.notify(`Подобрано ${drop.amount} ₽`);changed();});for(let i=0;i<3;i++)box(item.object,.5,.035,.24,i*.035,i*.05,0,'#8ab976');}
  for(const drop of a.drops)addDrop(drop);
  const tables=world.props.diagnostics.props.filter(p=>p.id==='game-table');
  const court=safe(point(900,650)),goal={x:court.x-Math.sin(.25)*3.5,z:court.z-Math.cos(.25)*3.5};
@@ -169,7 +171,7 @@ export async function createAdventure(scene,world,state,callbacks){
    if(name==='guard'){const guard=guards.map((g,i)=>({g,i,d:g.mesh.position.distanceTo(world.player.mesh.position)})).sort((p,q)=>p.d-q.d)[0];if(guard)a.tracked='guard:'+guard.i;}
    changed();
   },
-  dropMoney(person){const id='npc:'+world.people.indexOf(person);if(a.knocked.includes(id))return;a.knocked.push(id);const drop={id,x:person.mesh.position.x,z:person.mesh.position.z,amount:20+(world.people.indexOf(person)%5)*10,taken:false};a.drops.push(drop);addDrop(drop);changed();},
+  dropMoney(person){const id='npc:'+world.people.indexOf(person);if(a.knocked.includes(id))return;a.knocked.push(id);const drop={id,x:person.mesh.position.x,z:person.mesh.position.z,y:person.mesh.position.y,amount:20+(world.people.indexOf(person)%5)*10,taken:false};a.drops.push(drop);addDrop(drop);changed();},
   shootWater,guardShot,
   onCrash(speed,vehicle){const own=vehicle?.homeVehicle||vehicle?.id===a.garage.vanId,condition=a.garage.condition,wasCarrying=a.events.delivery.carrying,p=world.player.mesh.position;
    const drop={x:p.x+3,z:p.z+2};crashCargo(state,speed,world.blocked(drop.x,drop.z,.4)?p:drop);if(!own)a.garage.condition=condition;if(wasCarrying&&!a.events.delivery.carrying){a.tracked='delivery';callbacks.notify('Посылка выпала! Подберите её в подсвеченной зоне.');}changed();},
@@ -178,22 +180,25 @@ export async function createAdventure(scene,world,state,callbacks){
    setHeld(a.equipped);const visible=!!heldRig&&!inVehicle&&!carrying&&!a.events.delivery.carrying;
    const aimAt=camera&&a.equipped==='water'?camera.getWorldDirection(new T.Vector3()).multiplyScalar(18).add(camera.position):null;
    if(heldRig)heldRig.update({aimAt,remaining:attack,strong:attackKind==='strong',firstPerson,pitch,visible,gait:(world.player.motion?.diagnostics.stride??0)*Math.PI*2,speed:world.player.motion?.diagnostics.speed??0});world.player.weaponRig=visible?heldRig:null;if(heldRig&&a.equipped==='stone')heldRig.root.traverse(n=>{if(n.name==='held-stone')n.visible=a.stones>0||attack>.38;});
+   for(const {person,rig}of workerRigs)rig.update({visible:person.mesh.visible&&!person.dead&&person.stun<=0&&!person.climb});
    for(const {person,rig}of policeRigs)rig.update({remaining:person.attack??0,visible:person.mesh.visible&&!person.dead&&person.stun<=0&&!person.climb});
    for(const {person,rig}of guardRigs)rig.update({aimAt:person.lookAt?new T.Vector3(person.lookAt.x,person.lookAt.y+1,person.lookAt.z):null,visible:person.mesh.visible&&!person.dead&&person.stun<=0&&(person.waterFear?.until??0)<=state.time});
   },
   update(dt,time,{inVehicle=false,carrying=false,firstPerson=false,camera=null,attack=0}={}){
+   waterSpray.update(dt);
    for(const [index,person]of world.people.entries())if(person.dead){const drop=rollPoliceLoot(state,person,index);if(drop){drop.y=world.parkour.floorAt(drop.x,drop.z,drop.y+.2);addWeaponDrop(drop);changed();}}
+   for(const person of world.people)if(person.kind==='worker'&&person.dead&&person.weapon==='shovel'&&!person.workerRecord.weaponDropped){const p=person.mesh.position,drop={id:'worker:'+person.workerIndex,weapon:'shovel',x:p.x,z:p.z,y:world.parkour.floorAt(p.x,p.z,p.y+.2),taken:false};person.workerRecord.weaponDropped=true;a.weaponDrops.push(drop);addWeaponDrop(drop);changed();}
    const position=world.player.mesh.position,e=a.events.delivery,pp=e.drop??source;parcel.x=pp.x;parcel.z=pp.z;parcel.group.position.set(pp.x,world.groundHeight(pp.x,pp.z),pp.z);
    for(const item of items){const distance=Math.hypot(item.x-position.x,item.z-position.z);
-    if(dt>0&&!inVehicle&&Math.abs(position.y-world.groundHeight(item.x,item.z))<1.8&&item.kind==='money'&&item.enabled()&&distance<1.55&&clearSegment(position,{x:item.x,z:item.z},world.blocked,.05))item.interaction();
-    item.group.visible=item.enabled()&&distance<65;if(item.group.visible){const floating=['weapon','pack','money','wallet'].includes(item.kind);if(floating)item.object.rotation.y=time*.8;item.object.position.y=floating?.8+Math.sin(time*2+item.x)*.1:.35;}}
+    if(dt>0&&!inVehicle&&Math.abs(position.y-item.y)<1.8&&item.kind==='money'&&item.enabled()&&distance<1.55&&clearSegment(position,{x:item.x,z:item.z},world.blocked,.05))item.interaction();
+    item.group.visible=item.enabled()&&distance<65;if(item.group.visible){const floating=['weapon','weapon-drop','pack','money','wallet'].includes(item.kind);if(floating)item.object.rotation.y=time*.8;item.object.position.y=floating?.8+Math.sin(time*2+item.x)*.1:.35;}}
    for(let i=effects.length-1;i>=0;i--){effects[i].life-=dt;if(effects[i].life<=0){root.remove(effects[i].mesh);effects.splice(i,1);}}
    carriedParcel.visible=e.carrying&&!inVehicle;
    for(const {guard,holder} of guardLabels){holder.position.copy(guard.mesh.position);holder.position.y+=.5;holder.visible=guard.mesh.visible;}
    const near=Math.hypot(position.x-court.x,position.z-court.z)<55;if(near!==ballEnabled){ballBody.setEnabled(near);ballEnabled=near;}ball.visible=near;goalRoot.visible=near;
    if(near){ball.position.copy(ballBody.translation());ball.quaternion.copy(ballBody.rotation());if(flight){ballAge+=dt;const p=ballBody.translation();if(Math.hypot(p.x-goal.x,p.z-goal.z)<1.15&&p.y<world.groundHeight(goal.x,goal.z)+1.65){a.fun.goals++;flight=false;if(a.fun.goals>=3&&!a.fun.footballWon){a.fun.footballWon=true;state.money+=30;state.stress=Math.max(0,state.stress-12);callbacks.notify('Три гола! +30 ₽ · стресс −12');}else callbacks.notify(`Гол! ${Math.min(3,a.fun.goals)}/3`);changed();}else if(ballAge>5)flight=false;}}
   },
-  get diagnostics(){return {equipment:equipment.diagnostics,lastWaterShot,waterShots,guardWeapons:guardRigs.map(({person,rig})=>({guard:person.guardIndex,shots:person.gunCombat?.sequence??0,droppable:false,...rig.diagnostics})),vests:guardLabels.map(({guard,vest})=>({guard:guard.guardIndex,source:vest.name,boundTo:vest.parent.name,visible:guard.mesh.visible})),items:items.map(i=>({kind:i.kind,id:i.id,x:i.x,z:i.z,y:i.y,available:i.enabled(),visible:i.group.visible,beaconHeight:i.beam?PLAYER_SHAPE.height*2:0,hasBillboard:i.group.children.some(n=>n.isSprite)})),guards:guards.map(g=>({x:g.mesh.position.x,z:g.mesh.position.z,name:g.role,shopName:g.shopName})),goal:{...goal},court:{...court},equipped:a.equipped,heldVisible:!!heldRig?.root.visible,heldY:heldRig?.root.position.y??0,heldScale:heldRig?.root.scale.toArray()??[1,1,1],heldBounds:heldRig?new T.Box3().setFromObject(heldRig.root).getSize(new T.Vector3()).toArray():[0,0,0],weaponRig:heldRig?.diagnostics??null,policeWeapons:policeRigs.map(({person,rig})=>({officer:person.policeIndex,...rig.diagnostics})),activeEffects:effects.length};},
-  dispose(){heldRig?.dispose();for(const {rig}of [...policeRigs,...guardRigs])rig.dispose();equipment.dispose();root.removeFromParent();for(const {vest}of guardLabels)vest.removeFromParent();carriedParcel.removeFromParent();world.physics.removeRigidBody(ballBody);for(const g of geometries.values())g.dispose();for(const m of materials.values())m.dispose();for(const t of textures)t.dispose();},
+  get diagnostics(){return {waterSpray:waterSpray.diagnostics,equipment:equipment.diagnostics,lastWaterShot,waterShots,guardWeapons:guardRigs.map(({person,rig})=>({guard:person.guardIndex,shots:person.gunCombat?.sequence??0,droppable:false,modelScale:rig.root.getObjectByName('equipment-model:pistol').scale.x,...rig.diagnostics})),vests:guardLabels.map(({guard,vest})=>({guard:guard.guardIndex,source:vest.name,boundTo:vest.parent.name,visible:guard.mesh.visible})),items:items.map(i=>({kind:i.kind,id:i.id,x:i.x,z:i.z,y:i.y,available:i.enabled(),visible:i.group.visible,beaconHeight:i.beam?PLAYER_SHAPE.height*2:0,hasBillboard:i.group.children.some(n=>n.isSprite)})),guards:guards.map(g=>({x:g.mesh.position.x,z:g.mesh.position.z,name:g.role,shopName:g.shopName})),goal:{...goal},court:{...court},equipped:a.equipped,heldVisible:!!heldRig?.root.visible,heldY:heldRig?.root.position.y??0,heldScale:heldRig?.root.scale.toArray()??[1,1,1],heldBounds:heldRig?new T.Box3().setFromObject(heldRig.root).getSize(new T.Vector3()).toArray():[0,0,0],weaponRig:heldRig?.diagnostics??null,policeWeapons:policeRigs.map(({person,rig})=>({officer:person.policeIndex,...rig.diagnostics})),activeEffects:effects.length};},
+  dispose(){waterSpray.dispose();heldRig?.dispose();for(const {rig}of [...policeRigs,...guardRigs,...workerRigs])rig.dispose();equipment.dispose();root.removeFromParent();for(const {vest}of guardLabels)vest.removeFromParent();carriedParcel.removeFromParent();world.physics.removeRigidBody(ballBody);for(const g of geometries.values())g.dispose();for(const m of materials.values())m.dispose();for(const t of textures)t.dispose();},
  };
 }

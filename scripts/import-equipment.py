@@ -55,18 +55,29 @@ source(pathlib.Path('art/weapons/pistol-source.glb'),lambda p:Vector((-p.z*.3,(p
 marker('Muzzle',(0,.222,.481));marker('Palm',(0,0,0));save('guard-pistol','Quaternius · CC0 · Survival Pack Pistol_1')
 
 clear()
-water_parts=source(pathlib.Path('art/weapons/kenney-blaster/blaster-a.glb'),lambda p:Vector((p.x*.8,(p.y+.17)*.8,(p.z+.05)*.8)))
-cyan=material('Translucent-looking cyan reservoir',(.035,.65,.8),.05,.25)
-toy_body=material('Cyan moulded toy casing',(.025,.48,.62),0,.4)
-toy_grip=material('Orange toy grip',(.95,.32,.035),0,.6)
-for o in water_parts:
-    o.data.materials.clear();o.data.materials.append(toy_body);o.data.materials.append(toy_grip)
-    for p in o.data.polygons:p.material_index=1 if p.center.z<.09 or -p.center.y>.31 else 0
-sphere('Rounded water reservoir',(0,.29,-.075),(.085,.085,.15),cyan)
-orange=material('Orange safety nozzle',(1,.32,.035),0,.36)
-# A raised rim makes the nozzle readily visible from the third-person camera.
-bpy.ops.mesh.primitive_torus_add(major_radius=.032,minor_radius=.009,major_segments=20,minor_segments=8,location=(0,-.384,.174),rotation=(math.pi/2,0,0));bpy.context.object.name='Water-nozzle-rim';bpy.context.object.data.materials.append(orange)
-marker('Muzzle',(0,.174,.396));marker('Palm',(0,0,0));save('water-pistol','Kenney · CC0 · Blaster Kit blaster-a; added reservoir and nozzle')
+cyan=material('Cyan toy casing',(.025,.56,.72),0,.3)
+orange=material('Orange toy grip and nozzle',(1,.31,.025),0,.42)
+blue=material('Blue moulded water reservoir',(.08,.35,.69),0,.26)
+white=material('Cream trigger guard',(.92,.91,.72),0,.5)
+def rounded_box(name,position,size,m,bevel=.025):
+    bpy.ops.mesh.primitive_cube_add(size=1,location=(position[0],-position[2],position[1]));o=bpy.context.object;o.name=name;o.dimensions=(size[0],size[2],size[1]);bpy.ops.object.transform_apply(location=False,rotation=False,scale=True);o.data.materials.append(m)
+    mod=o.modifiers.new('Rounded moulded edges','BEVEL');mod.width=bevel;mod.segments=3
+    bpy.context.view_layer.objects.active=o;bpy.ops.object.modifier_apply(modifier=mod.name)
+    for f in o.data.polygons:f.use_smooth=True
+    o.modifiers.new('Weighted plastic normals','WEIGHTED_NORMAL')
+    return o
+rounded_box('Compact rounded body',(0,.15,.105),(.145,.15,.285),cyan)
+rounded_box('Palm centred pistol grip',(0,-.005,-.015),(.075,.205,.095),orange,.017)
+rounded_box('Rear body cap',(0,.17,-.055),(.15,.13,.04),blue,.017)
+sphere('Oval water reservoir',(0,.277,.045),(.075,.072,.135),blue)
+rounded_box('Reservoir filler cap',(0,.342,-.01),(.066,.022,.055),orange,.009)
+# Barrel and nozzle run straight forward along +Z, with no skewed scaling.
+for name,z,r,length,m in [('Cyan barrel',.267,.039,.16,cyan),('Orange nozzle',.357,.043,.045,orange),('Nozzle aperture',.382,.021,.004,white)]:
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24,radius=r,depth=length,location=(0,-z,.16),rotation=(math.pi/2,0,0));o=bpy.context.object;o.name=name;o.data.materials.append(m)
+rounded_box('Trigger guard lower',(0,-.075,.063),(.031,.025,.14),white,.008)
+rounded_box('Trigger guard front',(0,-.01,.12),(.031,.13,.025),white,.008)
+rounded_box('Trigger',(0,.023,.073),(.025,.062,.02),orange,.006)
+marker('Muzzle',(0,.16,.386));marker('Palm',(0,0,0));save('water-pistol','merch_badday · original compact toy water pistol, palm-centred grip')
 
 clear()
 # The irregular branch keeps the found bark, cut faces and knots, reshaped to a hand-held stick.
@@ -96,3 +107,7 @@ for o in vest:
     for v in o.data.vertices:v.co.x*=1.12;v.co.y*=1.35
     o.name='SWAT fitted vest '+o.name
 marker('TorsoAnchor',(0,0,0));save('security-vest','Quaternius · CC0 · Ultimate Animated Character Pack SWAT torso armour')
+
+clear()
+source(pathlib.Path('art/weapons/kenney-survival/tool-shovel.glb'),lambda p:Vector((p.x*4,(.25-p.y)*4,-p.z*4)))
+marker('Palm',(0,0,0));save('shovel','Kenney · CC0 · Survival Kit tool-shovel; palm-centred full-size shovel')

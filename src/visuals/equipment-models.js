@@ -1,11 +1,11 @@
 import * as T from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 
-const FILES={bat:'baseball-bat',stick:'wooden-stick',water:'water-pistol',pistol:'guard-pistol',vest:'security-vest'};
+const FILES={bat:'baseball-bat',stick:'wooden-stick',water:'water-pistol',pistol:'guard-pistol',vest:'security-vest',shovel:'shovel'};
 export async function loadEquipmentModels(base){
  const loader=new GLTFLoader(),models=new Map(await Promise.all(Object.entries(FILES).map(async([id,file])=>[id,(await loader.loadAsync(`${base}models/equipment/${file}.glb`)).scene])));
  return {
-  make(parent,id){const source=models.get(id);if(!source)return false;const model=source.clone(true);model.name='equipment-model:'+id;model.traverse(n=>{if(n.isMesh)n.castShadow=n.receiveShadow=true;});parent.add(model);return true;},
+  make(parent,id){const source=models.get(id);if(!source)return false;const model=source.clone(true);model.name='equipment-model:'+id;if(id==='pistol')model.scale.setScalar(.65);model.traverse(n=>{if(n.isMesh)n.castShadow=n.receiveShadow=true;});parent.add(model);return true;},
   dress(person){
    const owner=person.mesh,vest=models.get('vest').clone(true),spine=owner.getObjectByName('Spine')??owner;
    owner.updateWorldMatrix(true,true);

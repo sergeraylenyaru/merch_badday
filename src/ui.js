@@ -24,7 +24,7 @@ export function createUI(state, actions) {
   $('wanted').innerHTML=Array.from({length:5},()=>'<span class="wanted-star">☆</span>').join('');
   root.querySelector('#hud').append(root.querySelector('.message-chat'));
   const stats=root.querySelector('.statbox');stats.classList.add('player-status');
-  stats.insertAdjacentHTML('afterbegin','<div class="hand-status"><span>СЕЙЧАС В РУКАХ</span><div class="held-item"><i id="handIcon"></i><strong id="handItem">Кулаки</strong></div><small class="weapon-keys">1 Кулаки · 2 Бита · 3 Палка · 4 Вода · 5 Камни · 6 Рогатка · 7 Дубинка</small></div>');
+  stats.insertAdjacentHTML('afterbegin','<div class="hand-status"><span>СЕЙЧАС В РУКАХ</span><div class="held-item"><i id="handIcon"></i><strong id="handItem">Кулаки</strong></div><small class="weapon-keys">1 Кулаки · 2 Бита · 3 Палка · 4 Вода · 5 Камни · 6 Рогатка · 7 Дубинка · 8 Лопата</small></div>');
   root.querySelector('.clock').append(stats);
   const schematicMap=createSchematicMap(),miniSchematicMap=createSchematicMap({labels:false});let satelliteMap=null,currentVehicle=null,mapHits=[];
   let toastTimer,

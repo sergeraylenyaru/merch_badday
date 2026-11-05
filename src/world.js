@@ -1,3 +1,4 @@
+import {CACHE_SIZE,createCacheMark} from './city/colleague-caches.js';
 import {createCoast} from './city/coast.js';
 import {createFoodPlaces} from './city/food.js';
 import {createUnfinishedMall} from './city/unfinished-mall.js';
@@ -334,8 +335,9 @@ export async function createWorld(scene, state) {
   }
   for (let i = 0; i < 4; i++) {
     const {x,z}=point(...[[200,700],[800,710],[1450,600],[900,150]][i]);
-    const m = box(x, 0.8, z, 0.8, 0.8, 0.8, "#e8c568");
-    secrets.push({ mesh: m, taken: false });
+    const m = box(x, groundHeight(x,z)+CACHE_SIZE/2+.012, z, CACHE_SIZE,CACHE_SIZE,CACHE_SIZE, "#bf985b"),mark=createCacheMark(m);
+    const taken=state.adventure.takenCaches?.includes(i)??false;m.visible=!taken;
+    secrets.push({ mesh: m, taken,index:i,mark,size:CACHE_SIZE });
   }
   const policeVehicles = [];
   for (let i = 0; i < 3; i++) {
@@ -433,6 +435,7 @@ export async function createWorld(scene, state) {
   for(const [i,uv]of [[3,[570,380]],[4,[1070,380]],[5,[300,380]],[6,[460,380]],[7,[800,380]],[8,[1190,380]],[9,[1390,380]],[10,[1000,380]],[11,[200,380]]]){
     const p=point(...uv),officer=human(p.x,p.z,'#577d9a','police');officer.policeIndex=i;officer.weapon=policeWeapon(i);people.push(officer);
   }
+  for(let i=0;i<6;i++){const p=point(...[[195,270],[410,580],[820,200],[1050,600],[1270,500],[1500,690]][i]),n=human(p.x,p.z,'#3576b3','police');n.patrolPolice=true;n.policeIndex=12+i;n.weapon=i%3===0?'baton':null;n.role='Пеший патруль';people.push(n);}
   const homeCar=car(HOME_CAR.x,HOME_CAR.z,0,vehicles.length);
   homeCar.heading=HOME_CAR_HEADING;homeCar.mesh.rotation.y=HOME_CAR_HEADING;
   homeCar.claimed=true;homeCar.homeVehicle=true;vehicles.push(homeCar);
@@ -442,9 +445,9 @@ export async function createWorld(scene, state) {
   world.shopRoofs=SHOPS.map(s=>({x:s.x,z:s.z-3,w:14.5,d:6,y:6.8}));
   world.water=createWater(world,state);
   world.food=await createFoodPlaces(scene,world,state);
-  world.mall=createUnfinishedMall(scene,world);
+  world.mall=createUnfinishedMall(scene,world,state,{human});
   world.park=await createParkDetails(scene,world);
-  world.coast=createCoast(scene,world,state,{human});coastHeight=world.coast.floorAt;
+  world.coast=await createCoast(scene,world,state,{human});coastHeight=world.coast.floorAt;
   world.yards=createServiceYards(scene,world);
   world.cables=createCables(scene,world);
   world.roofs.push(...world.shopRoofs.map((r,i)=>({...r,id:'shop-work:'+i,kind:'shop',wallBounds:{x:r.x,z:r.z,w:r.w,d:5.5}})));

@@ -1,7 +1,7 @@
 import {coastPixelAt} from './coast-layout.js';
 import {reservedNewPlot} from './new-places.js';
 import {PARK_RIDES} from './park-details.js';
-import {gridTerrain,ROAD_PROFILES,WALK_PROFILES,WATER_LEVEL,roadHeight} from './terrain.js';
+import {gridTerrain,ROAD_PROFILES,WALK_PROFILES,WATER_LEVEL,roadHeight,exposedBridgeRail} from './terrain.js';
 import {clipSurface,appendSurface,roadPolygon,rectanglePolygon,SurfaceIndex} from './planar-surfaces.js';
 import {createCityMaterialPool} from './shared-materials.js';
 import * as T from 'three';
@@ -175,7 +175,8 @@ export function buildReferenceTerrain(world,scene){
   for(let d=3;!pedestrian&&road.width>=5.2&&d<road.length-2;d+=7){const x=road.start.x+road.dx*d,z=road.start.z+road.dz*d;if(ROAD_PROFILES.some(other=>other!==road&&(x-other.start.x)*other.dx+(z-other.start.z)*other.dz>=-1.3&&(x-other.start.x)*other.dx+(z-other.start.z)*other.dz<=other.length+1.3&&Math.abs((x-other.start.x)*other.dz-(z-other.start.z)*other.dx)<other.width/2+1.3))continue;const paint=world.box(x,roadHeight(x,z)+.012,z,.15,.012,2.4,'#dfdfbf');paint.rotation.y=angle;}
   // Rails and posts mark the raised span; gentle ramps stay open at both ends.
   for(let d=1;d<road.length-1;d+=2){if(road.heightAt(d)<.5)continue;
-    for(const side of [-1,1]){const x=road.start.x+road.dx*d+road.dz*(road.width/2+.12)*side,z=road.start.z+road.dz*d-road.dx*(road.width/2+.12)*side,y=road.heightAt(d);
+    for(const side of [-1,1]){const x=road.start.x+road.dx*d+road.dz*(road.width/2+.12)*side,z=road.start.z+road.dz*d-road.dx*(road.width/2+.12)*side,y=roadHeight(x,z);
+      if(![-1.06,0,1.06].every(offset=>exposedBridgeRail(road,x+road.dx*offset,z+road.dz*offset)))continue;
       world.box(x,y+.43,z,.10,.86,.10,'#7b888c');const rail=world.box(x,y+.86,z,.1,.1,2.12,'#b3bdbe');rail.rotation.y=angle;}
   }
  }

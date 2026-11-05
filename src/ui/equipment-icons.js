@@ -1,4 +1,5 @@
 const paths={
+ shovel:'<path d="M18 4h7v7h-7ZM21 11v17M14 27h14v5l-7 7-7-7Z"/>',
  energy:'<path d="M14 5h14v32H14Z"/><path d="m24 11-7 12h7l-5 10M14 9h14M14 34h14"/>',
  boots:'<path d="M9 7h12v16l12 5v9H7V22Z"/><path d="M8 33h25M13 13h8M13 18h8M13 23h8"/>',
  gloves:'<path d="M10 36 6 23c-1-4 3-5 5-1V10c0-4 5-4 5 0V6c0-4 5-4 5 0v4c0-4 5-4 5 0v4c0-4 5-4 5 0v14l-5 8Z"/>',

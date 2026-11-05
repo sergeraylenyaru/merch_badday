@@ -18,14 +18,24 @@ const profile=([a,b,c,d,width])=>{
 };
 export const ROAD_PROFILES=ROADS.map(profile);
 export const WALK_PROFILES=PEDESTRIAN_ROUTES.map(profile);
+// A bridge bend has one level deck across the full road/sidewalk junction.
+// Sampling separate ramps at the clipped corners produced mismatched heights
+// and triangular cracks at the southern river crossings.
+export const BRIDGE_JUNCTIONS=ROAD_JOINS.map(j=>({...j,height:Math.max(...j.roads.map(({index,end})=>ROAD_PROFILES[index].heightAt(end?ROAD_PROFILES[index].length:0)))})).filter(j=>j.height>.4);
+export function exposedBridgeRail(road,x,z,profiles=[...ROAD_PROFILES,...WALK_PROFILES]){
+ for(const other of profiles){if(other===road)continue;const along=(x-other.start.x)*other.dx+(z-other.start.z)*other.dz,across=Math.abs((x-other.start.x)*other.dz-(z-other.start.z)*other.dx);if(along>=-.08&&along<=other.length+.08&&across<=other.width/2+.08)return false;}
+ return ![...ROAD_JOINS,...WALK_JOINS].some(j=>Math.hypot(x-j.x,z-j.z)<j.radius-.06);
+}
 export function roadHeight(x,z) {
-  let height=terrainHeight(x,z);
+  let height=terrainHeight(x,z),onPaving=false;
   for(const road of [...ROAD_PROFILES,...WALK_PROFILES]){const along=(x-road.start.x)*road.dx+(z-road.start.z)*road.dz;
     if(along<-.08||along>road.length+.08)continue;
     const across=Math.abs((x-road.start.x)*road.dz-(z-road.start.z)*road.dx);
+    if(across<=road.width/2+2.2)onPaving=true;
     if(across<=road.width/2+.02)height=Math.max(height,road.heightAt(Math.max(0,Math.min(road.length,along))));}
   for(const j of ROAD_JOINS)if(Math.hypot(x-j.x,z-j.z)<=j.radius+.02)for(const {index,end}of j.roads){const r=ROAD_PROFILES[index];height=Math.max(height,r.heightAt(end?r.length:0));}
   for(const j of WALK_JOINS)if(Math.hypot(x-j.x,z-j.z)<=j.radius+.02)for(const {index,end}of j.roads){const r=WALK_PROFILES[index];height=Math.max(height,r.heightAt(end?r.length:0));}
+  if(onPaving||ROAD_JOINS.some(j=>Math.hypot(x-j.x,z-j.z)<=j.radius+.02))for(const j of BRIDGE_JUNCTIONS){const d=Math.hypot(x-j.x,z-j.z),inner=j.radius+2.4;if(d<inner+12)height=Math.max(height,j.height*Math.max(0,1-Math.max(0,d-inner)/12));}
   const p=pixel(x,z);if(segmentDistance(p.x,p.y,...PIER.slice(0,4))<=PIER[4]/2 || (p.x>837.5&&p.x<892.5&&p.y>870&&p.y<882))height=Math.max(height,.12);
   return Math.max(height,parkBridgeHeight(x,z));
 }

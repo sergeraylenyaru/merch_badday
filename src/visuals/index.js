@@ -1,3 +1,4 @@
+import {addUniform} from './uniforms.js';
 import { Box3, Vector3, Group, Mesh, SkinnedMesh, Float32BufferAttribute,BoxGeometry,MeshStandardMaterial } from "three";
 import { AssetLibrary } from "./assets.js";
 import { createDistrictMaterials } from "./materials.js";
@@ -16,6 +17,7 @@ const original = (file) => `${base}models/original/${file}.glb?rig=2`;
 // Envelopes fit local models. Cars feed their measured body footprint back to
 // the world; entity identities, saved positions and physical bodies stay intact.
 export const MODEL_MANIFEST = {
+  patrol:{url: `${base}models/characters/merch-male.glb?rig=6`,size:[1.3,2.1,.9]},
   hero: { url: `${base}models/characters/merch-male.glb?rig=6`, size: [1.3, 2.1, 0.9] },
   staff: { url: `${base}models/characters/civilian-female.glb?rig=4`, size: [1.3, 2.1, 0.9] },
   officer: {url: `${base}models/characters/police-officer.glb?rig=2`,size:[1.3,2.1,.9]},
@@ -115,7 +117,7 @@ export async function createVisuals(scene, world, shopDecor) {
           const recolor = (source) => {
             if (!['Merch_BlueTShirt', 'Civilian_TealShirt'].includes(source.name)) return source;
             const material = source.clone();
-            material.color.set(entity.kind === 'police' ? '#344663' : entity.shop >= 0 ? SHOP_STYLES[entity.shop].primary : ['#577986', '#8d6556', '#73885f'][actors.length % 3]);
+            material.color.set(entity.patrolPolice?'#3576b3':entity.kind === 'police' ? '#344663' : entity.shop >= 0 ? SHOP_STYLES[entity.shop].primary : ['#577986', '#8d6556', '#73885f'][actors.length % 3]);
             actorMaterials.add(material);
             return material;
           };
@@ -133,9 +135,10 @@ export async function createVisuals(scene, world, shopDecor) {
   replace(world.player, "hero", true);
   world.people.forEach((person, index) => {
     const female = person.role === 'elder' || (person.kind === 'staff' ? [0, 2, 6, 8].includes(person.shop) : person.kind !== 'police' && index % 2 === 0);
-    const profile=person.kind==='guard'?'tall':person.kind==='civilian'?['stocky','short','tall','elder','bandit','staff','hero'][index%7]:person.kind==='resident'?['elder','short','stocky','staff'][index%4]:person.kind==='driver'?['hero','stocky','bandit','tall'][index%4]:null;
+    const profile=person.kind==='worker'?'stocky':person.kind==='guard'?'tall':person.kind==='civilian'?['stocky','short','tall','elder','bandit','staff','hero'][index%7]:person.kind==='resident'?['elder','short','stocky','staff'][index%4]:person.kind==='driver'?['hero','stocky','bandit','tall'][index%4]:null;
     person.personType=profile??(female?'staff':'hero');
-    replace(person, person.kind==='police' ? 'officer' : profile??(female?'staff':'hero'), true);
+    replace(person, person.patrolPolice?'patrol':person.kind==='police' ? 'officer' : profile??(female?'staff':'hero'), true);
+    addUniform(person,{materials:actorMaterials,geometries:vehicleGeometries});
   });
   for (const vehicle of world.vehicles){replace(vehicle, vehicle.police ? 'police' : vehicle.visualModel);
     if(vehicle.visualModel==='taxi'){

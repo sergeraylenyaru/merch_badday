@@ -9,7 +9,7 @@ test('exactly every fifth officer carries a baton and its damage occurs once dur
  const guarded={weapon:'baton'};policeCombat(guarded,input,.01);assert.equal(policeCombat(guarded,{...input,guarding:true},.33).damage,3);
 });
 test('a police punch winds up, hits once at contact and recovers before another swing',()=>{
-  const officer={};assert.deepEqual(policeCombat(officer,close,.01),{attack:.35,damage:0});
+  const officer={};assert.deepEqual(policeCombat(officer,close,.01),{attack:.35,damage:0,vehicleHit:false,eject:false});
   assert.equal(policeCombat(officer,close,.1).damage,0);
   assert.equal(policeCombat(officer,close,.1).damage,POLICE_ATTACK.damage);
   assert.equal(policeCombat(officer,close,.1).damage,0);
